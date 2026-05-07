@@ -45,11 +45,13 @@ BTC, ETH, SOL, XRP, BNB
 **Tier 2 (scan for opportunities):**
 DOGE, ADA, AVAX, LINK, DOT, MATIC, ATOM, LTC, BCH, UNI, AAVE, OP, ARB, SUI, APT, INJ, TIA, HYPE, TAO
 
-For each Tier 2 asset, a quick search is enough — you only need the price and rough % change in the last 24h and 7d.
+For each Tier 2 asset fetch: current price, 24h % change, 7d % change.
 
 ### STEP 4 — Technical Analysis Per Asset
 
-For each Tier 1 asset and any Tier 2 asset showing unusual movement (>5% in 24h), analyze:
+For each Tier 1 asset, perform full analysis. For ALL Tier 2 assets, also perform full analysis — do not skip any based on price movement. The goal is to find setups across the entire altcoin space, not just the ones already moving.
+
+For every asset (Tier 1 and Tier 2), analyze:
 
 1. **Trend**: Above or below 50-day MA and 200-day MA? Death cross or golden cross?
 2. **Key levels**: What are the nearest resistance levels above? Support levels below?

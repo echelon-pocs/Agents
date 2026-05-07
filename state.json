@@ -26,28 +26,17 @@
       "symbol": "ETH",
       "direction": "SHORT",
       "conviction": "MEDIUM",
-  "last_run": null,
-  "macro_bias": null,
-  "btc_price": null,
-  "btc_dominance": null,
-  "altcoin_season_index": null,
-  "fear_greed": null,
-  "active_setups": [
-    {
-      "symbol": "ETH",
-      "direction": "SHORT",
-      "conviction": "HIGH",
       "entry_zone": [2600, 2700],
       "stop_loss": 2820,
       "target_1": 2000,
       "target_2": 1600,
       "r_r_ratio": 2.5,
       "status": "WAITING",
-      "rationale": "Death cross confirmed. $2,600-2,700 is prior breakdown structure flipped to resistance. Culper Research short thesis: Fusaka upgrade weakened tokenomics. $4.5B OI = cascade risk on flush.",
+      "rationale": "Death cross confirmed. $2,600-2,700 is prior breakdown structure flipped to resistance. Culper Research short thesis: Fusaka upgrade weakened tokenomics. $5B OI = cascade risk on flush.",
       "catalyst_risk": "CLARITY Act passage or ETH ETF inflow surge could trigger short squeeze.",
       "timeframe": "MEDIUM_TERM",
       "added": "2026-05-06",
-      "notes": "Initial setup from analyst session"
+      "notes": "REVISED 2026-05-07: Conviction downgraded HIGH to MEDIUM. Funding rate now slightly negative (-0.002%), meaning shorts are crowded not longs. Core structural thesis intact but derivatives signal weakened. Current price $2,336 — 11% below entry zone."
     },
     {
       "symbol": "SOL",
@@ -80,13 +69,72 @@
       "timeframe": "MEDIUM_TERM",
       "added": "2026-05-06",
       "notes": "Current price $1.41 — 10.8% below entry zone. Alt entry zone $1.78-1.85 on catalyst squeeze."
+    },
+    {
+      "symbol": "DOGE",
+      "direction": "SHORT",
+      "conviction": "MEDIUM",
+      "entry_zone": [0.115, 0.125],
+      "stop_loss": 0.135,
+      "target_1": 0.090,
+      "target_2": 0.070,
+      "r_r_ratio": 2.0,
+      "status": "APPROACHING",
+      "rationale": "RSI at 73.89 (overbought) with price pressing against the $0.12 resistance. 68.6% of futures positions are long with positive funding (+0.0044%) — crowded longs at a key ceiling. Historically DOGE RSI >70 produces 5-10% pullbacks. No fundamental catalyst supporting a sustained breakout.",
+      "catalyst_risk": "Elon Musk tweet or DOGE payment integration announcement could trigger momentum breakout above $0.14.",
+      "timeframe": "SHORT_TERM",
+      "added": "2026-05-07",
+      "notes": "Price currently $0.11-0.12, at edge of entry zone. Place limit orders."
+    },
+    {
+      "symbol": "AAVE",
+      "direction": "SHORT",
+      "conviction": "MEDIUM",
+      "entry_zone": [89.0, 93.0],
+      "stop_loss": 102.0,
+      "target_1": 70.0,
+      "target_2": 55.0,
+      "r_r_ratio": 2.3,
+      "status": "APPROACHING",
+      "rationale": "Supertrend flipped bearish. Critical support at $91.50 is thin — a confirmed breakdown exposes $63.59 (next major support, -30%). Current price $92.15 is teetering at the edge. DeFi is in a winter cycle with BTC dominance at 60% absorbing capital. Entry on breakdown confirmation.",
+      "catalyst_risk": "DeFi protocol fee switch vote or AAVE V4 launch with strong TVL inflow could reverse sentiment.",
+      "timeframe": "SHORT_TERM",
+      "added": "2026-05-07",
+      "notes": "Watch $91.50 — a daily close below is the trigger. Current price $92.15."
+    },
+    {
+      "symbol": "ADA",
+      "direction": "LONG",
+      "conviction": "LOW",
+      "entry_zone": [0.235, 0.250],
+      "stop_loss": 0.210,
+      "target_1": 0.310,
+      "target_2": 0.380,
+      "r_r_ratio": 2.5,
+      "status": "APPROACHING",
+      "rationale": "Shorts paying -0.82%/day (-0.27% per 8h) — extreme short crowding rarely sustains. Price holding above $0.24 key support with RSI neutral and MACD flattening (bearish momentum fading). Contrarian: if shorts unwind, squeeze to $0.31+ is feasible.",
+      "catalyst_risk": "Macro BIFURCATED regime is a headwind for alt longs. BTC dominance at 60% suppresses ADA rotation. Size small.",
+      "timeframe": "SHORT_TERM",
+      "added": "2026-05-07",
+      "notes": "LOW conviction — contrarian extreme-short-crowding play only. 1-2% position max."
+    },
+    {
+      "symbol": "LINK",
+      "direction": "LONG",
+      "conviction": "LOW",
+      "entry_zone": [8.50, 9.00],
+      "stop_loss": 7.50,
+      "target_1": 11.00,
+      "target_2": 13.00,
+      "r_r_ratio": 2.6,
+      "status": "APPROACHING",
+      "rationale": "Funding rate -0.0035% (shorts paying longs) — crowded short positioning at the key $8.50 support that has held multiple tests. A short squeeze from here targets $11-13 resistance. Derivatives positioning is the primary signal.",
+      "catalyst_risk": "Macro BIFURCATED suppresses alt longs. LINK needs broader alt rotation catalyst. Size small.",
+      "timeframe": "SHORT_TERM",
+      "added": "2026-05-07",
+      "notes": "LOW conviction — derivatives-only play. Watch for $8.50 support failure which invalidates entirely."
     }
   ],
   "alerted": [],
-  "last_analysis": "May 7, 2026. Macro: BIFURCATED. BTC at $81,022 testing 200-day MA ($82,228) from below after 7 months of rejection — key inflection point. Dominance 60%, Alt Season Index 30/100, Fear & Greed 45. DXY weak at 97.63, gold strong at ~$5,400. New BTC SHORT setup added at 200-day MA with APPROACHING status. ETH conviction revised HIGH to MEDIUM on negative funding rates. All three legacy setups (ETH, SOL, XRP) remain WAITING, all 10-11% below entry zones. No entries triggered."
-      "notes": "Alt entry zone $1.78-1.85 on catalyst squeeze"
-    }
-  ],
-  "alerted": [],
-  "last_analysis": "Initial state. Three short setups loaded from analyst session on 2026-05-06. BTC dominance at 60.47%, Altcoin Season Index at 22/100. Macro bias: BEARISH/BIFURCATED. No entries triggered yet — all assets waiting for relief bounce."
+  "last_analysis": "May 7, 2026 (updated with full Tier 2 altcoin sweep). Macro: BIFURCATED. BTC at $81,022 testing 200-day MA. Full altcoin sweep added 4 new setups: DOGE SHORT (MEDIUM, APPROACHING — RSI overbought + crowded longs at resistance), AAVE SHORT (MEDIUM, APPROACHING — Supertrend bearish + thin $91.50 support breakdown), ADA LONG (LOW — extreme short crowding -0.82%/day), LINK LONG (LOW — negative funding at support). 8 total active setups. DOGE and AAVE are highest-conviction altcoin plays."
 }
