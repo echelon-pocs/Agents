@@ -1,0 +1,60 @@
+{
+  "last_run": null,
+  "macro_bias": null,
+  "btc_price": null,
+  "btc_dominance": null,
+  "altcoin_season_index": null,
+  "fear_greed": null,
+  "active_setups": [
+    {
+      "symbol": "ETH",
+      "direction": "SHORT",
+      "conviction": "HIGH",
+      "entry_zone": [2600, 2700],
+      "stop_loss": 2820,
+      "target_1": 2000,
+      "target_2": 1600,
+      "r_r_ratio": 2.5,
+      "status": "WAITING",
+      "rationale": "Death cross confirmed. $2,600-2,700 is prior breakdown structure flipped to resistance. Culper Research short thesis: Fusaka upgrade weakened tokenomics. $4.5B OI = cascade risk on flush.",
+      "catalyst_risk": "CLARITY Act passage or ETH ETF inflow surge could trigger short squeeze.",
+      "timeframe": "MEDIUM_TERM",
+      "added": "2026-05-06",
+      "notes": "Initial setup from analyst session"
+    },
+    {
+      "symbol": "SOL",
+      "direction": "SHORT",
+      "conviction": "HIGH",
+      "entry_zone": [96, 102],
+      "stop_loss": 110,
+      "target_1": 70,
+      "target_2": 50,
+      "r_r_ratio": 2.5,
+      "status": "WAITING",
+      "rationale": "73% longs in futures = dangerously crowded. $100 psychological wall + prior breakdown level. Down from $295 ATH. Alpenglow narrative fully priced in.",
+      "catalyst_risk": "Alpenglow early launch or major institutional SOL ETF approval.",
+      "timeframe": "MEDIUM_TERM",
+      "added": "2026-05-06",
+      "notes": "Initial setup from analyst session"
+    },
+    {
+      "symbol": "XRP",
+      "direction": "SHORT",
+      "conviction": "MEDIUM",
+      "entry_zone": [1.58, 1.65],
+      "stop_loss": 1.95,
+      "target_1": 1.00,
+      "target_2": 0.75,
+      "r_r_ratio": 2.7,
+      "status": "WAITING",
+      "rationale": "$1.45-1.47 rejected 4 times. 200-day MA at $1.88 is max squeeze level. ETF approvals and legal resolution fully priced in. CLARITY Act = sell the news.",
+      "catalyst_risk": "CLARITY Act Senate vote surprise or Ripple institutional partnership announcement.",
+      "timeframe": "MEDIUM_TERM",
+      "added": "2026-05-06",
+      "notes": "Alt entry zone $1.78-1.85 on catalyst squeeze"
+    }
+  ],
+  "alerted": [],
+  "last_analysis": "Initial state. Three short setups loaded from analyst session on 2026-05-06. BTC dominance at 60.47%, Altcoin Season Index at 22/100. Macro bias: BEARISH/BIFURCATED. No entries triggered yet — all assets waiting for relief bounce."
+}
