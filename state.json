@@ -26,17 +26,28 @@
       "symbol": "ETH",
       "direction": "SHORT",
       "conviction": "MEDIUM",
+  "last_run": null,
+  "macro_bias": null,
+  "btc_price": null,
+  "btc_dominance": null,
+  "altcoin_season_index": null,
+  "fear_greed": null,
+  "active_setups": [
+    {
+      "symbol": "ETH",
+      "direction": "SHORT",
+      "conviction": "HIGH",
       "entry_zone": [2600, 2700],
       "stop_loss": 2820,
       "target_1": 2000,
       "target_2": 1600,
       "r_r_ratio": 2.5,
       "status": "WAITING",
-      "rationale": "Death cross confirmed. $2,600-2,700 is prior breakdown structure flipped to resistance. Culper Research short thesis: Fusaka upgrade weakened tokenomics. $5B OI = cascade risk on flush.",
+      "rationale": "Death cross confirmed. $2,600-2,700 is prior breakdown structure flipped to resistance. Culper Research short thesis: Fusaka upgrade weakened tokenomics. $4.5B OI = cascade risk on flush.",
       "catalyst_risk": "CLARITY Act passage or ETH ETF inflow surge could trigger short squeeze.",
       "timeframe": "MEDIUM_TERM",
       "added": "2026-05-06",
-      "notes": "REVISED 2026-05-07: Conviction downgraded HIGH to MEDIUM. Funding rate now slightly negative (-0.002%), meaning shorts are crowded not longs. Core structural thesis intact but derivatives signal weakened. Current price $2,336 — 11% below entry zone."
+      "notes": "Initial setup from analyst session"
     },
     {
       "symbol": "SOL",
@@ -73,4 +84,9 @@
   ],
   "alerted": [],
   "last_analysis": "May 7, 2026. Macro: BIFURCATED. BTC at $81,022 testing 200-day MA ($82,228) from below after 7 months of rejection — key inflection point. Dominance 60%, Alt Season Index 30/100, Fear & Greed 45. DXY weak at 97.63, gold strong at ~$5,400. New BTC SHORT setup added at 200-day MA with APPROACHING status. ETH conviction revised HIGH to MEDIUM on negative funding rates. All three legacy setups (ETH, SOL, XRP) remain WAITING, all 10-11% below entry zones. No entries triggered."
+      "notes": "Alt entry zone $1.78-1.85 on catalyst squeeze"
+    }
+  ],
+  "alerted": [],
+  "last_analysis": "Initial state. Three short setups loaded from analyst session on 2026-05-06. BTC dominance at 60.47%, Altcoin Season Index at 22/100. Macro bias: BEARISH/BIFURCATED. No entries triggered yet — all assets waiting for relief bounce."
 }
