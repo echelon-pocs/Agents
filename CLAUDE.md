@@ -141,7 +141,7 @@ CRYPTO MARKET INTELLIGENCE — DAILY REPORT
 
 MACRO OVERVIEW
 ──────────────────────────────────────────────────
-BTC:          ${price} | {trend} | {% from 50-day MA}
+BTC:          ${price} | {trend} | {% from 200-day MA}
 BTC Dom:      {%} | {interpretation}
 Alt Season:   {index}/100 | {interpretation}
 Fear & Greed: {index} | {label}
@@ -150,62 +150,52 @@ DXY / Gold:   {brief note}
 
 MARKET NARRATIVE
 ──────────────────────────────────────────────────
-{2-3 paragraphs of your analysis. What is driving 
-the market today? What are the key risks? What should
-the trader be watching this week?}
+{2-3 paragraphs: what is driving the market today,
+key risks, what the trader should watch this week.}
 
 ═══════════════════════════════════════════════════
-🔴 ENTER NOW — SHORT/LONG IMMEDIATELY
+ALL ACTIVE SETUPS
 ═══════════════════════════════════════════════════
-{Only shown if any setup has status ENTER}
 
-For each ENTER setup:
+SYM   DIR    STATUS       CONV    PRICE     ENTRY ZONE      STOP     T1       T2      R/R  P&L    KEY SIGNAL
+----  -----  -----------  ------  --------  --------------  -------  -------  ------  ---  -----  --------------------------------
+...one row per setup, all setups in a single table...
+
+Status legend: 🔴 ENTER | 🟡 APPROACHING | ⏳ WAITING | ✅ COMPLETED | ❌ INVALIDATED
+
+═══════════════════════════════════════════════════
+🔴 ENTER DETAILS — action required
+═══════════════════════════════════════════════════
+{Only shown if any setup has status ENTER. One block per ENTER setup:}
+
   {SYMBOL} | {DIRECTION} | Conviction: {level}
   ─────────────────────────────────────────────
-  Current Price : ${price}
-  Entry Zone    : ${low} – ${high}
-  Stop Loss     : ${stop} ({%} risk)
-  Target 1      : ${t1} ({%} gain)
-  Target 2      : ${t2} ({%} gain)
-  R/R Ratio     : {ratio}:1
-  Timeframe     : {timeframe}
-  
+  Current Price : ${price}      P&L from entry: {+/-%}
+  Entry Zone    : ${low}–${high}
+  Stop Loss     : ${stop} ({%} risk from entry)
+  Target 1      : ${t1} ({%} remaining)
+  Target 2      : ${t2} ({%} remaining)
+  R/R Ratio     : {ratio}:1    Timeframe: {timeframe}
+
   Rationale: {rationale}
   Risk: {catalyst_risk}
-
-═══════════════════════════════════════════════════
-🟡 APPROACHING — PLACE LIMIT ORDERS
-═══════════════════════════════════════════════════
-{Setups within 5% of entry zone}
-
-  {SYMBOL} | {DIRECTION} | {conviction}
-  Price: ${price} → Entry at ${low}–${high} ({%} away)
-  Stop: ${stop} | T1: ${t1} | T2: ${t2} | R/R: {ratio}:1
-  {rationale one-liner}
-
-═══════════════════════════════════════════════════
-⏳ WATCHLIST — WAITING FOR SETUP
-═══════════════════════════════════════════════════
-{All other active setups in table form}
-
-  SYMBOL  DIR    PRICE      ENTRY ZONE       STOP    R/R  CONVICTION
-  ------  -----  ---------  ---------------  ------  ---  ----------
-  ...
+  Action: {specific action — trail stop, partial take-profit, hold, etc.}
 
 ═══════════════════════════════════════════════════
 📋 SETUP CHANGES TODAY
 ═══════════════════════════════════════════════════
-{List any setups that were added, revised, or closed today}
-- NEW: {symbol} {direction} added — {brief reason}
-- REVISED: {symbol} entry zone updated from X to Y — {reason}
-- INVALIDATED: {symbol} broke above/below stop ${price}
-- COMPLETED: {symbol} hit Target 1 at ${price}
+- NEW: {symbol} {direction} — {brief reason}
+- REVISED: {symbol} — {what changed and why}
+- ENTER: {symbol} — entry triggered at ${price}
+- INVALIDATED: {symbol} — broke stop at ${price}
+- COMPLETED: {symbol} — hit Target {N} at ${price}
 
 ═══════════════════════════════════════════════════
 FULL PRICE SNAPSHOT
 ──────────────────────────────────────────────────
-{Asset}    ${price}    {24h%}    {7d%}    {status}
-...
+Asset    Price       24h%     7d%      Note
+------   ----------  -------  -------  --------------------
+...all Tier 1 and Tier 2 assets...
 
 ═══════════════════════════════════════════════════
 — Crypto Market Intelligence Agent

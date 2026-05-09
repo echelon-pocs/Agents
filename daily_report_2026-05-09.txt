@@ -5,143 +5,133 @@ CRYPTO MARKET INTELLIGENCE — DAILY REPORT
 
 MACRO OVERVIEW
 ──────────────────────────────────────────────────
-BTC:          $80,369 | Ranging below 200d MA ($82,228) | Rejected from ceiling
-BTC Dom:      ~59% | Sliding from 60% — early alt rotation signal
-Alt Season:   39/100 | Still Bitcoin season but rising (was 30 on May 7)
-Fear & Greed: 38 | Fear (worsened from 45 on May 7)
+BTC:          $80,369 | Ranging | 2.3% below 200d MA ($82,228)
+BTC Dom:      59% | Sliding from 60% — early alt rotation signal
+Alt Season:   39/100 | Bitcoin season (rising from 30 on May 7)
+Fear & Greed: 38 | Fear (worsened from 45 two days ago)
 Macro Bias:   BIFURCATED
-DXY / Gold:   DXY declining (~97), Gold $4,714 (+43% YTD) | Risk-off signal
+DXY / Gold:   DXY declining (~97), Gold $4,714 (+43% YTD, risk-off)
 
 MARKET NARRATIVE
 ──────────────────────────────────────────────────
-BTC's 200-day MA test played out exactly as the setup predicted: price ground up to
-~$81,022, kissed the ceiling at $82,228, and rejected back to $80,369. This is a clean
-technical failure at the most important level on the chart. It does not confirm a new
-downtrend yet — but it confirms the resistance is live. The short setup entry window
-($81,500-$83,000) remains on watch for the next rally attempt.
+BTC's 200-day MA test resolved exactly as the setup predicted: price ground to
+$81,022, kissed the $82,228 ceiling, and rejected back to $80,369. The resistance
+is live. The short entry window ($81,500–$83,000) remains on watch for the next
+rally. A close above $83,500 on volume would be the first real invalidation signal.
 
-The interesting story today is selective alt strength. SOL is up 7.6% to $93.45 and
-knocking on the door of the $96 short entry zone. LINK surged from $9 to $10.40 on a
-short squeeze (the crowded-shorts thesis worked). ADA broke above its consolidation to
-$0.276. BTC dominance is ticking down from 60% to 59% and the Alt Season Index rose from
-30 to 39. This is not altseason — but it is the beginning of narrative-specific rotation.
-Watch whether this is sustained or a 48-hour flush of overcrowded shorts.
+The more interesting story today is selective alt strength. SOL surged +7.6% to
+$93.45 — now 2.7% from the $96 short entry zone. LINK jumped from $9 to $10.40,
+triggering the squeeze exactly as the negative funding thesis predicted. ADA broke
+from $0.245 to $0.276. BTC dominance slid from 60% to 59% and the Alt Season
+Index rose from 30 to 39. This is not altseason — it is overcrowded-short unwind
+in specific names. Watch whether it sustains or fades within 48 hours.
 
-The macro backdrop warrants caution on the longs. Fear & Greed dropped to 38 (more fear),
-gold is at $4,714 signalling institutional risk-off, and the Fed held with no cut in sight
-(94.9% probability of no change at June meeting). The Iran conflict is injecting geopolitical
-risk. Three ENTER alerts fired today: DOGE SHORT is working, ADA LONG is working, LINK
-LONG is approaching T1. The key event to watch this week: US Senate Banking Committee
-Crypto Bill vote on May 14 — a catalyst for XRP and potentially the whole sector.
+Macro backdrop remains cautious: Fear & Greed at 38 (more fearful), gold at $4,714
+signals institutional risk-off, and the Fed held with no cut (94.9% probability).
+Iran conflict adds geopolitical noise. Key event this week: US Senate Banking
+Committee Crypto Bill vote on May 14 — a potential catalyst for XRP and sector
+sentiment broadly.
 
 ═══════════════════════════════════════════════════
-🔴 ENTRY ALERTS — THREE POSITIONS NOW ACTIVE
+ALL ACTIVE SETUPS
+═══════════════════════════════════════════════════
+
+SYM   DIR    STATUS        CONV    PRICE      ENTRY ZONE       STOP      T1       T2      R/R  P&L     KEY SIGNAL
+----  -----  ------------  ------  ---------  ---------------  --------  -------  ------  ---  ------  -----------------------------------
+DOGE  SHORT  🔴 ENTER      MEDIUM  $0.107     $0.115–$0.125    $0.135    $0.090   $0.070  2.0  +11%    RSI 73.89 overbought + 68.6% longs flushed
+ADA   LONG   🔴 ENTER      LOW     $0.276     $0.235–$0.250    $0.210    $0.310   $0.380  2.5  +13%    Extreme short crowding -0.82%/day squeezed
+LINK  LONG   🔴 ENTER      LOW     $10.40     $8.50–$9.00      $7.50     $11.00   $13.00  2.6  +15.6%  Negative funding at support triggered squeeze
+SOL   SHORT  🟡 APPROACH   HIGH    $93.45     $96–$102         $110      $70      $50     2.5  —       Death cross, 2.7% from entry zone
+BTC   SHORT  ⏳ WAITING    MEDIUM  $80,369    $81,500–$83,000  $86,000   $75,500  $68,000 2.2  —       Rejected 200d MA, next rally = entry
+ETH   SHORT  ⏳ WAITING    MEDIUM  $2,315     $2,600–$2,700    $2,820    $2,000   $1,600  2.5  —       Death cross, 12% below entry zone
+XRP   SHORT  ⏳ WAITING    MEDIUM  $1.42      $1.58–$1.65      $1.95     $1.00    $0.75   2.7  —       May 14 vote may squeeze into zone first
+AAVE  SHORT  ⏳ WAITING    MEDIUM  $94.06     $89–$93 (break)  $102      $70      $55     2.3  —       $91.50 support held, wait for breakdown
+
+Status: 🔴 ENTER (3) | 🟡 APPROACHING (1) | ⏳ WAITING (4)
+
+═══════════════════════════════════════════════════
+🔴 ENTER DETAILS — action required
 ═══════════════════════════════════════════════════
 
   DOGE | SHORT | Conviction: MEDIUM
   ─────────────────────────────────────────────
-  Entry was triggered  : ~$0.120 (zone $0.115–$0.125)
-  Current Price        : $0.107
-  Stop Loss            : $0.135
-  Target 1             : $0.090 (16% remaining)
-  Target 2             : $0.070 (35% remaining)
-  R/R Ratio            : 2.0:1
-  Current P&L          : +11% from entry midpoint
-  Timeframe            : SHORT_TERM
+  Current Price : $0.107        P&L from entry: +11%
+  Entry Zone    : $0.115–$0.125
+  Stop Loss     : $0.135 (trail to $0.130 now)
+  Target 1      : $0.090 (16% remaining)
+  Target 2      : $0.070 (35% remaining)
+  R/R Ratio     : 2.0:1    Timeframe: SHORT_TERM
 
-  Thesis confirmed: RSI 73.89 overbought + 68.6% crowded longs = flush.
-  Action: Hold position. Trail stop to $0.130 to protect gains. T1 at $0.090.
-  Risk: Elon Musk tweet or DOGE payment news. Hard stop $0.135 mandatory.
+  Rationale: RSI 73.89 overbought + 68.6% crowded longs at $0.12 resistance
+  produced the flush. No fundamental catalyst supports a breakout above $0.14.
+  Risk: Elon Musk tweet or DOGE payment news above $0.135.
+  Action: Trail stop to $0.130. Hold toward T1 $0.090.
 
   ─────────────────────────────────────────────
 
-  ADA | LONG | Conviction: LOW (size small)
+  ADA | LONG | Conviction: LOW (size 1-2% max)
   ─────────────────────────────────────────────
-  Entry was triggered  : ~$0.245 (zone $0.235–$0.250)
-  Current Price        : $0.276
-  Stop Loss (trail)    : $0.240 (moved to near breakeven)
-  Target 1             : $0.310 (12% remaining)
-  Target 2             : $0.380 (38% remaining)
-  R/R Ratio            : 2.5:1
-  Current P&L          : +13% from entry
-  Timeframe            : SHORT_TERM
+  Current Price : $0.276        P&L from entry: +13%
+  Entry Zone    : $0.235–$0.250
+  Stop Loss     : $0.240 (trailed to near breakeven)
+  Target 1      : $0.310 (12% remaining)
+  Target 2      : $0.380 (38% remaining)
+  R/R Ratio     : 2.5:1    Timeframe: SHORT_TERM
 
-  Extreme short crowding (-0.82%/day) forced the squeeze as expected.
+  Rationale: Extreme short crowding (-0.82%/day) forced the unwind as expected.
+  Risk: BTC macro weakness could pull ADA back. Macro BIFURCATED still a headwind.
   Action: Trail stop to $0.240. Partial take-profit at $0.300 acceptable.
-  Risk: BTC macro weakness pulling ADA back. Size remains small (1-2%).
 
   ─────────────────────────────────────────────
 
-  LINK | LONG | Conviction: LOW (size small)
+  LINK | LONG | Conviction: LOW (size 1-2% max)
   ─────────────────────────────────────────────
-  Entry was triggered  : ~$9.00 (zone $8.50–$9.00)
-  Current Price        : $10.40
-  Stop Loss (trail)    : $9.00 (moved to breakeven)
-  Target 1             : $11.00 (5.8% remaining) ← IMMINENT
-  Target 2             : $13.00 (25% remaining)
-  R/R Ratio            : 2.6:1
-  Current P&L          : +15.6% from entry
-  Timeframe            : SHORT_TERM
+  Current Price : $10.40        P&L from entry: +15.6%
+  Entry Zone    : $8.50–$9.00
+  Stop Loss     : $9.00 (trailed to breakeven)
+  Target 1      : $11.00 (5.8% remaining) ← IMMINENT
+  Target 2      : $13.00 (25% remaining)
+  R/R Ratio     : 2.6:1    Timeframe: SHORT_TERM
 
-  Negative funding (crowded shorts at $8.50 support) produced the squeeze.
-  Action: Take partial profit at $11.00. Trail remainder to $10.00. T2 at $13.
-  Risk: Any BTC sell-off pulls LINK. Do not let this +15% turn into a loss.
-
-═══════════════════════════════════════════════════
-🟡 APPROACHING — PLACE LIMIT ORDERS
-═══════════════════════════════════════════════════
-
-  SOL | SHORT | HIGH conviction
-  Current: $93.45 → Entry $96–$102 (2.7% away)
-  Stop: $110 | T1: $70 | T2: $50 | R/R: 2.5:1
-  Death cross 50d $85 vs 200d $131. Relief rally into the resistance zone.
-  Place limit short orders at $96, $99, $102 now. Do not chase above $102.
-
-═══════════════════════════════════════════════════
-⏳ WATCHLIST — WAITING FOR SETUP
-═══════════════════════════════════════════════════
-
-  SYMBOL  DIR    PRICE      ENTRY ZONE         STOP     R/R  CONVICTION
-  ------  -----  ---------  -----------------  -------  ---  ----------
-  BTC     SHORT  $80,369    $81,500–$83,000    $86,000  2.2  MEDIUM
-  ETH     SHORT  $2,315     $2,600–$2,700      $2,820   2.5  MEDIUM
-  XRP     SHORT  $1.42      $1.58–$1.65        $1.95    2.7  MEDIUM
-  AAVE    SHORT  $94.06     $89–$93 on break   $102     2.3  MEDIUM
+  Rationale: Negative funding (-0.0035%) at multi-test $8.50 support triggered
+  the short squeeze precisely as modelled.
+  Risk: Any BTC sell-off pulls LINK. Do not let +15% turn into a loss.
+  Action: Take partial profit at $11.00. Trail remainder stop to $10.00.
 
 ═══════════════════════════════════════════════════
 📋 SETUP CHANGES TODAY
 ═══════════════════════════════════════════════════
-- ENTER: DOGE SHORT triggered — price swept through $0.115-$0.125 zone, now $0.107 (+11%)
-- ENTER: ADA LONG triggered — was at zone $0.245, surged to $0.276 (+13%)
-- ENTER: LINK LONG triggered — was at zone $9.00, surged to $10.40 (+15.6%), T1 imminent
-- REVISED: SOL WAITING→APPROACHING — surged +7.6% to $93.45, now 2.7% from $96 entry
-- REVISED: BTC APPROACHING→WAITING — rejected off 200d MA, pulled back to $80,369
-- REVISED: AAVE APPROACHING→WAITING — $91.50 support held, bounced to $94.06
-- WATCH: XRP May 14 Senate Banking Committee vote could squeeze into entry zone
+- ENTER:   DOGE SHORT — entry triggered at ~$0.120, now $0.107 (+11%)
+- ENTER:   ADA LONG — triggered at ~$0.245, now $0.276 (+13%)
+- ENTER:   LINK LONG — triggered at ~$9.00, now $10.40 (+15.6%), T1 imminent
+- REVISED: SOL WAITING→APPROACHING — surged +7.6% to $93.45, 2.7% from $96
+- REVISED: BTC APPROACHING→WAITING — rejected 200d MA, pulled back to $80,369
+- REVISED: AAVE APPROACHING→WAITING — $91.50 support held, bounced to $94
+- NOTE:    XRP — May 14 Senate Crypto Bill vote added as key catalyst
 
 ═══════════════════════════════════════════════════
 FULL PRICE SNAPSHOT
 ──────────────────────────────────────────────────
 TIER 1
-Asset   Price       24h%      vs May 7     Status
-------  ----------  --------  -----------  ---------------------------
-BTC     $80,369     +1.25%    -0.8%        Rejected 200d MA, WAITING
-ETH     $2,315      +1.43%    -0.9%        Weak, below all MAs
-SOL     $93.45      +5.66%    +7.6%        APPROACHING short entry
-XRP     $1.42       flat      +0.7%        WAITING May 14 catalyst
-BNB     $650.21     +1.67%    -0.8%        Neutral
+Asset    Price       24h%     vs May 7    Note
+------   ----------  -------  ----------  --------------------------
+BTC      $80,369     +1.25%   -0.8%       Rejected 200d MA
+ETH      $2,315      +1.43%   -0.9%       Weak, below all MAs
+SOL      $93.45      +5.66%   +7.6%       Approaching short entry
+XRP      $1.42       flat     +0.7%       Watch May 14 vote
+BNB      $650.21     +1.67%   -0.8%       Neutral
 
-TIER 2 (notable)
-Asset   Price       vs May 7     Status
-------  ----------  -----------  ---------------------------
-DOGE    $0.107      -11%         ENTER SHORT — working +11%
-ADA     $0.276      +13%         ENTER LONG — working +13%
-AVAX    $9.89       +11%         Watching — no setup yet
-LINK    $10.40      +15%         ENTER LONG — T1 at $11 imminent
-AAVE    $94.06      +2%          WAITING short on $91.50 break
-TAO     ~$289       flat         Watching — spot ETF filing catalyst
+TIER 2
+Asset    Price       24h%     vs May 7    Note
+------   ----------  -------  ----------  --------------------------
+DOGE     $0.107      -10.7%   -11%        ENTER SHORT — working
+ADA      $0.276      +12.7%   +13%        ENTER LONG — working
+AVAX     $9.89       +7.6%    +11%        Watching, no setup
+LINK     $10.40      +15.6%   +15%        ENTER LONG — T1 imminent
+AAVE     $94.06      +2.1%    +2%         Waiting short on breakdown
+TAO      ~$289       flat     flat        Watching, spot ETF filing
 
 ═══════════════════════════════════════════════════
 — Crypto Market Intelligence Agent
   Next report: 2026-05-10 08:00 UTC
-  KEY EVENT: Senate Banking Committee Crypto Bill vote — May 14
+  KEY EVENT THIS WEEK: Senate Banking Committee Crypto Bill vote — May 14
