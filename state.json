@@ -2,73 +2,154 @@
   "last_run": "2026-05-09T08:00:00Z",
   "macro_bias": "BIFURCATED",
   "btc_price": 80369,
-  "btc_dominance": 59.0,
-  "altcoin_season_index": 39,
-  "fear_greed": 38,
+  "btc_dominance": 60.34,
+  "altcoin_season_index": 35,
+  "fear_greed": 39,
+  "whale_wallets": [
+    {"name": "Strategy (MicroStrategy)", "type": "Corporate Treasury", "btc_holdings": 818334, "signal": "ACCUMULATING"},
+    {"name": "Metaplanet", "type": "Corporate Treasury", "btc_holdings": 40177, "signal": "ACCUMULATING"},
+    {"name": "Spot BTC ETF Composite (IBIT/FBTC)", "type": "Institutional ETF", "signal": "RECORD_INFLOWS"},
+    {"name": "Anonymous BTC Whale Cluster", "type": "Large Wallet", "signal": "ACCUMULATING_61K_BTC_30D"},
+    {"name": "Machi Big Brother", "type": "DeFi Whale", "tracked_by": "Arkham", "signal": "ACTIVE"},
+    {"name": "Multicoin Capital", "type": "VC Fund", "signal": "STAKING_82M_HYPE"},
+    {"name": "ONDO Institutional Consortium (Ripple/Mastercard/JPM)", "type": "Institutional", "signal": "EXECUTING_LIVE_SETTLEMENT"},
+    {"name": "ETH Whale Cluster", "type": "Large Wallet", "eth_accumulated": "9M_ETH_leverage_flush", "signal": "ABSORBING"},
+    {"name": "XRP ETF Flows", "type": "Institutional ETF", "signal": "INFLOWS_83.9M_APR"}
+  ],
+  "whale_signals_today": {
+    "BTC": {
+      "signal": "STRONG_BULL",
+      "score": 0.85,
+      "sources": [
+        "Strategy holds 818,334 BTC, still accumulating weekly",
+        "Metaplanet raised $50M to buy more BTC, now 40,177 BTC",
+        "Spot ETF inflows hit weekly record May 7, 2026",
+        "Exchange BTC reserves at 7-year low (2.21M BTC)",
+        "Large holders net-bought 61,568 BTC in 30 days",
+        "Exchange BTC reserves down 170K BTC in 6 months to cold storage"
+      ]
+    },
+    "ETH": {
+      "signal": "MILD_BULL",
+      "score": 0.25,
+      "sources": [
+        "Whale cluster absorbed 9M ETH during $7B leverage flush",
+        "Long-term holders returned to net buying",
+        "Exchange ETH outflows (net withdrawals persisting)",
+        "Retail selling 820K ETH creating drag — mixed net signal"
+      ]
+    },
+    "XRP": {
+      "signal": "MILD_BULL",
+      "score": 0.30,
+      "sources": [
+        "XRP ETF inflows $83.9M between April 10-29",
+        "Ripple/ONDO/Mastercard/JPM live cross-border treasury settlement on XRPL",
+        "Institutional adoption narrative intact"
+      ]
+    },
+    "ONDO": {
+      "signal": "STRONG_BULL",
+      "score": 0.80,
+      "sources": [
+        "Whale withdrawal of 41.87M ONDO (~$14.34M) from Coinbase to private wallet",
+        "TVL surged from $2.6B to $3.53B in Q1 2026",
+        "First live cross-border tokenized Treasury settlement with Ripple/Mastercard/JPM (May 6)",
+        "29% price surge following settlement announcement",
+        "Demand zone $0.35-0.40 showing strong accumulation CVD"
+      ]
+    },
+    "SOL": {
+      "signal": "NEUTRAL",
+      "score": 0.0,
+      "sources": [
+        "Earlier 2026 whale accumulation documented",
+        "Current OI: $6.35B — elevated, crowded",
+        "$31.2M in SOL futures liquidated last 24h — two-way risk",
+        "No clear directional whale signal today"
+      ]
+    }
+  },
   "active_setups": [
     {
       "symbol": "BTC",
-      "direction": "SHORT",
-      "conviction": "MEDIUM",
-      "entry_zone": [81500, 83000],
-      "stop_loss": 86000,
-      "target_1": 75500,
-      "target_2": 68000,
-      "r_r_ratio": 2.2,
+      "direction": "LONG",
+      "conviction": "HIGH",
+      "entry_zone": [76000, 79000],
+      "stop_loss": 73000,
+      "target_1": 88000,
+      "target_2": 96000,
+      "r_r_ratio": 2.3,
       "status": "WAITING",
-      "rationale": "BTC tested its 200-day MA ($82,228) and rejected — confirming the ceiling is real. Pulled back to $80,369. Fear & Greed fell from 45 to 38, macro remains risk-off with gold strong at $4,714. Setup thesis intact: entry on next rally into 200d MA zone.",
-      "catalyst_risk": "Fed surprise cut, ETF inflow surge, or Iran conflict de-escalation risk-on spike above $83,500.",
-      "timeframe": "SHORT_TERM",
-      "added": "2026-05-07",
-      "notes": "REVISED 2026-05-09: APPROACHING→WAITING. BTC rejected near 200d MA and pulled back to $80,369. Entry zone not triggered. Next test of $81,500–$83,000 is the setup trigger."
+      "whale_signal": "STRONG_BULL",
+      "whale_wallets_active": 6,
+      "technical_score": 0.4,
+      "composite_score": 0.715,
+      "rationale": "Smart money is screaming accumulation: Strategy 818K BTC, Metaplanet 40K BTC, record ETF inflows, exchange reserves 7-year lows. Previous SHORT thesis at $81,500-83,000 invalidated — whale composite +0.715 signals LONG. Wait for pullback to $76K-79K to enter with institutional tailwind.",
+      "catalyst_risk": "Fed hawkish surprise or BTC ETF outflow reversal. Geopolitical risk-on could spike fast.",
+      "timeframe": "MEDIUM_TERM",
+      "added": "2026-05-09",
+      "notes": "NEW 2026-05-09: Replaced BTC SHORT (invalidated by whale signal composite +0.715). BTC SHORT was WAITING at $81,500-83,000 but whale accumulation overwhelming — 6 large entities actively buying. New setup: LONG on pullback to $76K-79K."
     },
     {
       "symbol": "ETH",
       "direction": "SHORT",
-      "conviction": "MEDIUM",
+      "conviction": "LOW",
       "entry_zone": [2600, 2700],
       "stop_loss": 2820,
       "target_1": 2000,
       "target_2": 1600,
       "r_r_ratio": 2.5,
       "status": "WAITING",
-      "rationale": "Death cross confirmed. $2,600-2,700 is prior breakdown structure flipped to resistance. $5B OI = cascade risk on flush. ETH at $2,315 — 12% below entry zone.",
-      "catalyst_risk": "CLARITY Act passage or ETH ETF inflow surge could trigger short squeeze.",
+      "whale_signal": "MILD_BULL",
+      "whale_wallets_active": 2,
+      "technical_score": -0.5,
+      "composite_score": 0.025,
+      "rationale": "Death cross still valid and $2,600-2,700 is solid resistance. However, whale composite is near neutral (+0.025): 9M ETH absorbed by whales during leverage flush partially offsets bearish technicals. Short thesis intact but conviction downgraded to LOW — size smaller and require confirmed daily close above $2,600 to enter.",
+      "catalyst_risk": "Glamsterdam upgrade catalyst or whale absorption turning full bull would invalidate. Monitor ETH exchange flows.",
       "timeframe": "MEDIUM_TERM",
       "added": "2026-05-06",
-      "notes": "Current price $2,315 — 12% below entry zone. Unchanged."
+      "notes": "REVISED 2026-05-09: Conviction downgraded MEDIUM→LOW. Whale counter-signal (MILD_BULL, composite +0.025) weakens short case. Price $2,379 — 9% below entry zone. Unchanged otherwise."
     },
     {
       "symbol": "SOL",
       "direction": "SHORT",
-      "conviction": "HIGH",
+      "conviction": "LOW",
       "entry_zone": [96, 102],
       "stop_loss": 110,
       "target_1": 70,
       "target_2": 50,
       "r_r_ratio": 2.5,
       "status": "APPROACHING",
-      "rationale": "Death cross confirmed (50d $85 vs 200d $131). SOL surged +7.6% to $93.45 in 2 days — now only 2.7% from entry zone. This rally is the setup materialising: relief bounce into $96-102 resistance cluster. Place limit short orders now.",
-      "catalyst_risk": "Alpenglow early launch or major institutional SOL ETF approval.",
+      "whale_signal": "NEUTRAL",
+      "whale_wallets_active": 0,
+      "technical_score": -0.7,
+      "composite_score": -0.21,
+      "rationale": "Death cross confirmed (50d $85 vs 200d $131). SOL now $93.66, 2.5% from entry zone low. Technical score -0.7 (strong) but whale signal neutral, bringing composite to only -0.21. Setup valid via technicals alone — place limit shorts at $96-102 but size conservatively given LOW composite conviction.",
+      "catalyst_risk": "Alpenglow early launch or SOL ETF approval. Whale accumulation reversal.",
       "timeframe": "MEDIUM_TERM",
       "added": "2026-05-06",
-      "notes": "REVISED 2026-05-09: WAITING→APPROACHING. SOL surged from $86.81 to $93.45 (+7.6%). Now 2.7% from entry zone low. Place limit shorts at $96–102. Next resistance: $95, $97, $100."
+      "notes": "REVISED 2026-05-09: Conviction MEDIUM→LOW. Whale signal NEUTRAL (composite -0.21 < 0.3 threshold). Technical setup strong but smart money not confirming short. SOL at $93.66, OI $6.35B, $31.2M liquidations. Place conservative limit shorts at $96-102."
     },
     {
       "symbol": "XRP",
       "direction": "SHORT",
-      "conviction": "MEDIUM",
+      "conviction": "LOW",
       "entry_zone": [1.58, 1.65],
       "stop_loss": 1.95,
       "target_1": 1.00,
       "target_2": 0.75,
       "r_r_ratio": 2.7,
       "status": "WAITING",
-      "rationale": "$1.45-1.47 rejected 4 times. 200-day MA at $1.88 is max squeeze level. ETF approvals and legal resolution fully priced in. Senate Banking Committee Crypto Bill vote May 14 = potential sell-the-news event.",
-      "catalyst_risk": "CLARITY Act Senate vote May 14 — watch for squeeze to $1.58+ first, then short.",
+      "whale_signal": "MILD_BULL",
+      "whale_wallets_active": 1,
+      "technical_score": -0.4,
+      "composite_score": 0.09,
+      "rationale": "Resistance at $1.58-1.65 still valid technically. However, XRP whale signal is MILD_BULL (ETF inflows $83.9M, Ripple live with ONDO/JPM). Composite near-zero (+0.09) means no directional edge from smart money. May 14 Senate vote is a potential sell-the-news catalyst — hold WAITING and reassess post-vote.",
+      "catalyst_risk": "CLARITY Act Senate vote May 14 — squeeze to $1.58+ possible first. Ripple institutional momentum could push above stop.",
       "timeframe": "MEDIUM_TERM",
       "added": "2026-05-06",
-      "notes": "REVISED 2026-05-09: Current price $1.42. May 14 Senate vote is key — could squeeze XRP into entry zone. Alt entry zone $1.78-1.85 on broader catalyst."
+      "notes": "REVISED 2026-05-09: Conviction MEDIUM→LOW. Whale counter-signal (MILD_BULL, composite +0.09). Price $1.42 — 11% below entry zone. May 14 Senate vote key catalyst. Monitor for squeeze into $1.58-1.65 for SHORT entry, or invalidate if vote is bullish."
     },
     {
       "symbol": "DOGE",
@@ -80,27 +161,35 @@
       "target_2": 0.070,
       "r_r_ratio": 2.0,
       "status": "ENTER",
-      "rationale": "Entry triggered — price swept through zone and is at $0.107. RSI overbought + 68.6% crowded longs produced the flush. Currently +11% profit from $0.12 entry midpoint. T1 at $0.09 is 16% further.",
-      "catalyst_risk": "Elon Musk tweet or DOGE payment integration could reverse. Stop $0.135.",
+      "whale_signal": "NEUTRAL",
+      "whale_wallets_active": 0,
+      "technical_score": -0.5,
+      "composite_score": -0.15,
+      "rationale": "In trade. Entry triggered at $0.12 midpoint, price now $0.107 (+11% profit). T1 at $0.090 is 16% away. Whale signal neutral for meme coins. Technical composite -0.15 — modest but directionally correct. Trail stop to $0.125 (entry zone top) to protect gains.",
+      "catalyst_risk": "Elon Musk tweet or DOGE payment news could spike hard. Stop $0.135.",
       "timeframe": "SHORT_TERM",
       "added": "2026-05-07",
-      "notes": "ENTER 2026-05-09. Price $0.107. P&L from $0.12: +11%. T1 $0.09 = 16% remaining. Hold stop at $0.135."
+      "notes": "ENTER — in trade. Price $0.107. P&L from $0.12: +11%. T1 $0.09 = 16% remaining. Trail stop to $0.125. Composite -0.15 (neutral whales, technical short). Hold."
     },
     {
       "symbol": "AAVE",
       "direction": "SHORT",
-      "conviction": "MEDIUM",
+      "conviction": "LOW",
       "entry_zone": [89.0, 93.0],
       "stop_loss": 102.0,
       "target_1": 70.0,
       "target_2": 55.0,
       "r_r_ratio": 2.3,
-      "status": "WAITING",
-      "rationale": "Supertrend bearish. $91.50 support held — price bounced to $94. Entry requires confirmed $91.50 breakdown. Funding turned slightly negative (-0.0007%), reducing urgency. Wait for re-test.",
-      "catalyst_risk": "AAVE V4 launch or DeFi fee switch vote passing could spike price.",
+      "status": "APPROACHING",
+      "whale_signal": "NEUTRAL",
+      "whale_wallets_active": 0,
+      "technical_score": -0.4,
+      "composite_score": -0.12,
+      "rationale": "Price at $93.99 — now touching the top of entry zone ($89-93). RSI neutral at 47.97. AAVE V4 launched March 2026 (positive catalyst reduces urgency for short). Whale signal neutral. Composite -0.12 is weak. Require confirmed daily close BELOW $91.50 before entering — do not short into V4 momentum without breakdown.",
+      "catalyst_risk": "AAVE V4 fee switch vote passing or DeFi resurgence. V4 already launched — DeFi TVL uptick could push above $102 stop.",
       "timeframe": "SHORT_TERM",
       "added": "2026-05-07",
-      "notes": "REVISED 2026-05-09: APPROACHING→WAITING. $91.50 held. Price at $94.06. Wait for re-test and daily close below $91.50."
+      "notes": "REVISED 2026-05-09: WAITING→APPROACHING. Price $93.99 at upper edge of entry zone. Conviction downgraded MEDIUM→LOW (V4 catalyst, weak composite -0.12). Require daily close below $91.50. Do not enter at current price."
     },
     {
       "symbol": "ADA",
@@ -112,11 +201,15 @@
       "target_2": 0.380,
       "r_r_ratio": 2.5,
       "status": "ENTER",
-      "rationale": "Entry triggered — ADA was at $0.245 (within zone) and surged to $0.276. Extreme short crowding (-0.82%/day) forced the squeeze. Currently +13% from entry. T1 at $0.310 is 12% away.",
-      "catalyst_risk": "Macro BIFURCATED still a headwind. BTC weakness could pull ADA down. Size small.",
+      "whale_signal": "MILD_BULL",
+      "whale_wallets_active": 1,
+      "technical_score": 0.4,
+      "composite_score": 0.26,
+      "rationale": "In trade. Entry at $0.245, now $0.276 (+13% profit). Composite +0.26 (mild bull whale + positive technical). T1 at $0.310 is 12% away. Trail stop to $0.250 (near breakeven). Size remains small given BIFURCATED macro.",
+      "catalyst_risk": "BTC weakness pulling alts. BTC SHORT replaced with LONG — if BTC corrects to entry zone, ADA could dip. Trail stop protects.",
       "timeframe": "SHORT_TERM",
       "added": "2026-05-07",
-      "notes": "ENTER 2026-05-09. Price $0.276. P&L from $0.245: +13%. T1 $0.310 = 12% remaining. Trail stop to $0.240 (near breakeven)."
+      "notes": "ENTER — in trade. Price $0.276. P&L from $0.245: +13%. T1 $0.310 = 12% remaining. Trail stop to $0.250. Composite +0.26 (mild bull). Hold."
     },
     {
       "symbol": "LINK",
@@ -128,13 +221,37 @@
       "target_2": 13.00,
       "r_r_ratio": 2.6,
       "status": "ENTER",
-      "rationale": "Entry triggered — LINK was at $9.00 zone and surged to $10.40. Negative funding (crowded shorts) triggered squeeze as expected. Currently +15.6% from entry. T1 at $11.00 is only 5.8% away.",
-      "catalyst_risk": "BTC breakdown pulling all alts. Trail stop to protect gains.",
+      "whale_signal": "NEUTRAL",
+      "whale_wallets_active": 0,
+      "technical_score": 0.5,
+      "composite_score": 0.15,
+      "rationale": "In trade. Entry at $9.00, now $10.40 (+15.6% profit). T1 at $11.00 is only 5.8% away — consider taking 50% partial profit at $11. Trail stop to $9.50. Composite +0.15 (neutral whale, solid technical). Momentum trade — lock in gains near T1.",
+      "catalyst_risk": "BTC breakdown pulling all alts. Secure profits near T1.",
       "timeframe": "SHORT_TERM",
       "added": "2026-05-07",
-      "notes": "ENTER 2026-05-09. Price $10.40. P&L from $9.00: +15.6%. T1 $11.00 = 5.8% remaining. Consider partial take-profit at $11. Trail stop to $9.00."
+      "notes": "ENTER — in trade. Price $10.40. P&L from $9.00: +15.6%. T1 $11.00 = 5.8% remaining. Take 50% profit at $11, trail stop to $9.50. Composite +0.15. T1 imminent."
+    },
+    {
+      "symbol": "ONDO",
+      "direction": "LONG",
+      "conviction": "HIGH",
+      "entry_zone": [0.40, 0.48],
+      "stop_loss": 0.34,
+      "target_1": 0.72,
+      "target_2": 1.05,
+      "r_r_ratio": 2.8,
+      "status": "APPROACHING",
+      "whale_signal": "STRONG_BULL",
+      "whale_wallets_active": 4,
+      "technical_score": 0.5,
+      "composite_score": 0.71,
+      "rationale": "Strongest whale signal of the week: STRONG_BULL (+0.80). Ondo Finance executed first live cross-border tokenized Treasury settlement with Ripple, Mastercard, and J.P. Morgan Kinexys (May 6) — this is real institutional adoption, not speculation. TVL surged to $3.53B (+35% Q1). Whale cluster withdrew 41.87M ONDO to cold storage. 29% surge post-announcement. Price $0.45 consolidating — wait for pullback to $0.40-0.48 entry zone. Composite +0.71 = HIGH conviction.",
+      "catalyst_risk": "Broader crypto risk-off pulling ONDO down with alts. If BTC corrects sharply, ONDO could gap below $0.34 stop. Regulatory clarity for RWA tokenization remains key.",
+      "timeframe": "MEDIUM_TERM",
+      "added": "2026-05-09",
+      "notes": "NEW 2026-05-09: APPROACHING. Price $0.45 at upper edge of entry zone after 29% surge. Highest composite score today (+0.71). Whale: STRONG_BULL. 4 institutional wallets active. Wait for consolidation/pullback into $0.40-0.48 zone. Place limit longs there."
     }
   ],
   "alerted": ["DOGE", "ADA", "LINK"],
-  "last_analysis": "May 9, 2026. Macro: BIFURCATED (dominance sliding 60%→59%, Alt Season 39/100, Fear & Greed 38). BTC rejected 200-day MA and pulled back to $80,369 — thesis intact, entry not triggered. SOL surged +7.6% to $93.45, now APPROACHING entry. Three ENTER alerts: DOGE SHORT (+11%), ADA LONG (+13%), LINK LONG (+15.6%, T1 imminent at $11). AAVE reverted to WAITING ($91.50 held). XRP WAITING; May 14 Senate vote key catalyst."
+  "last_analysis": "May 9, 2026. BIFURCATED macro: BTC $80,369, dominance 60.34%, Alt Season 35/100, Fear & Greed 39. KEY CHANGE: BTC SHORT invalidated — whale composite +0.715 (STRONG_BULL). Corporate treasuries (Strategy 818K, Metaplanet 40K), record ETF inflows, 7-year low exchange reserves all signal institutional accumulation. New BTC LONG setup added (entry $76K-79K). NEW setup ONDO LONG (composite +0.71, HIGH conviction) — Ripple/Mastercard/JPM live tokenized Treasury settlement. Three existing ENTER positions holding: DOGE SHORT (+11%), ADA LONG (+13%), LINK LONG (+15.6%, T1 at $11 imminent). AAVE now APPROACHING ($93.99 at entry zone top — wait for $91.50 breakdown). ETH/XRP/SOL SHORT setups downgraded to LOW conviction due to whale counter-signals."
 }
