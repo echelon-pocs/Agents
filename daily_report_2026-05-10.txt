@@ -1,0 +1,249 @@
+═══════════════════════════════════════════════════════════
+CRYPTO MARKET INTELLIGENCE — DAILY REPORT
+May 10, 2026  |  08:00 UTC
+SIGNAL ARCHITECTURE: 70% Smart Money On-Chain | 30% Technical
+🔴 ENTRY ALERT: ONDO LONG triggered at $0.43
+═══════════════════════════════════════════════════════════
+
+MACRO OVERVIEW
+──────────────────────────────────────────────────────────
+BTC:          $80,782  |  Holding above $80K  |  +0.5% 24h
+BTC Dom:      ~60.1%   |  Bitcoin Season — alt headwind persists
+Alt Season:   35/100   |  Bitcoin Season (unchanged)
+Fear & Greed: 42/100   |  Fear (improving — was 39 yesterday)
+Macro Bias:   BIFURCATED
+DXY:          Still weak — structural BTC tailwind
+Gold:         ~$4,720  |  Strong (risk-off safe haven bid intact)
+30-yr Yield:  5.0%     |  Hawkish macro headwind for risk assets
+
+MARKET NARRATIVE
+──────────────────────────────────────────────────────────
+The week's defining catalyst is four days away: May 14, the Senate Banking
+Committee CLARITY Act markup. A bipartisan compromise on stablecoin yield rules
+has cleared the key hurdle, and the market structure bill now has a credible path
+to a floor vote. This is the most significant regulatory development in crypto in
+two years. BTC already pushed above $80,000 on the news — analysts at JPMorgan
+project $100K+ by end-2026 if the Act delivers. XRP is the primary direct
+beneficiary (market structure clarity + XRPL legitimacy). Watch for XRP to squeeze
+from $1.42 into the $1.58-1.65 SHORT entry zone in the days ahead.
+
+Today's entry alert is ONDO. The Ripple/Mastercard/JPMorgan live tokenized Treasury
+settlement (May 6) was a genuine institutional milestone — not a press release, a
+live commercial transaction. The 29% surge that followed has now digested: price
+pulled back -5.3% from $0.45 to $0.43, right into the entry zone. RSI at 78.93
+shows momentum but the pullback is healthy and the whale demand zone ($0.35-0.40)
+sits below providing structural support. With a composite score of +0.71 (HIGH
+conviction), this is the cleanest new long setup in the book.
+
+The 30-year Treasury yield hitting 5% is a genuine macro headwind — it raises the
+opportunity cost of holding risk assets. However, it has not stopped whale
+accumulation: 270K BTC net bought in 30 days, 142 new whale addresses, ETF inflows
+$2.44B in April alone. Smart money is not waiting for lower yields to buy — they are
+accumulating through the hawkish environment. The bull case remains institutional
+conviction vs. macro friction. For now, institutional conviction is winning.
+
+═══════════════════════════════════════════════════════════
+🐋  SMART MONEY — WHALE SIGNALS TODAY
+═══════════════════════════════════════════════════════════
+
+ASSET   WHALE SIGNAL    SCORE    ACTIVE WALLETS   KEY EVIDENCE
+------  --------------  -------  ---------------  ─────────────────────────────────────────
+BTC     STRONG_BULL     +0.85    6                270K BTC/30d, 142 new whale addresses,
+                                                  ETF $2.44B April, exchange outflows persist
+ONDO    STRONG_BULL     +0.80    4                RWA institutional flow, live JPM settlement
+                                                  active, -5.3% pullback is TA not whale exit
+ETH     MILD_BULL       +0.30    2                140K ETH absorbed in 96h (reinforced signal),
+                                                  Glamsterdam upgrade approaching
+XRP     MILD_BULL       +0.35    1                CLARITY Act May 14 markup (direct beneficiary),
+                                                  higher lows $1.42-1.43, XRP ETF flows
+SOL     NEUTRAL          0.00    0                No new directional whale data
+DOGE    NEUTRAL          0.00    0                No institutional whale activity
+AAVE    NEUTRAL          0.00    0                No specific whale data
+ADA     MILD_BULL       +0.20    1                Selective alt accumulation
+
+Notable moves:
+- BTC Whale Cluster: 142 new 1000+ BTC addresses in 6 months — accumulation not distribution
+- ETH Whale Cluster: 140K ETH absorbed in 96 hours during leverage flush
+- ONDO Institutional (JPM/Ripple/Mastercard): Live commercial tokenized Treasury settlement running
+- CryptoQuant CEO signal: "Exchange whale ratio decline = large holders accumulating"
+
+═══════════════════════════════════════════════════════════
+📊  ALL ACTIVE SETUPS — MASTER TABLE
+═══════════════════════════════════════════════════════════
+
+SYM    DIR    STATUS       CONV    PRICE      ENTRY ZONE         STOP      T1        T2       R/R   WHALE        COMP    KEY SIGNAL
+-----  -----  -----------  ------  ---------  -----------------  --------  --------  -------  ----  -----------  ------  ─────────────────────────────────────
+ONDO   LONG   ENTER 🔴     HIGH    $0.43      $0.40 – $0.48      $0.34     $0.72     $1.05    3.2   STRONG_BULL  +0.71   NEW ENTRY: pullback into zone, JPM live
+BTC    LONG   WAITING      HIGH    $80,782    $76,000 – $79,000  $73,000   $88,000   $96,000  2.3   STRONG_BULL  +0.72   Corp treasuries + ETF record. Watch May 14
+LINK   LONG   ENTER ✓      LOW     $10.32     $8.50 – $9.00      $9.50*    $11.00    $13.00   2.6   NEUTRAL      +0.15   +14.7% profit, T1 $11 imminent
+ADA    LONG   ENTER ✓      LOW     $0.270     $0.235 – $0.250    $0.250*   $0.310    $0.380   2.5   MILD_BULL    +0.26   +10% profit, T1 $0.310
+DOGE   SHORT  ENTER ✓      MEDIUM  $0.109     $0.115 – $0.125    $0.125*   $0.090    $0.070   2.0   NEUTRAL      -0.15   +9% profit, T1 $0.09
+AAVE   SHORT  APPROACHING  LOW     $92.30     $89.00 – $93.00    $102.00   $70.00    $55.00   2.3   NEUTRAL      -0.12   Inside zone — await $91.50 daily close
+SOL    SHORT  APPROACHING  LOW     $92.95     $96.00 – $102.00   $110.00   $70.00    $50.00   2.5   NEUTRAL      -0.21   3.2% from entry, CLARITY Act risk May 14
+ETH    SHORT  WAITING      LOW     $2,327     $2,600 – $2,700    $2,820    $2,000    $1,600   2.5   MILD_BULL    +0.03   140K ETH whale buy reinforces counter-signal
+XRP    SHORT  WAITING      LOW     $1.42      $1.58 – $1.65      $1.95     $1.00     $0.75    2.7   MILD_BULL    +0.09   May 14 CLARITY Act — squeeze trigger, then fade
+
+* = trailing stop
+
+═══════════════════════════════════════════════════════════
+🔴  ENTER NOW — ACTION REQUIRED
+═══════════════════════════════════════════════════════════
+
+── ONDO | LONG | Conviction: HIGH | NEW ENTRY ─────────────
+  Current Price : $0.43 (entered entry zone $0.40–$0.48)
+  Stop Loss     : $0.34 (-20.9% from entry)
+  Target 1      : $0.72 (+67.4% remaining)
+  Target 2      : $1.05 (+144.2% remaining)
+  R/R Ratio     : 3.2:1
+  P&L from Entry: 0% (just entered)
+  Whale Signal  : STRONG_BULL (+0.80) | 4 institutional wallets active
+  Composite     : +0.71 (HIGH conviction)
+
+  Rationale: Price pulled back -5.3% from the post-settlement spike into the
+  entry zone — this is the consolidation entry. The Ripple/Mastercard/JPMorgan
+  live tokenized Treasury settlement (May 6) is not priced in; it is just beginning
+  to attract institutional capital. TVL $3.53B (+35% Q1). Whale demand zone at
+  $0.35-0.40 provides structural support below stop. This is the highest-composite
+  setup in the book.
+  Risk: 30-yr yield at 5% is macro headwind. BTC sharp correction could drag
+  ONDO below $0.34 stop. Regulatory RWA framework still developing.
+  Action: BUY at current $0.43. Stop $0.34. Target 1 at $0.72 (take 60% profit).
+  Target 2 at $1.05 (hold remainder). Do not chase above $0.50.
+
+── DOGE | SHORT | Conviction: MEDIUM | Holding ────────────
+  Current Price : $0.109   |  P&L: +9% from $0.120 entry
+  Stop Loss     : $0.125 (trailing)
+  Target 1      : $0.090 (18% remaining)
+  Action        : HOLD. Watch May 14 CLARITY Act for meme coin spike risk.
+
+── ADA | LONG | Conviction: LOW | Holding ─────────────────
+  Current Price : $0.270   |  P&L: +10% from $0.245 entry
+  Stop Loss     : $0.250 (trailing)
+  Target 1      : $0.310 (15% remaining)
+  Action        : HOLD. CLARITY Act May 14 is a potential catalyst to lift ADA.
+
+── LINK | LONG | Conviction: LOW | T1 IMMINENT ────────────
+  Current Price : $10.32   |  P&L: +14.7% from $9.00 entry
+  Stop Loss     : $9.50 (trailing)
+  Target 1      : $11.00 (6.6% remaining — TAKE 50% PROFIT HERE)
+  Action        : TAKE 50% at $11.00. Trail remainder to $10.00. CLARITY Act
+                  could lift oracle protocols — hold remainder for $13.
+
+═══════════════════════════════════════════════════════════
+🟡  APPROACHING — PLACE LIMIT ORDERS
+═══════════════════════════════════════════════════════════
+
+── AAVE | SHORT | LOW Conviction | Composite: -0.12 ───────
+  Price $92.30 (inside entry zone $89-93). Require close below $91.50.
+  CAUTION: CLARITY Act DeFi tailwind May 14 adds risk to this short.
+  Action: Do NOT enter yet. Wait for $91.50 daily close confirmation.
+
+── SOL | SHORT | LOW Conviction | Composite: -0.21 ────────
+  Price $92.95, entry zone $96-102 (3.2% away).
+  CAUTION: CLARITY Act May 14 could spike SOL. Size conservatively.
+  Action: Place small limit shorts at $96-102. Keep stops tight at $110.
+
+═══════════════════════════════════════════════════════════
+⏳  WATCHLIST — KEY CATALYSTS AHEAD
+═══════════════════════════════════════════════════════════
+
+── BTC | LONG | HIGH Conviction | Composite: +0.72 ───────
+  Price $80,782 → Entry zone $76,000-$79,000 (waiting for pullback)
+  NOTE: If CLARITY Act passes bullishly May 14, BTC may not dip to zone.
+  Plan B: If BTC breaks above $84,000 on CLARITY news, adjust entry to
+  $80,000-83,000 with updated stops. Watch for confirmation.
+
+── XRP | SHORT | LOW Conviction | Composite: +0.09 ───────
+  Price $1.42 → Entry $1.58-1.65 (10.6% below zone)
+  CLARITY Act scenario: XRP squeezes to $1.58-1.65 on May 14 news → SHORT entry
+  (sell-the-news). If CLARITY is very bullish (XRP breaks $1.70+), step aside.
+
+── ETH | SHORT | LOW Conviction | Composite: +0.03 ───────
+  Price $2,327 → Entry $2,600-2,700 (11.9% below zone)
+  Whale 140K ETH absorption reinforced. Composite near zero. Monitor Glamsterdam.
+  Consider invalidating if whale score crosses +0.35.
+
+═══════════════════════════════════════════════════════════
+📋  SETUP CHANGES TODAY
+═══════════════════════════════════════════════════════════
+- ENTER: ONDO LONG — price $0.43 entered $0.40-$0.48 zone. JPM/Ripple/Mastercard
+  live settlement intact. Composite +0.71 HIGH. R/R 3.2:1. New position.
+
+- UPDATE: BTC LONG — note CLARITY Act May 14 may prevent pullback to $76K-79K
+  entry zone. Prepare Plan B entry around $80K-83K if BTC breaks higher on news.
+
+- UPDATE: XRP SHORT — CLARITY Act May 14 is now the specific TRIGGER for entry.
+  Scenario: XRP squeezes to $1.58-1.65 on news → SHORT (sell-the-news catalyst).
+
+- UPDATE: DOGE SHORT — slight price bounce ($0.107→$0.109). Stop $0.125 intact.
+  CLARITY Act May 14 risk: meme coin spike. Monitor.
+
+- UPDATE: LINK LONG — T1 at $11.00 is 6.6% away. CLARITY Act could accelerate.
+  Take 50% at $11.
+
+- MONITOR: ETH SHORT — whale signal reinforced (140K ETH/96h). If whale score
+  crosses +0.35, will invalidate this setup. Currently LOW conviction only.
+
+- WATCH: SUI — showing breakout + relative strength. Flag for deeper scan.
+- WATCH: HYPE — Multicoin $82M stake, +5% today. Flag for deeper scan.
+
+═══════════════════════════════════════════════════════════
+⚡  MAY 14 CLARITY ACT PLAYBOOK
+═══════════════════════════════════════════════════════════
+Scenario A — Bullish pass (full markup, bipartisan support):
+  BTC: Spike to $84K-88K → may not hit $76K-79K zone; adjust entry upward
+  XRP: Squeeze to $1.65-1.80 → SHORT entry (sell-the-news)
+  ONDO: Boost to $0.52-0.60 → hold, approaching T1 $0.72
+  LINK: Likely hits T1 $11.00 → take 50% profit
+  ADA: Spike to $0.30+ → approaching T1 $0.310
+
+Scenario B — Delayed/watered down (postponed or weakened):
+  BTC: Pulls back toward $78K → BTC LONG entry possible
+  XRP: Drifts lower → setup remains WAITING
+  Broader alts: Sell-off → stop management critical
+
+Scenario C — Failed/blocked:
+  BTC: Sharp drop $75K-76K → BTC LONG entry triggered
+  XRP: Breaks below $1.40 → XRP SHORT invalidated (too much downside risk)
+
+═══════════════════════════════════════════════════════════
+FULL PRICE SNAPSHOT
+──────────────────────────────────────────────────────────
+TIER 1 ASSETS
+Asset   Price       24h%     Whale Signal   Setup Status
+------  ----------  -------  -------------  ──────────────────────────────
+BTC     $80,782     +0.5%    STRONG_BULL    LONG WAITING (HIGH, $76K-79K)
+ETH     $2,327      +0.6%    MILD_BULL      SHORT WAITING (LOW)
+SOL     $92.95      -0.4%    NEUTRAL        SHORT APPROACHING (LOW)
+XRP     $1.42       -1.1%    MILD_BULL      SHORT WAITING — May 14 trigger
+ONDO    $0.43       -5.3%    STRONG_BULL    LONG ENTER 🔴 (NEW, HIGH)
+
+TIER 2 ASSETS
+Asset   Price       24h%     Setup Notes
+------  ----------  -------  ─────────────────────────────────────
+DOGE    $0.109      +1.4%    SHORT ENTER (in trade +9%, stop $0.125)
+ADA     $0.270      -2.2%    LONG ENTER (in trade +10%, stop $0.250)
+LINK    $10.32      -0.8%    LONG ENTER (in trade +14.7%, T1 $11 imminent)
+AAVE    $92.30      -1.8%    SHORT APPROACHING (await $91.50 close)
+AVAX    ~$22        ~-1%     No setup
+DOT     ~$4.50      ~-1%     No setup
+MATIC   ~$0.35      ~flat    No setup
+ATOM    ~$5.20      ~flat    No setup
+LTC     ~$88        ~+1%     No setup
+BCH     ~$420       ~flat    No setup
+UNI     ~$6.10      ~-2%     No setup
+OP      ~$1.20      ~+1%     No setup
+ARB     ~$0.55      ~flat    No setup
+SUI     ~$2.80      +4%      WATCHING — breakout + relative strength
+APT     ~$5.50      ~+1%     No setup
+INJ     ~$8.20      ~-1%     No setup
+TIA     ~$2.90      ~flat    No setup
+HYPE    ~$15.20     +5%      WATCHING — Multicoin $82M stake
+TAO     ~$315       +2%      No setup
+
+═══════════════════════════════════════════════════════════
+— Crypto Market Intelligence Agent (Whale Tracking Layer v2)
+  Data: Phemex, MetaMask, Lookonchain, Arkham, Nansen, CoinGlass
+  Next report: tomorrow 08:00 UTC
+  ⚡ KEY DATE: May 14 — U.S. Senate CLARITY Act markup
+     See playbook above for scenario planning.
