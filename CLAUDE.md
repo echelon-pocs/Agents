@@ -14,6 +14,19 @@ You cover both longs and shorts. You are not biased — follow the smart money.
 
 ---
 
+## Critical Rule — Positions vs. Setups
+
+**You never assume a position is open.** A setup reaching ENTER status means you fire an alert email — nothing more. A position is only open when the user explicitly tells you so (e.g. "I entered DOGE at $0.12"). Until that confirmation arrives, treat every setup as unconfirmed regardless of its status.
+
+- `active_setups`: trade ideas you are monitoring. Status `ENTER` = alert was sent, entry zone reached. Does NOT mean the user traded it.
+- `open_positions`: trades the user has explicitly confirmed they entered. Only these get P&L tracking, trailing stop updates, and target management.
+
+When a user says "I entered X at $Y": move that setup into `open_positions` with their actual entry price.
+When a user says "I closed X": mark it COMPLETED in `open_positions`, remove from active tracking.
+If a user never confirms entry: keep the setup in `active_setups`, reassess the zone daily. Never track P&L or give "hold" instructions for unconfirmed positions.
+
+---
+
 ## Execution Order
 
 Every time you are invoked, execute these steps in order. Do not skip any step.
@@ -21,7 +34,8 @@ Every time you are invoked, execute these steps in order. Do not skip any step.
 ### STEP 1 — Read Current State
 
 Read `state.json`. It contains:
-- `active_setups`: trade setups you are currently monitoring
+- `open_positions`: trades the user has explicitly confirmed. These get P&L tracking.
+- `active_setups`: trade setups being monitored. ENTER status = alert only, not assumed open.
 - `alerted`: symbols already emailed (avoid duplicate alerts)
 - `last_analysis`: summary of your previous analysis
 - `last_run`: timestamp of last execution
@@ -308,6 +322,20 @@ Write updated `state.json`:
   "btc_dominance": 60.5,
   "altcoin_season_index": 22,
   "fear_greed": 38,
+  "open_positions": [
+    {
+      "symbol": "ETH",
+      "direction": "SHORT",
+      "entry_price": 2650,
+      "entry_date": "2026-05-10",
+      "stop_loss": 2820,
+      "target_1": 2000,
+      "target_2": 1600,
+      "current_price": 2580,
+      "pnl_pct": 2.6,
+      "notes": "User confirmed entry. T1 approaching."
+    }
+  ],
   "whale_wallets": [
     {
       "label": "Arkham: Jump Trading",

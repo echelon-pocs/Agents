@@ -5,6 +5,7 @@
   "btc_dominance": 60.1,
   "altcoin_season_index": 35,
   "fear_greed": 42,
+  "open_positions": [],
   "whale_wallets": [
     {"name": "Strategy (MicroStrategy)", "type": "Corporate Treasury", "btc_holdings": 818334, "signal": "ACCUMULATING"},
     {"name": "Metaplanet", "type": "Corporate Treasury", "btc_holdings": 40177, "signal": "ACCUMULATING"},
@@ -23,49 +24,42 @@
       "sources": [
         "270K BTC net bought in 30 days by whales",
         "Whale addresses (1000+ BTC) grew by 142 over 6 months — now 2,028 total",
-        "April spot ETF inflows $2.44B — strongest institutional month since Oct 2025",
-        "Exchange reserves down 170K BTC in 6 months (cold storage migration)",
-        "CryptoQuant CEO: Exchange whale ratio decline signals large holders accumulating"
+        "April spot ETF inflows $2.44B",
+        "Exchange reserves down 170K BTC in 6 months (cold storage migration)"
       ]
     },
     "ETH": {
       "signal": "MILD_BULL",
       "score": 0.30,
       "sources": [
-        "Whale cluster absorbed 140K ETH in 96 hours (reinforced from yesterday)",
-        "Glamsterdam upgrade approaching — protocol catalyst",
-        "Exchange ETH outflows persisting (net withdrawals)",
-        "Retail selling continuing to suppress price — smart money absorbing"
+        "Whale cluster absorbed 140K ETH in 96 hours",
+        "Glamsterdam upgrade approaching",
+        "Exchange ETH outflows persisting"
       ]
     },
     "ONDO": {
       "signal": "STRONG_BULL",
       "score": 0.80,
       "sources": [
-        "Heavy institutional RWA flow continuing into ONDO May 2026",
-        "Live JPM/Ripple/Mastercard settlement active (May 6) — fundamental intact",
-        "-5.3% pullback is TA profit-taking (RSI 78.93), NOT whale exit",
-        "Price $0.43 now in entry zone — demand zone $0.35-0.40 provides floor",
-        "RWA narrative strongest theme in 2026 per smart money flow data"
+        "Heavy institutional RWA flow continuing",
+        "Live JPM/Ripple/Mastercard settlement active (May 6)",
+        "-5.3% pullback is TA profit-taking, NOT whale exit",
+        "Demand zone $0.35-0.40 structural support"
       ]
     },
     "XRP": {
       "signal": "MILD_BULL",
       "score": 0.35,
       "sources": [
-        "Senate CLARITY Act markup scheduled May 14 — direct XRP catalyst",
-        "XRP benefits most from market structure clarity (legal resolution complete)",
-        "XRP forming higher lows near $1.42-1.43 — bullish structure",
-        "XRP ETF flows renewed $13M recently"
+        "Senate CLARITY Act markup scheduled May 14",
+        "XRP forming higher lows near $1.42-1.43",
+        "XRP ETF flows renewed"
       ]
     },
     "SOL": {
       "signal": "NEUTRAL",
       "score": 0.0,
-      "sources": [
-        "No new directional whale data for SOL today",
-        "High OI still elevated — two-way risk"
-      ]
+      "sources": ["No new directional whale data", "High OI still elevated"]
     }
   },
   "active_setups": [
@@ -83,11 +77,11 @@
       "whale_wallets_active": 4,
       "technical_score": 0.5,
       "composite_score": 0.71,
-      "rationale": "ENTRY TRIGGERED at $0.43 — price pulled back from $0.45 post-surge into the entry zone ($0.40-0.48). This is the consolidation after the 29% Ripple/JPM/Mastercard settlement catalyst. RSI 78.93 means strong momentum; -5.3% pullback is healthy. Whale signal STRONG_BULL unchanged — RWA institutional flow persisting. Composite +0.71 = HIGH conviction. R/R from $0.43 entry: 3.2:1.",
-      "catalyst_risk": "Crypto broad risk-off (30-yr yield at 5% is macro headwind). Regulatory RWA setback. BTC sharp correction dragging alts below $0.34 stop.",
+      "rationale": "Price $0.43 inside entry zone $0.40-0.48. Ripple/JPM/Mastercard live tokenized Treasury settlement (May 6). TVL $3.53B. -5.3% pullback is TA, not whale exit. Demand zone $0.35-0.40 below. Composite +0.71 HIGH conviction. R/R 3.2:1.",
+      "catalyst_risk": "30-yr yield 5% macro headwind. BTC sharp correction dragging alts below $0.34 stop.",
       "timeframe": "MEDIUM_TERM",
       "added": "2026-05-09",
-      "notes": "ENTER 2026-05-10. Price $0.43 in entry zone. P&L: 0% (just entered). Stop $0.34. T1 $0.72 (+67%). T2 $1.05 (+144%). Whale STRONG_BULL. Composite +0.71."
+      "notes": "ENTER zone reached 2026-05-10. Alert sent. Awaiting user entry confirmation."
     },
     {
       "symbol": "BTC",
@@ -103,71 +97,71 @@
       "whale_wallets_active": 6,
       "technical_score": 0.4,
       "composite_score": 0.715,
-      "rationale": "Whale accumulation ongoing and strengthening: 270K BTC bought in 30 days, 142 new whale addresses, April ETF inflows $2.44B. CLARITY Act markup May 14 is a potential bullish catalyst that could push BTC higher and delay entry. Monitor: if CLARITY Act passes bullishly, BTC may not pull back to $76K-79K; consider adjusting entry or chasing with smaller size above $80K.",
-      "catalyst_risk": "CLARITY Act May 14 could spike BTC above $84K, invalidating pullback entry thesis. 30-yr yield at 5% is macro headwind.",
+      "rationale": "270K BTC net bought/30d, 142 new whale addresses, ETF $2.44B April, exchange reserves 7-yr lows. Wait for pullback to $76K-79K. CLARITY Act May 14 may prevent pullback — monitor.",
+      "catalyst_risk": "CLARITY Act May 14 could spike BTC above $84K before entry zone reached. 30-yr yield 5% headwind.",
       "timeframe": "MEDIUM_TERM",
       "added": "2026-05-09",
-      "notes": "REVISED 2026-05-10: WAITING. Price $80,782. Watch May 14 CLARITY Act — bullish pass could send BTC to $85K+ without touching entry zone. Consider adjusting entry to $79K-82K if CLARITY passes."
+      "notes": "WAITING. Price $80,782. Above entry zone. Watch May 14."
     },
     {
       "symbol": "LINK",
       "direction": "LONG",
       "conviction": "LOW",
       "entry_zone": [8.50, 9.00],
-      "stop_loss": 9.50,
+      "stop_loss": 7.50,
       "target_1": 11.00,
       "target_2": 13.00,
       "r_r_ratio": 2.6,
-      "status": "ENTER",
+      "status": "WAITING",
       "whale_signal": "NEUTRAL",
       "whale_wallets_active": 0,
       "technical_score": 0.5,
       "composite_score": 0.15,
-      "rationale": "In trade. Price $10.32, +14.7% from $9.00 entry. T1 at $11.00 is 6.6% away — imminent. Trail stop at $9.50. Take 50% profit at $11. CLARITY Act May 14 could push all oracles/data protocols up — LINK is well-positioned as the leading oracle.",
-      "catalyst_risk": "BTC breakdown. Partial take-profit at $11 protects gains.",
+      "rationale": "Entry zone $8.50-9.00 was reached — alert was sent. User did not confirm entry. Price now $10.32, above zone. Waiting for pullback to $8.50-9.00 for a fresh entry opportunity.",
+      "catalyst_risk": "BTC breakdown pulling alts back to zone.",
       "timeframe": "SHORT_TERM",
       "added": "2026-05-07",
-      "notes": "ENTER — in trade. Price $10.32. P&L from $9.00: +14.7%. T1 $11.00 = 6.6% remaining. Stop $9.50. Take 50% at $11."
+      "notes": "Alert sent when zone was reached. No user confirmation received. Monitoring for pullback to $8.50-9.00."
     },
     {
       "symbol": "ADA",
       "direction": "LONG",
       "conviction": "LOW",
       "entry_zone": [0.235, 0.250],
-      "stop_loss": 0.250,
+      "stop_loss": 0.210,
       "target_1": 0.310,
       "target_2": 0.380,
       "r_r_ratio": 2.5,
-      "status": "ENTER",
+      "status": "WAITING",
       "whale_signal": "MILD_BULL",
       "whale_wallets_active": 1,
       "technical_score": 0.4,
       "composite_score": 0.26,
-      "rationale": "In trade. Price $0.27, +10% from $0.245 entry. T1 at $0.310 is 15% away. Trail stop at $0.250. CLARITY Act May 14 could lift ADA broadly. Hold.",
-      "catalyst_risk": "BTC sharp correction pulling alts. Trail stop protects near breakeven.",
+      "rationale": "Entry zone $0.235-0.250 was reached — alert was sent. User did not confirm entry. Price now $0.270, above zone. Waiting for pullback to entry zone.",
+      "catalyst_risk": "BTC correction pulling ADA back. CLARITY Act May 14 could lift ADA above zone.",
       "timeframe": "SHORT_TERM",
       "added": "2026-05-07",
-      "notes": "ENTER — in trade. Price $0.27. P&L from $0.245: +10%. T1 $0.310 = 15% remaining. Trail stop $0.250."
+      "notes": "Alert sent when zone was reached. No user confirmation received. Monitoring for pullback to $0.235-0.250."
     },
     {
       "symbol": "DOGE",
       "direction": "SHORT",
       "conviction": "MEDIUM",
       "entry_zone": [0.115, 0.125],
-      "stop_loss": 0.125,
+      "stop_loss": 0.135,
       "target_1": 0.090,
       "target_2": 0.070,
       "r_r_ratio": 2.0,
-      "status": "ENTER",
+      "status": "WAITING",
       "whale_signal": "NEUTRAL",
       "whale_wallets_active": 0,
       "technical_score": -0.5,
       "composite_score": -0.15,
-      "rationale": "In trade. Price $0.109 (slight bounce from $0.107). +9% profit from $0.12 entry. T1 at $0.090 is 18% away. Stop at $0.125. CLARITY Act May 14 could cause short-term DOGE spike — be aware. Stop is protective.",
-      "catalyst_risk": "CLARITY Act risk-on could spike meme coins. Elon tweet. Stop $0.125 is tight.",
+      "rationale": "Entry zone $0.115-0.125 was reached — alert was sent. User did not confirm entry. Price now $0.109, below zone. Setup still directionally valid (short bias intact). Waiting for bounce back to $0.115-0.125 for re-entry opportunity.",
+      "catalyst_risk": "CLARITY Act risk-on spike or Elon tweet could push above $0.135 stop zone.",
       "timeframe": "SHORT_TERM",
       "added": "2026-05-07",
-      "notes": "ENTER — in trade. Price $0.109. P&L from $0.12: +9%. T1 $0.090 = 18% remaining. Stop $0.125."
+      "notes": "Alert sent when zone was reached. No user confirmation received. Price moved through zone. Monitor for bounce back to $0.115-0.125."
     },
     {
       "symbol": "AAVE",
@@ -183,11 +177,11 @@
       "whale_wallets_active": 0,
       "technical_score": -0.4,
       "composite_score": -0.12,
-      "rationale": "Price $92.30 — now inside entry zone. Still require daily close BELOW $91.50 to confirm breakdown vs. being absorbed at support. CLARITY Act May 14 could lift DeFi broadly (AAVE benefits) — heightened risk on the short. Composite -0.12 is very weak for a short entry.",
-      "catalyst_risk": "CLARITY Act May 14 DeFi tailwind. AAVE V4 momentum. Do not enter without $91.50 breakdown.",
+      "rationale": "Price $92.30 inside entry zone $89-93. Require confirmed daily close below $91.50 before alerting ENTER. CLARITY Act May 14 adds DeFi risk to this short. Composite -0.12 is weak.",
+      "catalyst_risk": "CLARITY Act DeFi tailwind. AAVE V4 momentum above $102 would invalidate.",
       "timeframe": "SHORT_TERM",
       "added": "2026-05-07",
-      "notes": "REVISED 2026-05-10: Price $92.30 inside entry zone. Still APPROACHING — await $91.50 close. CLARITY Act adds risk to this short."
+      "notes": "APPROACHING. Price $92.30 inside zone. Await $91.50 close before flagging ENTER."
     },
     {
       "symbol": "SOL",
@@ -203,11 +197,11 @@
       "whale_wallets_active": 0,
       "technical_score": -0.7,
       "composite_score": -0.21,
-      "rationale": "Price $92.95, 3.2% from entry zone low. Death cross valid. Whale neutral, composite -0.21. CLARITY Act May 14 is a wild card — could spike SOL. Place limit shorts at $96-102 but keep position small.",
-      "catalyst_risk": "CLARITY Act May 14 rally. Alpenglow early launch.",
+      "rationale": "Price $92.95, 3.2% from entry zone low. Death cross confirmed. Whale NEUTRAL, composite -0.21 — valid via technicals alone but size conservatively. CLARITY Act May 14 is a spike risk.",
+      "catalyst_risk": "CLARITY Act May 14. Alpenglow early launch. Whale accumulation reversal.",
       "timeframe": "MEDIUM_TERM",
       "added": "2026-05-06",
-      "notes": "REVISED 2026-05-10: Price $92.95. 3.2% from entry. CLARITY Act May 14 adds risk. Size small."
+      "notes": "APPROACHING. Price $92.95. 3.2% from $96 entry zone."
     },
     {
       "symbol": "ETH",
@@ -223,11 +217,11 @@
       "whale_wallets_active": 2,
       "technical_score": -0.5,
       "composite_score": 0.025,
-      "rationale": "Whale signal reinforced: 140K ETH absorbed in 96 hours. Composite +0.025 (near zero — no directional edge). Price $2,327, 11% below entry zone. Glamsterdam upgrade is an approaching bullish catalyst. Short thesis weakening. Monitor closely.",
-      "catalyst_risk": "Glamsterdam upgrade. 140K ETH whale absorption could flip composite positive.",
+      "rationale": "140K ETH absorbed by whales in 96 hours. Composite near zero (+0.025). Death cross valid but whale counter-signal weakens conviction. Price $2,327, 11% below entry zone. Consider invalidating if whale score crosses +0.35.",
+      "catalyst_risk": "Glamsterdam upgrade. Whale absorption flipping composite positive.",
       "timeframe": "MEDIUM_TERM",
       "added": "2026-05-06",
-      "notes": "REVISED 2026-05-10: Whale signal reinforced (140K ETH/96h). Composite near zero. Consider invalidating if whale signal crosses +0.35."
+      "notes": "WAITING. Price $2,327. Whale MILD_BULL reinforced. Composite near-zero."
     },
     {
       "symbol": "XRP",
@@ -243,13 +237,13 @@
       "whale_wallets_active": 1,
       "technical_score": -0.4,
       "composite_score": 0.09,
-      "rationale": "CLARITY Act May 14 Senate markup is the key event. XRP could squeeze from $1.42 into $1.58-1.65 entry zone on bullish CLARITY news — that would be the SHORT entry (sell-the-news). If CLARITY Act fails or is postponed, XRP drifts lower and setup remains dormant. Composite +0.09 = no directional edge from whales.",
-      "catalyst_risk": "CLARITY Act passes with extremely bullish language — XRP squeezes above $1.65 stop zone, invalidating setup.",
+      "rationale": "May 14 CLARITY Act markup is the specific trigger: XRP could squeeze from $1.42 to $1.58-1.65 on bullish news — that is the SHORT entry (sell-the-news). Composite near-zero means no directional edge from whales alone.",
+      "catalyst_risk": "CLARITY Act passes very bullishly, XRP breaks above $1.65 invalidating entry zone.",
       "timeframe": "MEDIUM_TERM",
       "added": "2026-05-06",
-      "notes": "REVISED 2026-05-10: May 14 CLARITY Act markup is the trigger. Watch for squeeze to $1.58-1.65 THEN short. Alt entry $1.78-1.85 if it spikes hard on news. Price $1.42."
+      "notes": "WAITING. Price $1.42. May 14 CLARITY Act is the trigger event for entry zone."
     }
   ],
   "alerted": ["DOGE", "ADA", "LINK", "ONDO"],
-  "last_analysis": "May 10, 2026. BIFURCATED: BTC $80,782, dom ~60%, Alt Season 35, F&G 42 (slight improvement). KEY EVENT: ONDO LONG triggered at $0.43 — price entered zone after -5.3% profit-taking pullback; whale signal STRONG_BULL unchanged, JPM/Ripple live settlement intact, composite +0.71 HIGH conviction. May 14 CLARITY Act Senate markup approaching — direct catalyst for XRP/BTC/crypto broadly; watch for XRP squeeze to $1.58-1.65 SHORT entry. BTC LONG still WAITING ($76K-79K); if CLARITY passes bullishly, entry may need adjustment upward. Whale signals reinforced: 270K BTC bought/30d, 140K ETH absorbed/96h. 30-yr Treasury yield 5% is macro headwind. Existing trades: DOGE SHORT +9%, ADA LONG +10%, LINK LONG +14.7% (T1 imminent), ONDO LONG just entered."
+  "last_analysis": "May 10, 2026. BIFURCATED: BTC $80,782, dom 60.1%, Alt Season 35, F&G 42. No open positions (user has not confirmed any entries). ONDO LONG alert sent (zone $0.40-0.48, price $0.43, composite +0.71 HIGH). BTC LONG WAITING ($76K-79K). May 14 CLARITY Act Senate markup is week's key event — XRP SHORT trigger, BTC directional catalyst. DOGE/ADA/LINK zones were reached and alerted but user did not confirm entries — monitoring for pullbacks. 30-yr yield 5% macro headwind."
 }
