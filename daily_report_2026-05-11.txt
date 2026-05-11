@@ -1,0 +1,235 @@
+═══════════════════════════════════════════════════════════
+CRYPTO MARKET INTELLIGENCE — DAILY REPORT
+May 11, 2026  |  08:00 UTC
+SIGNAL ARCHITECTURE: 70% Smart Money On-Chain | 30% Technical
+🟢 OPEN POSITION: ONDO LONG — Entry $0.4154 | P&L +8.3%
+🆕 NEW SETUP: SUI LONG — CME Futures Catalyst (May 29)
+❌ INVALIDATED: AAVE SHORT — price moved wrong direction
+═══════════════════════════════════════════════════════════
+
+MACRO OVERVIEW
+──────────────────────────────────────────────────────────
+BTC:          $81,969  |  Continuing higher  |  +1.44% 24h
+BTC Dom:      ~60.1%   |  Bitcoin Season — alt headwind persists
+Alt Season:   38/100   |  Bitcoin Season (improving slightly)
+Fear & Greed: 70/100   |  GREED (was 42 yesterday — major shift)
+Macro Bias:   BIFURCATED (leaning bullish)
+DXY:          Weak — structural BTC tailwind intact
+Gold:         ~$4,720  |  Risk-off safe haven bid intact
+Morgan Stanley BTC ETF: $194M inflows May 11
+
+MARKET NARRATIVE
+──────────────────────────────────────────────────────────
+The Fear & Greed Index jumped from 42 (Fear) to 70 (Greed) in a single
+day. The driver: May 14 CLARITY Act Senate markup is now 3 days away and
+markets are front-running a bullish regulatory outcome. Bitcoin hit $81,969
+(+1.44%) on $194M in Morgan Stanley ETF inflows alone. Weekly BTC ETF
+inflows hit $1.63B in the first week of May.
+
+The day's biggest structural development is SUI. CME Group announced SUI
+futures launching May 29 — SUI becomes the 4th L1 with CME-regulated
+derivatives (BTC, ETH, SOL). A Nasdaq-listed firm staked 108.7M SUI tokens
+(2.7% of supply locked). SUI printed a 45% weekly candle breaking above a
+3-month consolidation. NEW LONG setup added, composite +0.53 MEDIUM.
+
+ONDO tracking well at +8.3% from your $0.4154 entry. Whale cohorts added
+77.7M ONDO in 30 days. Smart money 13.2% portfolio allocation — #1 asset.
+
+WARNING: F&G 70 (Greed) elevates risk on all short setups. CLARITY Act
+May 14 is the dominant event this week — size conservatively.
+
+═══════════════════════════════════════════════════════════
+🐋  SMART MONEY — WHALE SIGNALS TODAY
+═══════════════════════════════════════════════════════════
+
+ASSET   WHALE SIGNAL    SCORE    ACTIVE WALLETS   KEY EVIDENCE
+------  --------------  -------  ---------------  ─────────────────────────────────────────
+BTC     STRONG_BULL     +0.85    6                Morgan Stanley ETF $194M May 11,
+                                                  weekly ETF $1.63B, 270K BTC/30d,
+                                                  exchange reserves 7-yr lows (2.21M BTC)
+ONDO    STRONG_BULL     +0.80    5                77.7M ONDO added by cohorts/30d,
+                                                  smart money #1 allocation $663.9M (13.2%)
+SUI     MILD_BULL       +0.50    2                Nasdaq staked 108.7M SUI (2.7% supply),
+                                                  CME futures launch May 29 announced
+ETH     MILD_BULL       +0.30    2                140K ETH absorption persisting
+XRP     MILD_BULL       +0.35    1                ETF inflows $34.2M, CLARITY Act May 14
+SOL     NEUTRAL          0.00    0                No new directional whale data
+DOGE    NEUTRAL          0.00    0                No institutional whale activity
+
+Notable moves:
+- Morgan Stanley BTC ETF: $194M single-day inflows May 11
+- ONDO Whale Cohorts: 77.7M ONDO accumulated/30d; 1M-10M tier fastest growing
+- SUI Nasdaq Staker: 108.7M SUI locked (2.7% of supply removed)
+- BTC Dormant Wallet: Satoshi-era 500 BTC — OTC routed, not exchange dump
+
+═══════════════════════════════════════════════════════════
+📊  OPEN POSITIONS (user-confirmed)
+═══════════════════════════════════════════════════════════
+
+── ONDO | LONG | Entry: $0.4154 | Conviction: HIGH ────────
+  Entry Date    : May 11, 2026
+  Entry Price   : $0.4154
+  Current Price : ~$0.45
+  P&L           : +8.3%
+  Stop Loss     : $0.34  (-18.1% from entry) — DO NOT MOVE until TP1 hit
+  Whale Signal  : STRONG_BULL (+0.80) | 5 institutional wallets active
+  Composite     : +0.71 (HIGH conviction)
+
+  TAKE PROFIT LADDER
+  TP1: $0.55  (+32.4%)  — Take 25% of position
+         After hit: Move stop to $0.42
+
+  TP2: $0.72  (+73.3%)  — Take 35% of position
+         After hit: Move stop to $0.60
+
+  TP3: $1.05  (+152.9%) — Close remaining 40%
+
+  R/R Breakdown:
+    To TP1:  Risk 18.1% | Reward 32.4% | R/R 1.8:1
+    To TP2:  Risk 18.1% | Reward 73.3% | R/R 4.0:1
+    To TP3:  Risk 18.1% | Reward 152.9% | R/R 8.4:1
+
+  Why hold: Whale cohorts added 77.7M ONDO in 30 days (not exiting).
+  Smart money 13.2% portfolio weighting — largest single allocation.
+  RWA narrative in full institutional adoption cycle.
+  Risk: BTC sharp correction or 30-yr yield spike above 5.2%.
+
+═══════════════════════════════════════════════════════════
+📊  ALL ACTIVE SETUPS — MASTER TABLE
+═══════════════════════════════════════════════════════════
+
+SYM   DIR    STATUS        CONV    PRICE      ENTRY ZONE         STOP      TP1       TP2      R/R   WHALE        COMP    KEY SIGNAL
+----  -----  -----------   ------  ---------  -----------------  --------  --------  -------  ----  -----------  ------  ─────────────────────────────────────
+BTC   LONG   WAITING       HIGH    $81,969    $76,000-$79,000    $73,000   $88,000   $96,000  2.3   STRONG_BULL  +0.72   ETF $1.63B week, whale 270K BTC/30d
+SUI   LONG   APPROACHING   MED     $1.265     $1.05-$1.15        $0.95     $1.60     $2.20    3.3   MILD_BULL    +0.53   CME futures May 29, 2.7% supply locked
+SOL   SHORT  APPROACHING   LOW     $94.82     $96-$102           $110      $78       $65      2.1   NEUTRAL      -0.21   Touched $96.78 intraday, below threshold
+XRP   SHORT  WAITING       LOW     $1.45      $1.58-$1.65        $1.95     $1.20     $1.00    2.7   MILD_BULL    +0.09   May 14 CLARITY Act trigger
+ETH   SHORT  WAITING       LOW     $2,339     $2,600-$2,700      $2,820    $2,100    $1,800   2.5   MILD_BULL    +0.03   Whale 140K ETH absorption
+LINK  LONG   WAITING       LOW     $10.55     $8.50-$9.00        $7.50     $11.00    $13.00   2.6   NEUTRAL      +0.15   Zone reached, no confirmation, above
+ADA   LONG   WAITING       LOW     $0.278     $0.235-$0.250      $0.210    $0.310    $0.380   2.5   MILD_BULL    +0.26   Zone reached, no confirmation, above
+DOGE  SHORT  WAITING       MED     $0.110     $0.115-$0.125      $0.135    $0.090    $0.075   2.0   NEUTRAL      -0.15   Zone reached, no confirmation, below
+AAVE  SHORT  INVALIDATED   —       $100.09    —                  —         —         —        —     NEUTRAL      —       Price moved wrong direction vs $89-93
+
+═══════════════════════════════════════════════════════════
+🆕  NEW SETUP — SUI LONG (APPROACHING)
+═══════════════════════════════════════════════════════════
+
+── SUI | LONG | Conviction: MEDIUM | NEW ──────────────────
+  Current Price : $1.265 (+11.68% today, +34.4% in 7 days)
+  Entry Zone    : $1.05-$1.15  (pullback to breakout level)
+  Momentum Alt  : $1.20-$1.30  (if no pullback, momentum entry)
+  Stop Loss     : $0.95        (-13.6% from $1.10 midpoint)
+  TP1           : $1.60  (+45%)  — Take 30% | Move stop to $1.10
+  TP2           : $2.20  (+100%) — Take 35% | Move stop to $1.60
+  TP3           : $3.00  (+173%) — Close remaining 35%
+  R/R (pullback): 3.3:1 to T1 | 7.3:1 to T2
+  R/R (momentum $1.25): 2.4:1 to T1 | 4.8:1 to T2
+  Whale Signal  : MILD_BULL (+0.50) | 2 institutional wallets
+  Composite     : +0.53 (MEDIUM conviction)
+
+  Rationale:
+  (1) CME futures launching May 29 — SUI joins BTC/ETH/SOL as only L1s
+  with CME-regulated derivatives. Institutional access milestone.
+  (2) Nasdaq firm staked 108.7M SUI — 2.7% of supply permanently locked.
+  (3) Confidential transactions launching 2026 (privacy feature).
+  SUI broke out of 3-month $0.85-$1.03 consolidation on 45% weekly candle.
+  Resistance levels: $1.50-1.60, then $2.20, then $3.00.
+
+  Action: Limit long at $1.05-1.15. Momentum entry $1.20-1.30 with
+  stop $1.05 if no pullback. Hard catalyst: May 29 CME live.
+
+═══════════════════════════════════════════════════════════
+🟡  APPROACHING — CAUTION
+═══════════════════════════════════════════════════════════
+
+── SOL | SHORT | LOW Conviction | Composite: -0.21 ────────
+  Current: $94.82  |  Zone: $96-$102  |  Touched $96.78 intraday
+  Stop: $110  |  TP1: $78  |  TP2: $65  |  R/R: 2.1:1
+  COMPOSITE BELOW -0.30 THRESHOLD. F&G 70 + CLARITY Act May 14 = spike risk.
+  Action: LIMIT SHORT ONLY at $96-97. Max 1% portfolio. Stop $110.
+
+═══════════════════════════════════════════════════════════
+⏳  WATCHLIST
+═══════════════════════════════════════════════════════════
+
+BTC LONG (HIGH): $81,969 → zone $76K-79K. Plan B $80K-83K if CLARITY spikes.
+XRP SHORT (LOW): $1.45 → zone $1.58-1.65. May 14 trigger. 8.3% away.
+ETH SHORT (LOW): $2,339 → zone $2,600-2,700. Whale MILD_BULL weakens thesis.
+DOGE SHORT (MED): $0.110 → zone $0.115-0.125. Bounce needed. CLARITY risk.
+ADA LONG (LOW): $0.278 → zone $0.235-0.250. Pullback needed.
+LINK LONG (LOW): $10.55 → zone $8.50-9.00. Pullback needed.
+
+═══════════════════════════════════════════════════════════
+📋  SETUP CHANGES TODAY
+═══════════════════════════════════════════════════════════
+- POSITION OPENED: ONDO LONG — user confirmed entry at $0.4154.
+  Moved to open_positions. Stepped TPs: $0.55/$0.72/$1.05.
+
+- NEW: SUI LONG (APPROACHING) — CME futures May 29, 108.7M staked,
+  45% weekly breakout. Composite +0.53 MEDIUM. Zone $1.05-1.15.
+
+- INVALIDATED: AAVE SHORT — price $100 moved wrong direction from
+  zone $89-93. DeFi CLARITY tailwind + V4 momentum confirmed.
+
+- UPDATE: BTC LONG — Morgan Stanley ETF $194M. F&G jumped to 70.
+  Plan B entry $80K-83K if CLARITY spikes BTC above $84K.
+
+- UPDATE: SOL SHORT — touched zone $96.78 intraday, pulled back.
+  Composite -0.21 below threshold. Size 1% max. Extreme caution.
+
+- UPDATE: XRP SHORT — price $1.45 (+2.5%), 8.3% from zone low.
+  May 14 CLARITY Act markup is T-3 days.
+
+═══════════════════════════════════════════════════════════
+MAY 14 CLARITY ACT PLAYBOOK
+═══════════════════════════════════════════════════════════
+Scenario A — Bullish pass:
+  BTC: Spike $84K-88K → Plan B entry $80K-83K
+  XRP: Squeeze to $1.65-1.80 → SHORT (sell-the-news)
+  ONDO: Boost to $0.55-0.60 → TP1 triggered, take 25%
+  SUI: Boost to $1.40-1.50 → approaching momentum entry
+  SOL: Spike $100-105 → short entries fill (watch stops)
+
+Scenario B — Delayed/watered down:
+  BTC: Pulls back $78K → LONG entry triggered
+  XRP: Drifts lower → WAITING
+  SUI: Pullback $1.05-1.15 → LONG entry triggered
+
+Scenario C — Failed/blocked:
+  BTC: Sharp drop $75K-76K → LONG triggered at zone low
+  XRP: Below $1.40 → SHORT invalidated
+
+═══════════════════════════════════════════════════════════
+FULL PRICE SNAPSHOT
+──────────────────────────────────────────────────────────
+TIER 1
+Asset   Price       24h%     Whale Signal   Setup Status
+------  ----------  -------  -------------  ──────────────────────────────
+BTC     $81,969     +1.44%   STRONG_BULL    LONG WAITING (HIGH, $76K-79K)
+ETH     $2,339      +0.33%   MILD_BULL      SHORT WAITING (LOW)
+SOL     $94.82      +2.63%   NEUTRAL        SHORT APPROACHING (LOW)
+XRP     $1.45       +2.50%   MILD_BULL      SHORT WAITING — May 14 trigger
+ONDO    ~$0.45      +8.3%*   STRONG_BULL    OPEN LONG (+8.3% from $0.4154)
+
+TIER 2
+Asset   Price       24h%     Setup Notes
+------  ----------  -------  ─────────────────────────────────────
+SUI     $1.265      +11.68%  NEW LONG APPROACHING ($1.05-1.15)
+DOGE    $0.110      ~flat    SHORT WAITING ($0.115-0.125 bounce)
+ADA     $0.278      ~flat    LONG WAITING ($0.235-0.250 pullback)
+LINK    $10.55      +2.2%    LONG WAITING ($8.50-9.00 pullback)
+AAVE    $100.09     +8.4%    INVALIDATED — DeFi CLARITY tailwind
+AVAX    ~$10.11     +1.6%    No setup
+DOT     ~$4.50      ~flat    No setup
+MATIC   ~$0.10      ~flat    No setup
+ARB     $0.14       ~flat    No setup
+HYPE    ~$24.77     +63%*    WATCHING — verify price first
+TAO     ~$320       ~+2%     No setup
+
+* P&L from user entry / price needs verification
+
+═══════════════════════════════════════════════════════════
+— Crypto Market Intelligence Agent (Whale Tracking Layer v2)
+  Next report: tomorrow 08:00 UTC
+  KEY DATE: May 14 — U.S. Senate CLARITY Act markup (T-3 days)
+  KEY DATE: May 29 — CME SUI Futures go live
