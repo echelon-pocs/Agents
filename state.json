@@ -1,87 +1,82 @@
 {
-  "last_run": "2026-05-11T08:00:00Z",
+  "last_run": "2026-05-12T08:00:00Z",
   "macro_bias": "BIFURCATED",
-  "btc_price": 81969,
+  "btc_price": 80860,
   "btc_dominance": 60.1,
   "altcoin_season_index": 38,
-  "fear_greed": 70,
-  "open_positions": [
+  "fear_greed": 68,
+  "open_positions": [],
+  "completed_positions": [
     {
       "symbol": "ONDO",
       "direction": "LONG",
       "entry_price": 0.4154,
       "entry_date": "2026-05-11",
-      "current_price": 0.45,
-      "stop_loss": 0.34,
-      "tp1": 0.55,
-      "tp1_size_pct": 25,
-      "tp1_action": "Take 25% of position. Move stop from $0.34 to $0.42.",
-      "tp2": 0.72,
-      "tp2_size_pct": 35,
-      "tp2_action": "Take 35% of position. Move stop from $0.42 to $0.60.",
-      "tp3": 1.05,
-      "tp3_size_pct": 40,
-      "tp3_action": "Close remaining 40% of position.",
-      "pnl_pct": 8.3,
-      "whale_signal": "STRONG_BULL",
-      "whale_score": 0.80,
-      "conviction": "HIGH",
-      "composite_score": 0.71,
-      "timeframe": "MEDIUM_TERM",
-      "notes": "User confirmed entry at $0.4154 on 2026-05-11. P&L +8.3%. Whale cohorts added 77.7M ONDO in 30 days. Smart money #1 allocation (13.2% of smart money portfolios = $663.9M). RWA narrative intact. After TP1 hit move stop to $0.42. After TP2 hit move stop to $0.60."
+      "exit_price": 0.4154,
+      "exit_date": "2026-05-12",
+      "pnl_pct": 0.0,
+      "notes": "User closed at breakeven. Position ran to +8.3% but user exited at entry price."
     }
   ],
   "whale_wallets": [
-    {"name": "Strategy (MicroStrategy)", "type": "Corporate Treasury", "btc_holdings": 818334, "signal": "ACCUMULATING"},
+    {"name": "Strategy (MicroStrategy)", "type": "Corporate Treasury", "btc_holdings": 818869, "signal": "ACCUMULATING_535_BTC_MAY12"},
     {"name": "Metaplanet", "type": "Corporate Treasury", "btc_holdings": 40177, "signal": "ACCUMULATING"},
-    {"name": "Morgan Stanley BTC ETF", "type": "Institutional ETF", "signal": "INFLOWS_194M_MAY11"},
-    {"name": "Spot BTC ETF Composite (IBIT/FBTC)", "type": "Institutional ETF", "signal": "INFLOWS_1.63B_MAY_WEEK1"},
-    {"name": "Anonymous BTC Whale Cluster (1000+ BTC wallets)", "type": "Large Wallet", "signal": "GROWING_142_NEW_ADDRESSES"},
+    {"name": "Spot BTC ETF Composite (IBIT/FBTC)", "type": "Institutional ETF", "signal": "INFLOWS_ONGOING_1B_MAY"},
+    {"name": "Anonymous BTC Whale Cluster (1000+ BTC wallets)", "type": "Large Wallet", "signal": "GROWING"},
     {"name": "ONDO Institutional Consortium (Ripple/Mastercard/JPM)", "type": "Institutional", "signal": "LIVE_SETTLEMENT_ACTIVE"},
-    {"name": "ONDO Whale Cohorts (1M-10M tier)", "type": "Large Wallet", "ondo_accumulated": "77.7M_ONDO_30DAYS", "signal": "ABSORBING"},
+    {"name": "HYPE Whale (0xb5E4)", "type": "Large Wallet", "hype_accumulated": "1.22M_HYPE_3WEEKS_$52M", "signal": "STRONG_ACCUMULATION"},
+    {"name": "HYPE Daily Buyer", "type": "On-chain Tracker", "signal": "DAILY_BUY_$19.18M_POSITION_2MONTHS"},
     {"name": "SUI Nasdaq Institutional Staker", "type": "Institutional", "sui_staked": "108.7M_SUI", "signal": "LOCKED_CME_CATALYST"},
-    {"name": "ETH Whale Cluster", "type": "Large Wallet", "eth_accumulated": "140K_ETH_96H", "signal": "HOLDING"},
-    {"name": "XRP ETF Flows", "type": "Institutional ETF", "signal": "INFLOWS_34.2M_WEEK_MAY9"}
+    {"name": "Circle", "type": "Institutional", "signal": "RAISED_$222M_MAY12"},
+    {"name": "XRP ETF Flows", "type": "Institutional ETF", "signal": "CLARITY_ACT_MAY14_IMMINENT"}
   ],
   "whale_signals_today": {
     "BTC": {
       "signal": "STRONG_BULL",
       "score": 0.85,
       "sources": [
-        "Morgan Stanley BTC ETF $194M inflows May 11",
-        "Spot BTC ETF weekly inflows $1.63B first week of May",
-        "270K BTC net bought by whale wallets in 30 days (ongoing)",
-        "Exchange reserves at 7-year lows (2.21M BTC)",
-        "Dormant Satoshi-era 500 BTC moved — OTC positioning not exchange dump"
+        "Strategy bought 535 BTC on May 12 (now 818,869 BTC total)",
+        "Spot ETF inflows ~$1B first two weeks of May",
+        "270K BTC net bought in 30 days (ongoing)",
+        "Exchange reserves at 7-year lows (2.21M BTC)"
       ]
     },
-    "ONDO": {
+    "HYPE": {
       "signal": "STRONG_BULL",
-      "score": 0.80,
+      "score": 0.75,
       "sources": [
-        "Whale cohorts added 77.7M ONDO in 30 days",
-        "1M-10M wallet tier grew from 555.38M to 594.05M tokens",
-        "10M-100M tier grew from 2.00B to 2.03B tokens",
-        "Smart money #1 allocation: $663.9M (13.2% of smart money portfolios)",
-        "RWA sector institutional flow May 2026 dominated by ONDO"
+        "Wallet 0xb5E4 received 1.22M HYPE (~$52M) in 3 weeks",
+        "Unknown entity buys HYPE daily for 2+ months, built $19.18M position",
+        "590,000 HYPE added in April by single whale",
+        "Arthur Hayes publicly called $150 target",
+        "Glassnode: whale long exposure at highest 2026 level"
       ]
     },
-    "ETH": {
+    "SUI": {
       "signal": "MILD_BULL",
-      "score": 0.30,
+      "score": 0.50,
       "sources": [
-        "140K ETH absorbed by whale cluster (persisting signal)",
-        "Glamsterdam upgrade approaching",
-        "Exchange outflows persist"
+        "108.7M SUI staked by Nasdaq firm (supply locked)",
+        "CME futures May 29 — institutional onboarding in progress",
+        "Price holding $1.26 after 45% weekly breakout"
       ]
     },
     "XRP": {
       "signal": "MILD_BULL",
       "score": 0.35,
       "sources": [
-        "ETF inflows $34.2M week of May 9",
-        "CLARITY Act Senate markup May 14 — direct beneficiary",
-        "Higher lows forming at $1.42-1.45"
+        "CLARITY Act Senate markup TOMORROW (May 14)",
+        "Bipartisan stablecoin compromise confirmed",
+        "XRP ETF inflows continuing"
+      ]
+    },
+    "ETH": {
+      "signal": "MILD_BULL",
+      "score": 0.30,
+      "sources": [
+        "140K ETH absorbed by whale cluster (persisting)",
+        "Glamsterdam upgrade approaching",
+        "Circle raised $222M — Ethereum stablecoin infrastructure"
       ]
     },
     "SOL": {
@@ -89,21 +84,76 @@
       "score": 0.0,
       "sources": [
         "No new directional whale data",
-        "High OI remains elevated"
+        "Price dropped sharply from $94.82 to $84.43 — entry zone missed"
       ]
     },
-    "SUI": {
-      "signal": "MILD_BULL",
-      "score": 0.50,
+    "ONDO": {
+      "signal": "STRONG_BULL",
+      "score": 0.80,
       "sources": [
-        "Nasdaq-listed firm staked 108.7M SUI tokens (2.7% of supply locked)",
-        "CME Group announced SUI futures launch May 29 — 4th L1 for regulated futures",
-        "SUI confidential transactions confirmed for 2026",
-        "45% weekly candle breakout from 3-month $0.85-$1.03 consolidation"
+        "Whale cohorts holding 77.7M ONDO accumulated last 30 days",
+        "Smart money #1 allocation unchanged",
+        "RWA narrative intact — no exit signals"
       ]
     }
   },
   "active_setups": [
+    {
+      "symbol": "SUI",
+      "direction": "LONG",
+      "conviction": "MEDIUM",
+      "entry_zone": [1.05, 1.15],
+      "momentum_entry_zone": [1.20, 1.30],
+      "stop_loss": 0.95,
+      "tp1": 1.60,
+      "tp1_size_pct": 30,
+      "tp1_action": "Take 30%. Move stop to $1.10.",
+      "tp2": 2.20,
+      "tp2_size_pct": 35,
+      "tp2_action": "Take 35%. Move stop to $1.60.",
+      "tp3": 3.00,
+      "tp3_size_pct": 35,
+      "tp3_action": "Close remaining 35%.",
+      "r_r_ratio": 3.3,
+      "status": "APPROACHING",
+      "whale_signal": "MILD_BULL",
+      "whale_wallets_active": 2,
+      "technical_score": 0.60,
+      "composite_score": 0.53,
+      "rationale": "CME futures May 29. Nasdaq firm staked 108.7M SUI (2.7% supply locked). 45% weekly breakout from $0.85-$1.03 consolidation. Price $1.26 is inside momentum entry zone $1.20-1.30. Composite +0.53 MEDIUM conviction.",
+      "catalyst_risk": "CLARITY Act correction pulling SUI down. CME futures delayed.",
+      "timeframe": "SHORT_TERM",
+      "added": "2026-05-11",
+      "notes": "APPROACHING. Price $1.26 is INSIDE momentum entry zone $1.20-1.30. Momentum entry valid NOW with stop $1.05. Ideal pullback entry $1.05-1.15 if price corrects."
+    },
+    {
+      "symbol": "HYPE",
+      "direction": "LONG",
+      "conviction": "MEDIUM",
+      "entry_zone": [32.00, 36.00],
+      "momentum_entry_zone": [38.00, 42.00],
+      "stop_loss": 28.00,
+      "tp1": 55.00,
+      "tp1_size_pct": 30,
+      "tp1_action": "Take 30%. Move stop to $36.",
+      "tp2": 100.00,
+      "tp2_size_pct": 35,
+      "tp2_action": "Take 35%. Move stop to $55.",
+      "tp3": 150.00,
+      "tp3_size_pct": 35,
+      "tp3_action": "Close remaining 35%.",
+      "r_r_ratio": 3.5,
+      "status": "APPROACHING",
+      "whale_signal": "STRONG_BULL",
+      "whale_wallets_active": 3,
+      "technical_score": 0.50,
+      "composite_score": 0.675,
+      "rationale": "Wallet 0xb5E4 received 1.22M HYPE ($52M) in 3 weeks. Unknown entity building daily for 2+ months ($19.18M). 590K HYPE added in April by single whale. Arthur Hayes publicly calls $150. Glassnode whale long exposure at 2026 highs. Composite +0.675 MEDIUM-HIGH.",
+      "catalyst_risk": "CLARITY Act risk-off move pulling all alts down. Resistance $44-46 may cap near-term upside.",
+      "timeframe": "MEDIUM_TERM",
+      "added": "2026-05-12",
+      "notes": "NEW. Price $41.07, above entry zone $32-36. Wait for pullback to $32-36. Momentum entry $38-42 also valid with stop $33. Hard resistance at $44-46 first — watch for breakout confirmation."
+    },
     {
       "symbol": "BTC",
       "direction": "LONG",
@@ -122,64 +172,12 @@
       "whale_wallets_active": 6,
       "technical_score": 0.4,
       "composite_score": 0.715,
-      "rationale": "270K BTC net bought/30d, 142 new whale addresses, ETF $2.44B April + $1.63B first week May, exchange reserves 7-yr lows. F&G now 70 (Greed). Wait for pullback to $76K-79K. CLARITY Act May 14 may prevent pullback. Plan B: adjust to $80K-83K if CLARITY passes bullishly.",
-      "catalyst_risk": "CLARITY Act May 14 could spike BTC above $84K before entry zone reached. Greed reading 70 suggests caution on entries.",
+      "rationale": "Strategy bought 535 BTC on May 12. ETF inflows ~$1B first 2 weeks of May. Exchange reserves 7-yr lows. CLARITY Act tomorrow — could spike BTC to $84K+ or create pullback to entry zone depending on outcome.",
+      "catalyst_risk": "CLARITY Act May 14 outcome determines next move. Bullish = spike (use Plan B). Bearish = pullback (entry zone triggered).",
       "plan_b": "If BTC breaks above $84,000 on CLARITY news, entry zone adjusts to $80,000-83,000, stop $76,000.",
       "timeframe": "MEDIUM_TERM",
       "added": "2026-05-09",
-      "notes": "WAITING. Price $81,969. F&G jumped to 70 (Greed). CLARITY Act 3 days away. Above zone. Watch May 14."
-    },
-    {
-      "symbol": "SUI",
-      "direction": "LONG",
-      "conviction": "MEDIUM",
-      "entry_zone": [1.05, 1.15],
-      "stop_loss": 0.95,
-      "tp1": 1.60,
-      "tp1_size_pct": 30,
-      "tp1_action": "Take 30%. Move stop to $1.10.",
-      "tp2": 2.20,
-      "tp2_size_pct": 35,
-      "tp2_action": "Take 35%. Move stop to $1.60.",
-      "tp3": 3.00,
-      "tp3_size_pct": 35,
-      "tp3_action": "Close remaining 35%.",
-      "r_r_ratio": 3.3,
-      "status": "APPROACHING",
-      "whale_signal": "MILD_BULL",
-      "whale_wallets_active": 2,
-      "technical_score": 0.60,
-      "composite_score": 0.53,
-      "rationale": "CME futures launch May 29 (4th L1 after BTC/ETH/SOL — massive institutional milestone). Nasdaq firm staked 108.7M SUI = 2.7% supply locked. 45% weekly breakout from 3-month consolidation ($0.85-$1.03). Confidential transactions 2026 announcement. Composite +0.53 MEDIUM conviction.",
-      "catalyst_risk": "BTC CLARITY Act correction pulling SUI down. Momentum fade if CME futures delayed.",
-      "momentum_entry": "If no pullback to $1.05-1.15, momentum entry at $1.20-1.30 valid with stop $1.05 (R/R ~4.8:1 to T2).",
-      "timeframe": "SHORT_TERM",
-      "added": "2026-05-11",
-      "notes": "NEW. Price $1.265, slightly above entry zone. Pullback to $1.05-1.15 is ideal entry. Momentum entry $1.20-1.30 also acceptable. CME May 29 is a hard date catalyst."
-    },
-    {
-      "symbol": "SOL",
-      "direction": "SHORT",
-      "conviction": "LOW",
-      "entry_zone": [96, 102],
-      "stop_loss": 110,
-      "tp1": 78,
-      "tp1_size_pct": 40,
-      "tp2": 65,
-      "tp2_size_pct": 35,
-      "tp3": 50,
-      "tp3_size_pct": 25,
-      "r_r_ratio": 2.1,
-      "status": "APPROACHING",
-      "whale_signal": "NEUTRAL",
-      "whale_wallets_active": 0,
-      "technical_score": -0.7,
-      "composite_score": -0.21,
-      "rationale": "Price $94.82, touched $96.78 intraday (in zone). Death cross confirmed. Whale NEUTRAL, composite -0.21 — below the -0.30 trade threshold. Technically valid via TA alone but very low conviction. CLARITY Act May 14 and F&G 70 are acute spike risks. Limit short orders at $96-97 only. Size 1% max.",
-      "catalyst_risk": "CLARITY Act May 14 (major spike risk). F&G 70 = Greed environment hostile to shorts. Alpenglow launch.",
-      "timeframe": "MEDIUM_TERM",
-      "added": "2026-05-06",
-      "notes": "APPROACHING. Touched zone high $96.78 intraday, pulled back to $94.82. Limit shorts at $96-97 actionable but composite below threshold. Extreme caution."
+      "notes": "WAITING. Price $80,860. Strategy bought 535 BTC today. CLARITY Act TOMORROW — decisive."
     },
     {
       "symbol": "XRP",
@@ -199,11 +197,35 @@
       "whale_wallets_active": 1,
       "technical_score": -0.4,
       "composite_score": 0.09,
-      "rationale": "CLARITY Act markup May 14: XRP could squeeze from $1.45 to $1.58-1.65 on bullish news — that is the SHORT entry (sell-the-news). Price $1.45 (+2.5% today). 8.3% below zone low. Composite near-zero.",
-      "catalyst_risk": "CLARITY Act passes very bullishly — XRP breaks above $1.65 invalidating zone.",
+      "rationale": "CLARITY Act markup TOMORROW (May 14). XRP squeeze to $1.58-1.65 on bullish news = SHORT entry (sell-the-news). Price $1.40 today, 12.9% below zone low. Bill text unveiled — bipartisan compromise confirmed.",
+      "catalyst_risk": "CLARITY Act passes very bullishly. XRP breaks above $1.65 invalidating entry.",
       "timeframe": "MEDIUM_TERM",
       "added": "2026-05-06",
-      "notes": "WAITING. Price $1.45. May 14 CLARITY Act is the trigger event. Getting closer — 8.3% from zone low."
+      "notes": "WAITING. CLARITY Act TOMORROW. Price $1.40. Watch for squeeze to $1.58-1.65 on markup news."
+    },
+    {
+      "symbol": "SOL",
+      "direction": "SHORT",
+      "conviction": "LOW",
+      "entry_zone": [96, 102],
+      "stop_loss": 110,
+      "tp1": 78,
+      "tp1_size_pct": 40,
+      "tp2": 65,
+      "tp2_size_pct": 35,
+      "tp3": 50,
+      "tp3_size_pct": 25,
+      "r_r_ratio": 2.1,
+      "status": "WAITING",
+      "whale_signal": "NEUTRAL",
+      "whale_wallets_active": 0,
+      "technical_score": -0.7,
+      "composite_score": -0.21,
+      "rationale": "SOL dropped from $94.82 to $84.43 — entry zone $96-102 was briefly touched ($96.78 intraday May 11) and price reversed sharply. Short thesis directionally confirmed but entry was missed. Reset to WAITING for next bounce to zone.",
+      "catalyst_risk": "CLARITY Act May 14 could spike SOL back to zone — that would be the entry. Watch.",
+      "timeframe": "MEDIUM_TERM",
+      "added": "2026-05-06",
+      "notes": "WAITING. Price $84.43. Zone was briefly touched May 11 but entry not confirmed. SOL dropped hard. Wait for next bounce to $96-102. CLARITY Act could be the trigger."
     },
     {
       "symbol": "ETH",
@@ -223,11 +245,11 @@
       "whale_wallets_active": 2,
       "technical_score": -0.5,
       "composite_score": 0.025,
-      "rationale": "140K ETH absorbed by whales in 96h. Composite near zero (+0.025). Death cross valid but whale counter-signal weakens conviction. Price $2,339, 10% below entry zone. Invalidate if whale score crosses +0.35.",
-      "catalyst_risk": "Glamsterdam upgrade. Whale absorption flipping composite positive.",
+      "rationale": "140K ETH absorbed. Composite near zero. Circle raised $222M — Ethereum stablecoin infrastructure bullish signal. Price $2,350, 10% below zone. Invalidate if whale score crosses +0.35.",
+      "catalyst_risk": "Glamsterdam upgrade. Whale score crossing +0.35.",
       "timeframe": "MEDIUM_TERM",
       "added": "2026-05-06",
-      "notes": "WAITING. Price $2,339. Whale MILD_BULL persists. Composite near-zero. No directional edge."
+      "notes": "WAITING. Price $2,350. Composite near-zero. Circle $222M raise slightly bullish for ETH ecosystem."
     },
     {
       "symbol": "LINK",
@@ -247,11 +269,10 @@
       "whale_wallets_active": 0,
       "technical_score": 0.5,
       "composite_score": 0.15,
-      "rationale": "Alert sent when zone $8.50-9.00 was reached. User did not confirm entry. Price now $10.55, above zone. Waiting for pullback. CLARITY Act could lift oracle protocols.",
-      "catalyst_risk": "BTC correction drags LINK below $8.50 invalidating zone.",
+      "rationale": "Alert sent. No user confirmation. Price ~$10.50, above zone $8.50-9.00. Waiting for pullback.",
       "timeframe": "SHORT_TERM",
       "added": "2026-05-07",
-      "notes": "Alert sent. No user confirmation. Price $10.55 — above zone. Monitoring for pullback."
+      "notes": "WAITING. Alert sent. No confirmation. Price above zone."
     },
     {
       "symbol": "ADA",
@@ -271,11 +292,10 @@
       "whale_wallets_active": 1,
       "technical_score": 0.4,
       "composite_score": 0.26,
-      "rationale": "Alert sent when zone $0.235-0.250 was reached. User did not confirm entry. Price now $0.278, above zone. Waiting for pullback.",
-      "catalyst_risk": "BTC correction pulling ADA back through zone. CLARITY Act May 14 could lift ADA above zone permanently.",
+      "rationale": "Alert sent. No user confirmation. Price ~$0.27, above zone. Waiting for pullback.",
       "timeframe": "SHORT_TERM",
       "added": "2026-05-07",
-      "notes": "Alert sent. No user confirmation. Price $0.278 — above zone. Monitoring for pullback."
+      "notes": "WAITING. Alert sent. No confirmation. Price above zone."
     },
     {
       "symbol": "DOGE",
@@ -295,13 +315,12 @@
       "whale_wallets_active": 0,
       "technical_score": -0.5,
       "composite_score": -0.15,
-      "rationale": "Alert sent when zone $0.115-0.125 was reached. User did not confirm entry. Price $0.11, below zone. Short bias intact. Waiting for bounce back to $0.115-0.125.",
-      "catalyst_risk": "CLARITY Act risk-on spike or Elon tweet above $0.135.",
+      "rationale": "Alert sent. No user confirmation. Price ~$0.11, below zone. Waiting for bounce to $0.115-0.125. CLARITY Act tomorrow is spike risk.",
       "timeframe": "SHORT_TERM",
       "added": "2026-05-07",
-      "notes": "Alert sent. No user confirmation. Price $0.11 — below zone. Monitor for bounce to $0.115-0.125."
+      "notes": "WAITING. Alert sent. No confirmation. Price below zone. CLARITY Act tomorrow — hold off."
     }
   ],
   "alerted": ["DOGE", "ADA", "LINK", "ONDO"],
-  "last_analysis": "May 11, 2026. BIFURCATED. BTC $81,969 (+1.44%), dom 60.1%, F&G 70 (GREED — major shift from 42 yesterday). OPEN POSITION: ONDO LONG confirmed at $0.4154, current ~$0.45, +8.3% P&L. Stepped TPs: TP1 $0.55 (25%), TP2 $0.72 (35%), TP3 $1.05 (40%). Morgan Stanley BTC ETF $194M inflows May 11. CLARITY Act Senate markup May 14 — 3 days away. SOL SHORT touched entry zone $96.78 intraday — limit shorts at $96-97 APPROACHING/CAUTION given CLARITY risk and F&G 70. NEW: SUI LONG setup added — CME futures May 29, Nasdaq staking, 45% weekly breakout, composite +0.53 MEDIUM — entry zone $1.05-1.15 or momentum entry $1.20-1.30. AAVE SHORT INVALIDATED — price $100 moved wrong direction vs entry zone $89-93."
+  "last_analysis": "May 12, 2026. BIFURCATED. BTC $80,860, dom 60.1%, F&G ~68 (Greed, slight pullback from 70). ONDO CLOSED by user at $0.4154 breakeven (entered and exited same price). No open positions. NEW: HYPE LONG — whale wallet 0xb5E4 accumulated 1.22M HYPE ($52M) in 3 weeks, daily buyer for 2 months, Arthur Hayes $150 target, composite +0.675 MEDIUM-HIGH. Entry zone $32-36. SOL SHORT reset to WAITING — price dropped to $84.43, entry zone $96-102 was briefly touched May 11 but entry missed. SUI LONG still APPROACHING — price $1.26 inside momentum entry zone $1.20-1.30. CLARITY Act TOMORROW (May 14) — decisive event. Strategy bought 535 BTC, Circle raised $222M, bill text unveiled with bipartisan compromise."
 }
