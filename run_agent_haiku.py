@@ -263,7 +263,13 @@ CHANGES TODAY
     enter_count  = count_enter_setups(updated_state)
     subject      = build_subject(macro_bias, setup_count, enter_count, date_str)
 
-    email_ok = send_report(subject=subject, body=email_body, is_alert=enter_count > 0)
+    email_ok = send_report(
+        subject=subject,
+        body=email_body,
+        is_alert=enter_count > 0,
+        attachment=response,
+        attachment_filename=f"crypto_full_report_{date_str}.txt",
+    )
 
     # ── Step 8: Update report.log ─────────────────────────────────────────────
     log_line = (f"{datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC | "
