@@ -64,6 +64,7 @@ def get_api_key(env: dict) -> str:
 
 
 def extract_state_from_response(text: str) -> dict:
+    """Pull the first valid JSON object out of Claude's response."""
     depth = 0
     start = None
     for i, ch in enumerate(text):
@@ -89,13 +90,26 @@ def extract_macro_bias(text: str) -> str:
 
 
 def count_enter_setups(state: dict) -> int:
-    return sum(1 for s in state.get("active_setups", []) if s.get("status") == "ENTER")
+    return sum(
+        1 for s in state.get("active_setups", [])
+        if s.get("status") == "ENTER"
+    )
+
+
+def extract_email_body(text: str) -> str:
+    """Extract only the [EMAIL]...[/EMAIL] section from Claude's response."""
+    start = text.find("[EMAIL]")
+    end   = text.find("[/EMAIL]")
+    if start != -1 and end != -1:
+        return text[start + 7:end].strip()
+    return text  # fallback: send full response if markers missing
 
 
 def run():
     print(f"[{datetime.utcnow().isoformat()}] ═══ Crypto Market Intelligence Agent (Haiku 4.5) ═══")
 
     env = load_env()
+
     try:
         api_key = get_api_key(env)
     except ValueError as e:
@@ -115,11 +129,12 @@ def run():
         existing_wallets=existing_profitable,
     )
     print(f"[{datetime.utcnow().isoformat()}] Whale data fetched — "
-          f"BTC:{whale_data['summary']['btc_large_moves']} "
-          f"ETH:{whale_data['summary']['eth_large_moves']} "
+          f"BTC moves:{whale_data['summary']['btc_large_moves']} "
+          f"ETH moves:{whale_data['summary']['eth_large_moves']} "
           f"profitable wallets:{whale_data['summary']['profitable_wallets_tracked']}")
 
     system_prompt = load_instructions()
+
     user_prompt = f"""Today is {datetime.utcnow().strftime('%Y-%m-%d')}.
 
 ═══ REAL ON-CHAIN WHALE DATA (fetched this run) ═══
@@ -130,11 +145,51 @@ def run():
 
 Instructions:
 - Use the real on-chain data above for Steps 3 (whale signals) and 4 (prices).
-- large_transfers shows actual large moves today — classify as bullish/bearish based on direction field.
-- profitable_wallets_discovered are real wallets with verified >20% avg profit — treat as high-weight signals.
-- Execute Steps 2 (macro analysis), 5 (TA), 6 (opportunity scoring), 7 (update setups), 8 (alerts) fully.
-- Output: first the complete daily report (Step 9 format), then a JSON block for updated state.json.
+- large_transfers shows actual large moves today — classify as bullish/bearish via direction field.
+- profitable_wallets_discovered are real wallets with >20% avg profit — treat as high-weight signals.
+- Execute all steps internally (macro, whale scoring, TA, composite scoring, setup updates).
 - No positions are open unless listed in current state open_positions.
+
+Output EXACTLY this structure — nothing else:
+
+[EMAIL]
+═══════════════════════════════════════════════════════════
+CRYPTO DAILY BRIEF — {{DATE}} | {{MACRO_BIAS}}
+═══════════════════════════════════════════════════════════
+BTC ${{price}}  Dom {{dom}}%  F&G {{fg}}  AltSeason {{alt}}/100
+{{One sentence macro summary. Key risk or catalyst to watch.}}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OPEN POSITIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[If no open positions, write: None confirmed.]
+[If open positions exist, one row per position:]
+SYM  DIR    ENTRY     NOW       P&L%   STOP      ACTION
+---  -----  --------  --------  -----  --------  --------------------------
+ETH  SHORT  $2,650    $2,520    +4.9%  $2,820    Trail stop to $2,600
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ACTIONABLE SETUPS  (ENTER and APPROACHING only)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SYM   DIR    STATUS    ENTRY ZONE       STOP      T1        T2        R/R  CONV    WHALE
+----  -----  --------  ---------------  --------  --------  --------  ---  ------  ----------
+[One row per ENTER or APPROACHING setup. Skip WAITING setups.]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+WAITING (monitor only)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[Comma-separated list: SYM DIR — reason in 5 words]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CHANGES TODAY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[Bullet list: NEW / ENTER / INVALIDATED / REVISED setups only. One line each.]
+═══════════════════════════════════════════════════════════
+[/EMAIL]
+
+[STATE_JSON]
+{{updated state.json as valid JSON}}
+[/STATE_JSON]
 """
 
     client = anthropic.Anthropic(api_key=api_key)
@@ -147,33 +202,42 @@ Instructions:
         messages=[{"role": "user", "content": user_prompt}],
     )
 
-    response    = message.content[0].text
-    tokens_in   = message.usage.input_tokens
-    tokens_out  = message.usage.output_tokens
-    cost_usd    = (tokens_in * 0.80 + tokens_out * 4.00) / 1_000_000
+    response   = message.content[0].text
+    tokens_in  = message.usage.input_tokens
+    tokens_out = message.usage.output_tokens
+    cost_usd   = (tokens_in * 0.80 + tokens_out * 4.00) / 1_000_000
 
     print(f"[{datetime.utcnow().isoformat()}] Done — in:{tokens_in} out:{tokens_out} cost:${cost_usd:.4f}")
 
-    updated_state = extract_state_from_response(response)
+    # Extract state JSON — try [STATE_JSON] marker first, fall back to bare JSON
+    state_text = response
+    sj_start = response.find("[STATE_JSON]")
+    sj_end   = response.find("[/STATE_JSON]")
+    if sj_start != -1 and sj_end != -1:
+        state_text = response[sj_start + 12:sj_end]
+
+    updated_state = extract_state_from_response(state_text)
     if updated_state:
-        updated_state["profitable_wallets_discovered"] = whale_data["profitable_wallets_discovered"]
+        updated_state["profitable_wallets_discovered"] = \
+            whale_data["profitable_wallets_discovered"]
         save_state(updated_state)
         print(f"[{datetime.utcnow().isoformat()}] state.json updated")
     else:
         print(f"[{datetime.utcnow().isoformat()}] WARNING: could not extract state JSON")
         updated_state = state
 
-    date_str = datetime.utcnow().strftime("%Y-%m-%d")
+    date_str    = datetime.utcnow().strftime("%Y-%m-%d")
     report_path = BASE_DIR / f"daily_report_{date_str}.txt"
     with open(report_path, "w") as f:
         f.write(response)
     print(f"[{datetime.utcnow().isoformat()}] Report saved: {report_path}")
 
-    macro_bias  = extract_macro_bias(response)
+    email_body  = extract_email_body(response)
+    macro_bias  = extract_macro_bias(email_body)
     setup_count = len(updated_state.get("active_setups", []))
     enter_count = count_enter_setups(updated_state)
     subject     = build_subject(macro_bias, setup_count, enter_count, date_str)
-    email_ok    = send_report(subject=subject, body=response, is_alert=enter_count > 0)
+    email_ok    = send_report(subject=subject, body=email_body, is_alert=enter_count > 0)
 
     log_line = (f"{datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC | "
                 f"{macro_bias} | {setup_count} setups | {enter_count} ENTER | "
