@@ -7,3 +7,6 @@ __pycache__/
 *.pyo
 state.json
 daily_report_*.txt
+pending_updates.json
+.tg_offset
+telegram.log
