@@ -2,3 +2,8 @@ claude/run-application-DMtBI
 .env
 report.log
 cron.log
+__pycache__/
+*.pyc
+*.pyo
+state.json
+daily_report_*.txt
