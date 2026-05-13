@@ -156,8 +156,25 @@ Output EXACTLY this structure — nothing else:
 ═══════════════════════════════════════════════════════════
 CRYPTO DAILY BRIEF — {{DATE}} | {{MACRO_BIAS}}
 ═══════════════════════════════════════════════════════════
-BTC ${{price}}  Dom {{dom}}%  F&G {{fg}}  AltSeason {{alt}}/100
-{{One sentence macro summary. Key risk or catalyst to watch.}}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 1 — STATE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Last run : {{last_run}}
+Positions: {{N open confirmed}} | Setups: {{N active}}
+Alerted  : {{alerted symbols or none}}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 2 — MACRO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+BTC       : ${{price}} | {{trend}} | {{% from 200d MA}}
+BTC Dom   : {{%}} — {{above/below 60% interpretation}}
+Alt Season: {{index}}/100 — {{interpretation}}
+Fear&Greed: {{index}} — {{label}}
+DXY/Gold  : {{one line}}
+Macro Bias: {{BULLISH|BEARISH|NEUTRAL|BIFURCATED}}
+
+{{2-3 sentences: what is driving the market, key risk or catalyst this week.}}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 OPEN POSITIONS
@@ -207,9 +224,9 @@ CHANGES TODAY
     tokens_out = message.usage.output_tokens
     cost_usd   = (tokens_in * 0.80 + tokens_out * 4.00) / 1_000_000
 
-    print(f"[{datetime.utcnow().isoformat()}] Done — in:{tokens_in} out:{tokens_out} cost:${cost_usd:.4f}")
+    print(f"[{datetime.utcnow().isoformat()}] Response received — "
+          f"in:{tokens_in} out:{tokens_out} cost:${cost_usd:.4f}")
 
-    # Extract state JSON — try [STATE_JSON] marker first, fall back to bare JSON
     state_text = response
     sj_start = response.find("[STATE_JSON]")
     sj_end   = response.find("[/STATE_JSON]")
@@ -223,7 +240,7 @@ CHANGES TODAY
         save_state(updated_state)
         print(f"[{datetime.utcnow().isoformat()}] state.json updated")
     else:
-        print(f"[{datetime.utcnow().isoformat()}] WARNING: could not extract state JSON")
+        print(f"[{datetime.utcnow().isoformat()}] WARNING: Could not extract state JSON")
         updated_state = state
 
     date_str    = datetime.utcnow().strftime("%Y-%m-%d")
