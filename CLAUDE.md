@@ -78,9 +78,44 @@ Levels must be significant: ATH/ATL, prior major highs/lows, round numbers, key 
 
 For each setup define: symbol, direction, whale_signal, technical_score, composite_score, conviction, entry_zone [low,high], stop_loss, target_1, target_2, r_r_ratio, status (WAITING|APPROACHING|ENTER|INVALIDATED), rationale (2–3 sentences, lead with whale action), catalyst_risk, timeframe (SHORT_TERM|MEDIUM_TERM).
 
-### STEP 6 — Update Active Setups
-Merge new setups with existing from state:
-- New → add. Valid levels → keep, update status/price. Stop broken → INVALIDATED. Target hit → COMPLETED. Levels shifted → revise with note.
+### STEP 6 — Update Active Setups & Manage Open Positions
+
+**6a — Active Setups (ideas being monitored)**
+
+For each existing setup in `active_setups`, apply these rules in order:
+
+| Condition | Action |
+|-----------|--------|
+| Price closed beyond stop_loss | INVALIDATED — remove from active monitoring, note in CHANGES TODAY |
+| Price hit target_1 | COMPLETED — note partial target reached |
+| Price hit target_2 | COMPLETED — note full target reached |
+| Entry zone reached (price inside [entry_low, entry_high]) | ENTER — fire alert if not already in `alerted` list |
+| Price within 3% of entry zone | APPROACHING |
+| Whale signal reversed vs. setup direction | INVALIDATED or downgrade conviction, explain why |
+| Levels still valid, no trigger | Keep as WAITING, update current price |
+| Setup from yesterday still valid but entry missed | Keep, widen zone slightly if justified, note revision |
+
+For new setups discovered in Step 5: add only if composite score clears threshold. Do not add duplicates of existing symbols unless direction is opposite.
+
+**6b — Open Positions (user-confirmed trades)**
+
+For each position in `open_positions`, calculate and update:
+
+1. **P&L %** — `(current_price - entry_price) / entry_price × 100` (invert for shorts)
+2. **Stop management:**
+   - If P&L > +5% → suggest trailing stop to breakeven
+   - If P&L > +10% → suggest trailing stop to lock in 5%
+   - If P&L > +20% → suggest trailing stop to lock in 10%, consider partial exit at T1
+   - If price approaching stop (within 2%) → flag as "stop close — monitor"
+3. **Target management:**
+   - If price within 3% of target_1 → flag "T1 approaching — consider partial take-profit (50%)"
+   - If target_1 already hit → track remaining position vs target_2
+4. **Conviction re-assessment:**
+   - If whale signal has reversed since entry → flag as "whale reversal — consider exit"
+   - If macro bias contradicts direction → note as risk, do not exit automatically
+5. **Action column in email** — always give a specific action: "Hold", "Trail stop to $X", "Take partial profit at $Y", "Exit — stop at $Z", "Reduce size — whale reversal"
+
+Never close a position in state without user confirmation. Only recommend actions; the user decides.
 
 ### STEP 7 — Output
 Produce output in EXACTLY the format specified in the user prompt ([EMAIL] and [STATE_JSON] blocks). No other output.
