@@ -154,7 +154,17 @@ Ensure the output is valid JSON for state updates and includes the formatted ema
     except Exception as e:
         print(f"[{datetime.utcnow().isoformat()}] Warning: Could not update report.log: {e}")
 
-    # Display the full response for verification
+    # Save daily report to file
+    try:
+        date_str = datetime.utcnow().strftime("%Y-%m-%d")
+        report_path = Path(__file__).parent / f"daily_report_{date_str}.txt"
+        with open(report_path, 'w') as f:
+            f.write(response_text)
+        print(f"[{datetime.utcnow().isoformat()}] Report saved: {report_path}")
+    except Exception as e:
+        print(f"[{datetime.utcnow().isoformat()}] Warning: Could not save report: {e}")
+
+    # Display the full response
     print("\n" + "="*80)
     print("AGENT RESPONSE:")
     print("="*80)
