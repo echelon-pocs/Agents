@@ -52,6 +52,9 @@ KNOWN_WALLETS = {
 # ONDO token contract
 ONDO_CONTRACT = "0xfAbA6f8e4a5E8Ab82F62fe7C39859FA577269BE3"
 
+# Etherscan V2 base URL
+ESCAN = "https://api.etherscan.io/v2/api"
+
 COINGECKO_IDS = {
     "BTC": "bitcoin", "ETH": "ethereum", "SOL": "solana",
     "XRP": "ripple", "SUI": "sui", "ONDO": "ondo-finance",
@@ -201,10 +204,8 @@ def get_ondo_large_transfers(etherscan_key: str = "", min_usd: float = 500_000) 
 def _estimate_block_from_hours_ago(hours: int, chain: str) -> int:
     """Rough block number estimate for time range filtering."""
     blocks_per_hour = {"eth": 300, "bsc": 1200}
-    # Etherscan V2 API
-    result = _get("https://api.etherscan.io/v2/api",
-                  params={"chainid": 1, "module": "proxy",
-                          "action": "eth_blockNumber"})
+    result = _get(ESCAN, params={"chainid": 1, "module": "proxy",
+                                 "action": "eth_blockNumber"})
     raw = (result or {}).get("result", "")
     if raw and raw.startswith("0x"):
         try:
@@ -212,6 +213,20 @@ def _estimate_block_from_hours_ago(hours: int, chain: str) -> int:
         except ValueError:
             pass
     return 21500000  # safe fallback
+
+
+def _block_from_hours_ago(hours: int, etherscan_key: str = "") -> int:
+    """Wrapper used by discovery functions — always targets ETH mainnet."""
+    result = _get(ESCAN, params={"chainid": 1, "module": "proxy",
+                                 "action": "eth_blockNumber",
+                                 "apikey": etherscan_key or "YourKey"})
+    raw = (result or {}).get("result", "")
+    if raw and raw.startswith("0x"):
+        try:
+            return int(raw, 16) - (hours * 300)
+        except ValueError:
+            pass
+    return 21500000
 
 # ─── SOL ─────────────────────────────────────────────────────────────────────
 
@@ -275,92 +290,232 @@ def get_xrp_large_transfers(min_usd: float = 500_000) -> List[Dict]:
                     })
     return results
 
-# ─── Profitable Wallet Discovery ─────────────────────────────────────────────
+# ─── Profitable Wallet Discovery — Early Buyer Method ────────────────────────
+#
+# Strategy: work BACKWARDS from confirmed price moves.
+# If token X is up >20% vs 30 days ago, find wallets that bought large amounts
+# BEFORE the move (first 5 days of the window). Those wallets are proven smart money.
+# Track what they're buying TODAY as a copy-trade signal.
+#
+# Why this works vs. the old Uniswap event scan:
+#   - Old: extracted router addresses (not users) from Swap event topics → always empty
+#   - New: uses tokentx (actual token transfers to/from real wallets) → reliable data
+#   - Old: paired arbitrary consecutive swaps as round-trips → meaningless P&L
+#   - New: uses real price appreciation over measured window → verified profit
+#
+# Weighting note: whale signals remain at 70% / TA 30%.
+# Discovered wallets feed INTO the whale signal layer — their current positions
+# count as whale bullish/bearish signals for the assets they're touching.
 
-def discover_profitable_eth_wallets(etherscan_key: str = "",
-                                     min_profit_pct: float = 20,
-                                     lookback_days: int = 30) -> List[Dict]:
+# Tokens to scan for early buyers. Add any ERC-20 contract here.
+SCANNABLE_TOKENS: Dict[str, str] = {
+    "ONDO": ONDO_CONTRACT,
+    "UNI":  "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984",
+    "LINK": "0x514910771AF9Ca656af840dff83E8264EcF986CA",
+    "AAVE": "0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9",
+}
+
+# Minimum USD size to count as "serious" buy — filters noise and bots
+MIN_BUY_USD = 75_000
+
+# Exchange hot wallets to exclude (they're not buyers, just routing)
+_EXCHANGE_ADDRS_FLAT: Optional[List[str]] = None
+
+def _exchange_addrs() -> List[str]:
+    global _EXCHANGE_ADDRS_FLAT
+    if _EXCHANGE_ADDRS_FLAT is None:
+        _EXCHANGE_ADDRS_FLAT = [
+            a.lower()
+            for addrs in EXCHANGE_HOT_WALLETS.get("ETH", {}).values()
+            for a in addrs
+        ]
+    return _EXCHANGE_ADDRS_FLAT
+
+
+def discover_early_buyers(
+    etherscan_key: str = "",
+    lookback_days: int = 30,
+    entry_window_days: int = 7,
+    min_profit_pct: float = 20,
+    min_buy_usd: float = MIN_BUY_USD,
+) -> List[Dict]:
     """
-    Scan ETH DEX trades (Uniswap v3 via Etherscan events) to find wallets
-    that consistently profit >= min_profit_pct on closed round-trips.
-    Returns list of wallet dicts with avg_profit_pct and trade_count.
+    Find wallets that bought a token during its accumulation phase
+    (first `entry_window_days` of the lookback window) and now sit
+    on >= min_profit_pct unrealised gain.
+
+    Returns wallets sorted by profit%, ready to feed into whale signal layer.
+    Each wallet also carries `current_holdings` so Claude can see what
+    they're holding TODAY as a copy-trade signal.
     """
-    # Get recent large DEX swaps — Uniswap v3 Swap event topic
-    UNISWAP_V3_FACTORY = "0x1F98431c8aD98523631AE4a59f267346ea31F984"
-    SWAP_TOPIC = "0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67"
-
-    start_block = _estimate_block_from_hours_ago(lookback_days * 24, "eth")
-    params = {
-        "chainid": 1, "module": "logs", "action": "getLogs",
-        "fromBlock": start_block, "toBlock": "latest",
-        "topic0": SWAP_TOPIC,
-        "apikey": etherscan_key or "YourKey",
-    }
-    data = _get("https://api.etherscan.io/v2/api", params=params)
-
-    wallet_trades: Dict[str, List[Dict]] = {}
-
-    if data and data.get("status") == "1":
-        for log in data.get("result", [])[:500]:
-            topics = log.get("topics", [])
-            if len(topics) < 2:
-                continue
-            wallet = "0x" + topics[2][-40:] if len(topics) > 2 else ""
-            if not wallet:
-                continue
-
-            block_ts = int(log.get("timeStamp", "0"), 16)
-            date_str = datetime.utcfromtimestamp(block_ts).strftime("%Y-%m-%d")
-
-            if wallet not in wallet_trades:
-                wallet_trades[wallet] = []
-            wallet_trades[wallet].append({
-                "date": date_str,
-                "block": int(log.get("blockNumber", "0"), 16),
-                "tx": log.get("transactionHash", ""),
-                "data": log.get("data", ""),
-            })
-
-    profitable_wallets = []
     prices = get_prices()
+    found: Dict[str, Dict] = {}  # address → wallet info
 
-    for wallet, trades in wallet_trades.items():
-        if len(trades) < 3:  # need minimum activity
+    for symbol, contract in SCANNABLE_TOKENS.items():
+        token_price_now = prices.get(symbol, 0)
+        if not token_price_now:
             continue
 
-        # Pair consecutive buy/sell to estimate round-trip P&L
-        profits = []
-        for i in range(0, len(trades) - 1, 2):
-            buy = trades[i]
-            sell = trades[i + 1]
-            buy_price = get_historical_price("ETH", buy["date"]) or prices.get("ETH", 2500)
-            sell_price = get_historical_price("ETH", sell["date"]) or prices.get("ETH", 2500)
-            if buy_price > 0:
-                pnl = (sell_price - buy_price) / buy_price * 100
-                profits.append(pnl)
-            time.sleep(0.2)  # respect CoinGecko rate limit
+        # Price 30 days ago
+        date_entry = (datetime.utcnow() - timedelta(days=lookback_days)).strftime("%Y-%m-%d")
+        price_entry = get_historical_price(symbol, date_entry) or token_price_now
+        time.sleep(0.3)  # CoinGecko rate limit
 
-        if not profits:
+        gain_pct = (token_price_now - price_entry) / price_entry * 100 if price_entry else 0
+
+        if gain_pct < min_profit_pct:
+            # Token didn't move enough — skip (no confirmed smart money signal)
             continue
 
-        avg_profit = sum(profits) / len(profits)
-        # Allow some losing trades but avg must exceed threshold
-        winning_trades = sum(1 for p in profits if p > 0)
-        win_rate = winning_trades / len(profits)
+        print(f"[WhaleTracker] {symbol} up {gain_pct:.1f}% in {lookback_days}d — scanning early buyers...")
 
-        if avg_profit >= min_profit_pct and win_rate >= 0.55:
-            profitable_wallets.append({
-                "address": wallet,
-                "avg_profit_pct": round(avg_profit, 2),
-                "win_rate_pct": round(win_rate * 100, 1),
-                "trade_count": len(profits),
-                "source": "Uniswap v3 DEX scan",
-                "chain": "ETH",
-                "discovered": datetime.utcnow().strftime("%Y-%m-%d"),
+        # Get token transfers during the entry window (first entry_window_days)
+        start_block = _block_from_hours_ago(lookback_days * 24, etherscan_key)
+        end_block   = _block_from_hours_ago((lookback_days - entry_window_days) * 24, etherscan_key)
+
+        data = _get(ESCAN, params={
+            "chainid": 1, "module": "account", "action": "tokentx",
+            "contractaddress": contract,
+            "startblock": start_block, "endblock": end_block,
+            "sort": "asc",
+            "apikey": etherscan_key or "YourKey",
+        })
+
+        if not data or data.get("status") != "1":
+            continue
+
+        for tx in data.get("result", [])[:300]:
+            buyer = tx.get("to", "").lower()
+
+            # Skip: exchange routing, contract addresses (start with 0x000), null
+            if not buyer or buyer in _exchange_addrs():
+                continue
+            if buyer.startswith("0x000000"):
+                continue
+
+            decimals = int(tx.get("tokenDecimal", 18))
+            amount   = int(tx.get("value", 0)) / (10 ** decimals)
+            buy_usd  = amount * price_entry
+
+            if buy_usd < min_buy_usd:
+                continue
+
+            profit_pct  = gain_pct  # unrealised gain on this position
+            current_val = amount * token_price_now
+
+            if buyer not in found:
+                found[buyer] = {
+                    "address":        buyer,
+                    "avg_profit_pct": 0.0,
+                    "tokens_bought":  [],
+                    "total_invested": 0.0,
+                    "total_now":      0.0,
+                    "trade_count":    0,
+                    "source":         "early-buyer scan",
+                    "chain":          "ETH",
+                    "discovered":     datetime.utcnow().strftime("%Y-%m-%d"),
+                }
+
+            w = found[buyer]
+            w["tokens_bought"].append({
+                "symbol":      symbol,
+                "amount":      round(amount, 2),
+                "buy_usd":     round(buy_usd, 0),
+                "current_usd": round(current_val, 0),
+                "profit_pct":  round(profit_pct, 1),
+            })
+            w["total_invested"] += buy_usd
+            w["total_now"]      += current_val
+            w["trade_count"]    += 1
+
+    # Compute blended avg_profit_pct and filter
+    results = []
+    for w in found.values():
+        if w["total_invested"] <= 0:
+            continue
+        w["avg_profit_pct"] = round(
+            (w["total_now"] - w["total_invested"]) / w["total_invested"] * 100, 2
+        )
+        if w["avg_profit_pct"] >= min_profit_pct:
+            results.append(w)
+
+    results.sort(key=lambda x: x["avg_profit_pct"], reverse=True)
+    top = results[:15]
+
+    if top:
+        print(f"[WhaleTracker] Found {len(top)} early-buyer wallets "
+              f"(avg profit range: {top[-1]['avg_profit_pct']}%–{top[0]['avg_profit_pct']}%)")
+    else:
+        print("[WhaleTracker] No early-buyer wallets found this run "
+              "(all tracked tokens moved <20% in lookback window — normal in sideways markets)")
+
+    return top
+
+
+def get_profitable_wallet_current_activity(
+    wallets: List[Dict],
+    etherscan_key: str = "",
+) -> List[Dict]:
+    """
+    For each discovered profitable wallet, check what ERC-20 tokens
+    they received in the last 48h. This is the copy-trade signal:
+    if a proven smart-money wallet is accumulating X right now, that's
+    a high-weight bullish signal for X.
+    """
+    if not wallets:
+        return []
+
+    prices  = get_prices()
+    signals = []
+    start   = _block_from_hours_ago(48, etherscan_key)
+
+    for w in wallets[:10]:  # check top 10 only to stay within rate limits
+        addr = w.get("address", "")
+        if not addr:
+            continue
+
+        data = _get(ESCAN, params={
+            "chainid": 1, "module": "account", "action": "tokentx",
+            "address": addr,
+            "startblock": start, "endblock": 99999999,
+            "sort": "desc",
+            "apikey": etherscan_key or "YourKey",
+        })
+
+        if not data or data.get("status") != "1":
+            continue
+
+        for tx in data.get("result", [])[:20]:
+            # Only inbound transfers (wallet is the buyer)
+            if tx.get("to", "").lower() != addr.lower():
+                continue
+            if tx.get("from", "").lower() in _exchange_addrs():
+                direction = "WITHDRAWAL_FROM_EXCHANGE"
+            else:
+                direction = "WALLET_TO_WALLET"
+
+            symbol    = tx.get("tokenSymbol", "?")
+            decimals  = int(tx.get("tokenDecimal", 18))
+            amount    = int(tx.get("value", 0)) / (10 ** decimals)
+            usd_val   = amount * prices.get(symbol, 0)
+
+            if usd_val < 10_000:
+                continue
+
+            signals.append({
+                "wallet":    addr,
+                "wallet_profit_pct": w.get("avg_profit_pct", 0),
+                "action":    "BUY",
+                "symbol":    symbol,
+                "amount":    round(amount, 2),
+                "value_usd": round(usd_val, 0),
+                "direction": direction,
+                "timestamp": tx.get("timeStamp"),
             })
 
-    # Sort by avg profit descending
-    return sorted(profitable_wallets, key=lambda x: x["avg_profit_pct"], reverse=True)[:10]
+        time.sleep(0.15)  # stay within free tier rate limits
+
+    return signals
 
 # ─── Known exchange deposit addresses (bearish signal) ───────────────────────
 
@@ -423,26 +578,42 @@ def get_all_whale_data(etherscan_key: str = "",
         tx["direction"] = classify_transfer_direction(
             tx.get("from", ""), tx.get("to", ""), "ETH")
 
-    # 3. Discover new profitable wallets (rate-limited, runs every run)
-    print("[WhaleTracker] Scanning for profitable wallets...")
+    # 3. Discover new profitable wallets via early-buyer method
+    print("[WhaleTracker] Scanning for profitable wallets (early-buyer method)...")
     try:
-        new_profitable = discover_profitable_eth_wallets(
+        new_profitable = discover_early_buyers(
             etherscan_key=etherscan_key,
-            min_profit_pct=20,
             lookback_days=30,
+            entry_window_days=7,
+            min_profit_pct=20,
+            min_buy_usd=MIN_BUY_USD,
         )
     except Exception as e:
         print(f"[WhaleTracker] Profitable wallet scan failed: {e}")
         new_profitable = []
 
-    # 4. Merge with existing tracked wallets
-    tracked_wallets = existing_wallets or []
+    # 4. Merge with existing tracked wallets (persist across runs)
+    tracked_wallets = list(existing_wallets or [])
     existing_addrs = {w.get("address", "").lower() for w in tracked_wallets}
     for w in new_profitable:
         if w["address"].lower() not in existing_addrs:
             tracked_wallets.append(w)
             print(f"[WhaleTracker] NEW profitable wallet found: {w['address']} "
                   f"avg +{w['avg_profit_pct']}% over {w['trade_count']} trades")
+
+    # 5. Get what those wallets are buying RIGHT NOW (copy-trade signal)
+    print(f"[WhaleTracker] Checking current activity for {min(len(tracked_wallets), 10)} profitable wallets...")
+    try:
+        profitable_signals = get_profitable_wallet_current_activity(
+            wallets=tracked_wallets,
+            etherscan_key=etherscan_key,
+        )
+    except Exception as e:
+        print(f"[WhaleTracker] Current activity check failed: {e}")
+        profitable_signals = []
+
+    if profitable_signals:
+        print(f"[WhaleTracker] {len(profitable_signals)} copy-trade signals from profitable wallets")
 
     return {
         "timestamp": datetime.utcnow().isoformat(),
@@ -456,6 +627,7 @@ def get_all_whale_data(etherscan_key: str = "",
         },
         "known_wallets": KNOWN_WALLETS,
         "profitable_wallets_discovered": tracked_wallets,
+        "profitable_wallet_signals": profitable_signals,
         "summary": {
             "btc_large_moves": len(btc_txs),
             "eth_large_moves": len(eth_txs),
@@ -463,5 +635,6 @@ def get_all_whale_data(etherscan_key: str = "",
             "xrp_large_moves": len(xrp_txs),
             "sol_active_wallets": len(sol_activity),
             "profitable_wallets_tracked": len(tracked_wallets),
+            "profitable_wallet_signals_today": len(profitable_signals),
         },
     }
