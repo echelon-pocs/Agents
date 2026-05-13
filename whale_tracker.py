@@ -142,11 +142,11 @@ def get_eth_large_transfers(etherscan_key: str = "", min_usd: float = 1_000_000)
 
     start_block = _estimate_block_from_hours_ago(24, "eth")
     params = {
-        "module": "account", "action": "txlistinternal",
+        "chainid": 1, "module": "account", "action": "txlistinternal",
         "startblock": start_block, "endblock": 99999999,
         "sort": "desc", "apikey": etherscan_key or "YourKey",
     }
-    data = _get("https://api.etherscan.io/api", params=params)
+    data = _get("https://api.etherscan.io/v2/api", params=params)
 
     results = []
     seen = set()
@@ -173,12 +173,12 @@ def get_ondo_large_transfers(etherscan_key: str = "", min_usd: float = 500_000) 
 
     start_block = _estimate_block_from_hours_ago(24, "eth")
     params = {
-        "module": "account", "action": "tokentx",
+        "chainid": 1, "module": "account", "action": "tokentx",
         "contractaddress": ONDO_CONTRACT,
         "startblock": start_block, "endblock": 99999999,
         "sort": "desc", "apikey": etherscan_key or "YourKey",
     }
-    data = _get("https://api.etherscan.io/api", params=params)
+    data = _get("https://api.etherscan.io/v2/api", params=params)
 
     results = []
     if data and data.get("status") == "1":
@@ -201,12 +201,17 @@ def get_ondo_large_transfers(etherscan_key: str = "", min_usd: float = 500_000) 
 def _estimate_block_from_hours_ago(hours: int, chain: str) -> int:
     """Rough block number estimate for time range filtering."""
     blocks_per_hour = {"eth": 300, "bsc": 1200}
-    latest = _get("https://api.etherscan.io/api",
-                  params={"module": "proxy", "action": "eth_blockNumber"})
-    if latest and latest.get("result"):
-        latest_block = int(latest["result"], 16)
-        return latest_block - (hours * blocks_per_hour.get(chain, 300))
-    return 21000000  # fallback
+    # Etherscan V2 API
+    result = _get("https://api.etherscan.io/v2/api",
+                  params={"chainid": 1, "module": "proxy",
+                          "action": "eth_blockNumber"})
+    raw = (result or {}).get("result", "")
+    if raw and raw.startswith("0x"):
+        try:
+            return int(raw, 16) - (hours * blocks_per_hour.get(chain, 300))
+        except ValueError:
+            pass
+    return 21500000  # safe fallback
 
 # ─── SOL ─────────────────────────────────────────────────────────────────────
 
@@ -286,12 +291,12 @@ def discover_profitable_eth_wallets(etherscan_key: str = "",
 
     start_block = _estimate_block_from_hours_ago(lookback_days * 24, "eth")
     params = {
-        "module": "logs", "action": "getLogs",
+        "chainid": 1, "module": "logs", "action": "getLogs",
         "fromBlock": start_block, "toBlock": "latest",
         "topic0": SWAP_TOPIC,
         "apikey": etherscan_key or "YourKey",
     }
-    data = _get("https://api.etherscan.io/api", params=params)
+    data = _get("https://api.etherscan.io/v2/api", params=params)
 
     wallet_trades: Dict[str, List[Dict]] = {}
 
