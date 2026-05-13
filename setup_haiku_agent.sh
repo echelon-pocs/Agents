@@ -4,9 +4,9 @@
 AGENTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 ENV_FILE="$AGENTS_DIR/.env"
 
-echo "═══════════════════════════════════════════════════════════"
+echo "═════════════════════════════════════════════════════════"
 echo "Crypto Market Intelligence Agent - Haiku 4.5 Setup"
-echo "═══════════════════════════════════════════════════════════"
+echo "═════════════════════════════════════════════════════════"
 echo "Agent directory: $AGENTS_DIR"
 echo ""
 

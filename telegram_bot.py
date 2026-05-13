@@ -22,8 +22,8 @@ Setup:
   3. Add to .env:
        TELEGRAM_BOT_TOKEN=123456:ABC-your-token
        TELEGRAM_CHAT_ID=your_chat_id   (optional — auto-detected on first message)
-  4. Schedule this script via cron every 5 min:
-       */5 * * * * python3 /home/user/Agents/telegram_bot.py >> /home/user/Agents/telegram.log 2>&1
+  4. Schedule this script via cron every 5 min (adjust path to your Agents dir):
+       */5 * * * * python3 /volume1/homes/admin/Agents/telegram_bot.py >> /volume1/homes/admin/Agents/telegram.log 2>&1
 """
 
 import json
@@ -40,7 +40,7 @@ OFFSET_FILE  = BASE_DIR / ".tg_offset"
 ENV_FILE     = BASE_DIR / ".env"
 
 
-# ─── Config ─────────────────────────────────────────────────────────────────
+# ─── Config ──────────────────────────────────────────────────────────────────
 
 def load_env() -> dict:
     cfg = {}
@@ -61,7 +61,7 @@ def save_env_value(key: str, value: str):
     ENV_FILE.write_text("\n".join(new_lines) + "\n")
 
 
-# ─── Telegram API helpers ────────────────────────────────────────────────────
+# ─── Telegram API helpers ─────────────────────────────────────────────────────
 
 def tg(token: str, method: str, **params) -> dict:
     try:
@@ -79,7 +79,7 @@ def send(token: str, chat_id: str, text: str):
     tg(token, "sendMessage", chat_id=chat_id, text=text, parse_mode="Markdown")
 
 
-# ─── Pending updates file ────────────────────────────────────────────────────
+# ─── Pending updates file ─────────────────────────────────────────────────────
 
 def load_pending() -> list:
     if PENDING_FILE.exists():
@@ -104,7 +104,7 @@ def load_state() -> dict:
     return {}
 
 
-# ─── Command parser ───────────────────────────────────────────────────────
+# ─── Command parser ───────────────────────────────────────────────────────────
 
 def parse_command(text: str) -> dict | None:
     """
@@ -238,7 +238,7 @@ HELP_TEXT = """*Crypto Agent — Commands*
 Updates are queued and applied on the next daily run."""
 
 
-# ─── Main polling loop ─────────────────────────────────────────────────────
+# ─── Main polling loop ────────────────────────────────────────────────────────
 
 def run():
     env = load_env()

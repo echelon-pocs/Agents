@@ -36,7 +36,7 @@ def slim_whale_data(data: dict) -> dict:
     - known_wallets addresses (just send label list per chain)
     - profitable_wallets tokens_bought detail (send summary string instead)
     - native token amounts where value_usd is present
-    Result: ~66% fewer tokens in the JSON dump.
+    Result: ~50-60% fewer tokens in the JSON dump.
     """
     transfers = {
         chain: [_slim_transfer(tx) for tx in txs]
@@ -92,6 +92,78 @@ def load_state() -> dict:
 def save_state(state: dict):
     with open(BASE_DIR / "state.json", "w") as f:
         json.dump(state, f, indent=2)
+
+
+def apply_pending_updates(state: dict) -> tuple[dict, list[str]]:
+    """
+    Read pending_updates.json (written by telegram_bot.py), apply position
+    changes to state, clear the file, and return (updated_state, log_lines).
+    """
+    pending_path = BASE_DIR / "pending_updates.json"
+    if not pending_path.exists():
+        return state, []
+
+    try:
+        updates = json.loads(pending_path.read_text())
+    except Exception:
+        return state, []
+
+    if not updates:
+        return state, []
+
+    log = []
+    positions = {p["symbol"]: p for p in state.get("open_positions", [])}
+    setups    = {s["symbol"]: s for s in state.get("active_setups", [])}
+
+    for u in updates:
+        action = u.get("action")
+        symbol = u.get("symbol", "")
+
+        if action == "ENTER":
+            price    = u.get("price", 0)
+            size_usd = u.get("size_usd")
+            # Find matching setup for direction/targets, fallback to LONG
+            setup = setups.get(symbol, {})
+            positions[symbol] = {
+                "symbol":      symbol,
+                "direction":   setup.get("direction", "LONG"),
+                "entry_price": price,
+                "entry_date":  u.get("timestamp", "")[:10],
+                "stop_loss":   setup.get("stop_loss"),
+                "target_1":    setup.get("target_1"),
+                "target_2":    setup.get("target_2"),
+                "size_usd":    size_usd,
+                "pnl_pct":     None,
+                "notes":       "User confirmed via Telegram.",
+            }
+            log.append(f"ENTERED {symbol} @ ${price:,}")
+
+        elif action == "CLOSE":
+            if symbol in positions:
+                if u.get("partial"):
+                    positions[symbol]["notes"] = (
+                        positions[symbol].get("notes", "") + " | Partial close flagged."
+                    )
+                    log.append(f"PARTIAL CLOSE flagged: {symbol}")
+                else:
+                    del positions[symbol]
+                    log.append(f"CLOSED {symbol}")
+            else:
+                log.append(f"CLOSE {symbol}: not in open positions (ignored)")
+
+        elif action == "NOTE":
+            if symbol in positions:
+                positions[symbol]["notes"] = (
+                    positions[symbol].get("notes", "") + f" | {u['note']}"
+                )
+                log.append(f"NOTE added to {symbol}: {u['note']}")
+
+    state["open_positions"] = list(positions.values())
+
+    # Clear the queue
+    pending_path.write_text("[]")
+
+    return state, log
 
 
 def load_env() -> dict:
@@ -172,13 +244,17 @@ def run():
 
     etherscan_key = env.get("ETHERSCAN_API_KEY", "")
 
-    # ── Step 1: Load state ───────────────────────────────────────────────────────────────────
+    # ── Step 1: Load state + apply Telegram position updates ─────────────────
     state = load_state()
+    state, tg_log = apply_pending_updates(state)
+    if tg_log:
+        print(f"[{datetime.utcnow().isoformat()}] Telegram updates applied: {', '.join(tg_log)}")
+        save_state(state)
     print(f"[{datetime.utcnow().isoformat()}] State loaded — "
           f"{len(state.get('active_setups', []))} setups, "
           f"{len(state.get('open_positions', []))} open positions")
 
-    # ── Step 2: Fetch on-chain whale data ───────────────────────────────────────────────────
+    # ── Step 2: Fetch on-chain whale data ─────────────────────────────────────
     existing_profitable = state.get("profitable_wallets_discovered", [])
     whale_data = get_all_whale_data(
         etherscan_key=etherscan_key,
@@ -189,9 +265,16 @@ def run():
           f"ETH moves:{whale_data['summary']['eth_large_moves']} "
           f"profitable wallets:{whale_data['summary']['profitable_wallets_tracked']}")
 
-    # ── Step 3: Build prompt for Claude ──────────────────────────────────────────────────
+    # ── Step 3: Build prompt for Claude ──────────────────────────────────────
     system_prompt = load_instructions()
+
     whale_slim = slim_whale_data(whale_data)
+
+    tg_section = (
+        f"\n═══ POSITION UPDATES (received via Telegram before this run) ═══\n"
+        + "\n".join(f"- {l}" for l in tg_log)
+        if tg_log else ""
+    )
 
     user_prompt = f"""Today is {datetime.utcnow().strftime('%Y-%m-%d')}.
 
@@ -200,21 +283,20 @@ def run():
 
 ═══ CURRENT STATE (from last run) ═══
 {json.dumps(state, separators=(',', ':'), default=str)}
-
+{tg_section}
 Instructions:
 - Use the real on-chain data above for Steps 3 (whale signals) and 4 (prices).
-- transfers shows large moves today — classify as bullish/bearish via direction field.
-- profitable_wallets are real wallets with >20% avg profit — treat as high-weight signals.
-- profitable_signals are what those proven wallets are buying RIGHT NOW — highest conviction copy-trade signals.
+- large_transfers shows actual large moves today — classify as bullish/bearish via direction field.
+- profitable_wallets_discovered are real wallets with >20% avg profit — treat as high-weight signals.
 - Execute all steps internally (macro, whale scoring, TA, composite scoring, setup updates).
 - No positions are open unless listed in current state open_positions.
 
 Output EXACTLY this structure — nothing else:
 
 [EMAIL]
-═══════════════════════════════════════════════════════════
+═════════════════════════════════════════════════════════
 CRYPTO DAILY BRIEF — {{DATE}} | {{MACRO_BIAS}}
-═══════════════════════════════════════════════════════════
+═════════════════════════════════════════════════════════
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 STEP 1 — STATE
@@ -260,7 +342,7 @@ WAITING (monitor only)
 CHANGES TODAY
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 [Bullet list: NEW / ENTER / INVALIDATED / REVISED setups only. One line each.]
-═══════════════════════════════════════════════════════════
+═════════════════════════════════════════════════════════
 [/EMAIL]
 
 [STATE_JSON]
@@ -268,7 +350,7 @@ CHANGES TODAY
 [/STATE_JSON]
 """
 
-    # ── Step 4: Call Claude Haiku ─────────────────────────────────────────────────────
+    # ── Step 4: Call Claude Haiku ─────────────────────────────────────────────
     client = anthropic.Anthropic(api_key=api_key)
     print(f"[{datetime.utcnow().isoformat()}] Calling Claude Haiku 4.5...")
 
@@ -287,7 +369,7 @@ CHANGES TODAY
     print(f"[{datetime.utcnow().isoformat()}] Response received — "
           f"in:{tokens_in} out:{tokens_out} cost:${cost_usd:.4f}")
 
-    # ── Step 5: Extract and save updated state ──────────────────────────────────────────
+    # ── Step 5: Extract and save updated state ────────────────────────────────
     # Extract state JSON — try [STATE_JSON] marker first, fall back to bare JSON
     state_text = response
     sj_start = response.find("[STATE_JSON]")
@@ -305,14 +387,14 @@ CHANGES TODAY
         print(f"[{datetime.utcnow().isoformat()}] WARNING: Could not extract state JSON")
         updated_state = state
 
-    # ── Step 6: Save full response to file ────────────────────────────────────────────
+    # ── Step 6: Save full response to file ────────────────────────────────────
     date_str = datetime.utcnow().strftime("%Y-%m-%d")
     report_path = BASE_DIR / f"daily_report_{date_str}.txt"
     with open(report_path, "w") as f:
         f.write(response)
     print(f"[{datetime.utcnow().isoformat()}] Report saved: {report_path}")
 
-    # ── Step 7: Send concise email ─────────────────────────────────────────────────────────
+    # ── Step 7: Send concise email ────────────────────────────────────────────
     email_body   = extract_email_body(response)
     macro_bias   = extract_macro_bias(email_body)
     setup_count  = len(updated_state.get("active_setups", []))
@@ -327,7 +409,7 @@ CHANGES TODAY
         attachment_filename=f"crypto_full_report_{date_str}.txt",
     )
 
-    # ── Step 8: Update report.log ───────────────────────────────────────────────────────────
+    # ── Step 8: Update report.log ─────────────────────────────────────────────
     log_line = (f"{datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC | "
                 f"{macro_bias} | {setup_count} setups | {enter_count} ENTER | "
                 f"email:{'OK' if email_ok else 'FAIL'} | "
