@@ -118,11 +118,13 @@ def run():
 
     etherscan_key = env.get("ETHERSCAN_API_KEY", "")
 
+    # ── Step 1: Load state ───────────────────────────────────────────────────────────────────
     state = load_state()
     print(f"[{datetime.utcnow().isoformat()}] State loaded — "
           f"{len(state.get('active_setups', []))} setups, "
           f"{len(state.get('open_positions', []))} open positions")
 
+    # ── Step 2: Fetch on-chain whale data ───────────────────────────────────────────────────
     existing_profitable = state.get("profitable_wallets_discovered", [])
     whale_data = get_all_whale_data(
         etherscan_key=etherscan_key,
@@ -133,6 +135,7 @@ def run():
           f"ETH moves:{whale_data['summary']['eth_large_moves']} "
           f"profitable wallets:{whale_data['summary']['profitable_wallets_tracked']}")
 
+    # ── Step 3: Build prompt for Claude ──────────────────────────────────────────────────
     system_prompt = load_instructions()
 
     user_prompt = f"""Today is {datetime.utcnow().strftime('%Y-%m-%d')}.
@@ -147,6 +150,7 @@ Instructions:
 - Use the real on-chain data above for Steps 3 (whale signals) and 4 (prices).
 - large_transfers shows actual large moves today — classify as bullish/bearish via direction field.
 - profitable_wallets_discovered are real wallets with >20% avg profit — treat as high-weight signals.
+- profitable_wallet_signals are what those proven wallets are buying RIGHT NOW — highest conviction copy-trade signals.
 - Execute all steps internally (macro, whale scoring, TA, composite scoring, setup updates).
 - No positions are open unless listed in current state open_positions.
 
@@ -209,6 +213,7 @@ CHANGES TODAY
 [/STATE_JSON]
 """
 
+    # ── Step 4: Call Claude Haiku ─────────────────────────────────────────────────────
     client = anthropic.Anthropic(api_key=api_key)
     print(f"[{datetime.utcnow().isoformat()}] Calling Claude Haiku 4.5...")
 
@@ -219,7 +224,7 @@ CHANGES TODAY
         messages=[{"role": "user", "content": user_prompt}],
     )
 
-    response   = message.content[0].text
+    response = message.content[0].text
     tokens_in  = message.usage.input_tokens
     tokens_out = message.usage.output_tokens
     cost_usd   = (tokens_in * 0.80 + tokens_out * 4.00) / 1_000_000
@@ -227,6 +232,8 @@ CHANGES TODAY
     print(f"[{datetime.utcnow().isoformat()}] Response received — "
           f"in:{tokens_in} out:{tokens_out} cost:${cost_usd:.4f}")
 
+    # ── Step 5: Extract and save updated state ──────────────────────────────────────────
+    # Extract state JSON — try [STATE_JSON] marker first, fall back to bare JSON
     state_text = response
     sj_start = response.find("[STATE_JSON]")
     sj_end   = response.find("[/STATE_JSON]")
@@ -243,29 +250,37 @@ CHANGES TODAY
         print(f"[{datetime.utcnow().isoformat()}] WARNING: Could not extract state JSON")
         updated_state = state
 
-    date_str    = datetime.utcnow().strftime("%Y-%m-%d")
+    # ── Step 6: Save full response to file ────────────────────────────────────────────
+    date_str = datetime.utcnow().strftime("%Y-%m-%d")
     report_path = BASE_DIR / f"daily_report_{date_str}.txt"
     with open(report_path, "w") as f:
         f.write(response)
     print(f"[{datetime.utcnow().isoformat()}] Report saved: {report_path}")
 
-    email_body  = extract_email_body(response)
-    macro_bias  = extract_macro_bias(email_body)
-    setup_count = len(updated_state.get("active_setups", []))
-    enter_count = count_enter_setups(updated_state)
-    subject     = build_subject(macro_bias, setup_count, enter_count, date_str)
-    email_ok    = send_report(subject=subject, body=email_body, is_alert=enter_count > 0)
+    # ── Step 7: Send concise email ─────────────────────────────────────────────────────────
+    email_body   = extract_email_body(response)
+    macro_bias   = extract_macro_bias(email_body)
+    setup_count  = len(updated_state.get("active_setups", []))
+    enter_count  = count_enter_setups(updated_state)
+    subject      = build_subject(macro_bias, setup_count, enter_count, date_str)
 
+    email_ok = send_report(subject=subject, body=email_body, is_alert=enter_count > 0)
+
+    # ── Step 8: Update report.log ───────────────────────────────────────────────────────────
     log_line = (f"{datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC | "
                 f"{macro_bias} | {setup_count} setups | {enter_count} ENTER | "
-                f"email:{'OK' if email_ok else 'FAIL'} | cost:${cost_usd:.4f} | Haiku 4.5\n")
+                f"email:{'OK' if email_ok else 'FAIL'} | "
+                f"cost:${cost_usd:.4f} | Haiku 4.5\n")
     with open(BASE_DIR / "report.log", "a") as f:
         f.write(log_line)
 
-    print(f"[{datetime.utcnow().isoformat()}] {log_line.strip()}")
+    print(f"[{datetime.utcnow().isoformat()}] Done. {log_line.strip()}")
+
+    # Print report to stdout for terminal review
     print("\n" + "=" * 80)
     print(response)
     print("=" * 80)
+
     return 0
 
 

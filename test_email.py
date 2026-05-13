@@ -14,17 +14,17 @@ def load_env():
                 config[k.strip()] = v.strip()
     return config
 
-cfg  = load_env()
+cfg = load_env()
 host = cfg.get("SMTP_HOST", "smtp.gmail.com")
 port = int(cfg.get("SMTP_PORT", 587))
 user = cfg.get("SMTP_USER", "")
 pw   = cfg.get("SMTP_PASS", "")
 to   = cfg.get("ALERT_EMAIL", user)
 
-print(f"SMTP_HOST  : {host}")
-print(f"SMTP_PORT  : {port}")
-print(f"SMTP_USER  : {user}")
-print(f"SMTP_PASS  : {'*' * len(pw)} ({len(pw)} chars)")
+print(f"SMTP_HOST : {host}")
+print(f"SMTP_PORT : {port}")
+print(f"SMTP_USER : {user}")
+print(f"SMTP_PASS : {'*' * len(pw)} ({len(pw)} chars)")
 print(f"ALERT_EMAIL: {to}")
 print()
 
