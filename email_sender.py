@@ -7,6 +7,8 @@ import smtplib
 import ssl
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -25,9 +27,10 @@ def load_smtp_config() -> dict:
     return config
 
 
-def send_report(subject: str, body: str, is_alert: bool = False) -> bool:
+def send_report(subject: str, body: str, is_alert: bool = False,
+                attachment: str = "", attachment_filename: str = "") -> bool:
     """
-    Send the daily report or ENTER alert email.
+    Send the daily report email with an optional plain-text attachment.
     Returns True on success, False on failure.
     """
     cfg = load_smtp_config()
@@ -42,14 +45,20 @@ def send_report(subject: str, body: str, is_alert: bool = False) -> bool:
         print("[Email] ERROR: SMTP_USER or SMTP_PASS not found in .env")
         return False
 
-    msg = MIMEMultipart("alternative")
+    msg = MIMEMultipart("mixed")
     msg["Subject"] = subject
     msg["From"]    = smtp_user
     msg["To"]      = to_addr
 
-    # Plain text body
-    part = MIMEText(body, "plain", "utf-8")
-    msg.attach(part)
+    msg.attach(MIMEText(body, "plain", "utf-8"))
+
+    if attachment and attachment_filename:
+        part = MIMEBase("text", "plain")
+        part.set_payload(attachment.encode("utf-8"))
+        encoders.encode_base64(part)
+        part.add_header("Content-Disposition", "attachment",
+                        filename=attachment_filename)
+        msg.attach(part)
 
     try:
         context = ssl.create_default_context()
@@ -58,7 +67,8 @@ def send_report(subject: str, body: str, is_alert: bool = False) -> bool:
             server.starttls(context=context)
             server.login(smtp_user, smtp_pass)
             server.sendmail(smtp_user, to_addr, msg.as_string())
-        print(f"[Email] Sent to {to_addr}: {subject}")
+        att_note = f" + attachment {attachment_filename}" if attachment_filename else ""
+        print(f"[Email] Sent to {to_addr}: {subject}{att_note}")
         return True
     except Exception as e:
         print(f"[Email] ERROR sending email: {e}")
