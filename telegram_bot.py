@@ -22,8 +22,8 @@ Setup:
   3. Add to .env:
        TELEGRAM_BOT_TOKEN=123456:ABC-your-token
        TELEGRAM_CHAT_ID=your_chat_id   (optional — auto-detected on first message)
-  4. Schedule this script via cron every 5 min:
-       */5 * * * * python3 /home/user/Agents/telegram_bot.py >> /home/user/Agents/telegram.log 2>&1
+  4. Schedule this script via cron every 5 min (adjust path to your Agents dir):
+       */5 * * * * python3 /volume1/homes/admin/Agents/telegram_bot.py >> /volume1/homes/admin/Agents/telegram.log 2>&1
 """
 
 import json

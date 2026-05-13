@@ -1,15 +1,17 @@
 #!/bin/bash
 # Setup script for Haiku 4.5 agent automation
 
+AGENTS_DIR="$(cd "$(dirname "$0")" && pwd)"
+ENV_FILE="$AGENTS_DIR/.env"
+
 echo "═══════════════════════════════════════════════════════════"
 echo "Crypto Market Intelligence Agent - Haiku 4.5 Setup"
 echo "═══════════════════════════════════════════════════════════"
+echo "Agent directory: $AGENTS_DIR"
 echo ""
 
-ENV_FILE="/home/user/Agents/.env"
-
 # Check if ANTHROPIC_API_KEY is already in .env
-if grep -q "ANTHROPIC_API_KEY" "$ENV_FILE"; then
+if grep -q "ANTHROPIC_API_KEY" "$ENV_FILE" 2>/dev/null; then
     echo "✓ ANTHROPIC_API_KEY already configured in .env"
 else
     echo "⚠ ANTHROPIC_API_KEY not found in .env"
@@ -24,7 +26,7 @@ else
 fi
 
 # Check if Python script exists
-if [ -f "/home/user/Agents/run_agent_haiku.py" ]; then
+if [ -f "$AGENTS_DIR/run_agent_haiku.py" ]; then
     echo "✓ Python agent script found"
 else
     echo "✗ Python agent script not found"
@@ -36,19 +38,24 @@ if python3 -c "import anthropic" 2>/dev/null; then
     echo "✓ Anthropic Python SDK installed"
 else
     echo "Installing Anthropic Python SDK..."
-    pip3 install anthropic --quiet
+    python3 -m pip install anthropic --quiet
 fi
 
-# Offer to test the script
+# Check if requests is installed (needed for telegram_bot.py)
+if python3 -c "import requests" 2>/dev/null; then
+    echo "✓ requests library installed"
+else
+    echo "Installing requests..."
+    python3 -m pip install requests --quiet
+fi
+
 echo ""
-echo "To test the agent with Haiku 4.5, run:"
-echo "  python3 /home/user/Agents/run_agent_haiku.py"
+echo "To test the agent, run:"
+echo "  python3 $AGENTS_DIR/run_agent_haiku.py"
 echo ""
-echo "To schedule daily runs:"
-echo "  • Synology: Task Scheduler > Create > Run script"
-echo "    - Path: /home/user/Agents/run_agent_haiku.py"
-echo "    - Schedule: Daily at 08:00"
+echo "Synology Task Scheduler — Daily agent (08:00):"
+echo "  python3 $AGENTS_DIR/run_agent_haiku.py >> $AGENTS_DIR/cron.log 2>&1"
 echo ""
-echo "  • Linux/macOS: Add to crontab"
-echo "    - 0 8 * * * /usr/bin/python3 /home/user/Agents/run_agent_haiku.py"
+echo "Synology Task Scheduler — Telegram bot (every 5 min):"
+echo "  python3 $AGENTS_DIR/telegram_bot.py >> $AGENTS_DIR/telegram.log 2>&1"
 echo ""
