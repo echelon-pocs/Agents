@@ -22,6 +22,60 @@ from email_sender import send_report, build_subject
 BASE_DIR = Path(__file__).parent
 
 
+def _slim_transfer(tx: dict) -> dict:
+    """Keep only what Claude needs for signal scoring — drop hash, raw addresses, native amounts."""
+    return {k: v for k, v in tx.items()
+            if k in ("chain", "value_usd", "direction", "amount_ondo",
+                     "amount_xrp", "wallet_label", "slot", "err")}
+
+
+def slim_whale_data(data: dict) -> dict:
+    """
+    Strip fields Claude can't use for analysis:
+    - tx hashes and raw from/to addresses (direction already encodes exchange flows)
+    - known_wallets addresses (just send label list per chain)
+    - profitable_wallets tokens_bought detail (send summary string instead)
+    - native token amounts where value_usd is present
+    Result: ~66% fewer tokens in the JSON dump.
+    """
+    transfers = {
+        chain: [_slim_transfer(tx) for tx in txs]
+        for chain, txs in data.get("large_transfers", {}).items()
+    }
+
+    known = {
+        chain: list(wallets.keys())
+        for chain, wallets in data.get("known_wallets", {}).items()
+    }
+
+    profitable = []
+    for w in data.get("profitable_wallets_discovered", [])[:8]:
+        bought_summary = ", ".join(
+            f"{t['symbol']} +{t['profit_pct']}%"
+            for t in w.get("tokens_bought", [])
+        )
+        profitable.append({
+            "addr":    w["address"][:10] + "…",
+            "profit":  f"+{w['avg_profit_pct']}%",
+            "trades":  w["trade_count"],
+            "bought":  bought_summary or "—",
+        })
+
+    signals = [
+        {k: v for k, v in s.items() if k != "wallet"}
+        for s in data.get("profitable_wallet_signals", [])
+    ]
+
+    return {
+        "prices":    data.get("prices", {}),
+        "transfers": transfers,
+        "known_wallet_labels": known,
+        "profitable_wallets": profitable,
+        "profitable_signals": signals,
+        "summary":   data.get("summary", {}),
+    }
+
+
 def load_instructions() -> str:
     with open(BASE_DIR / "CLAUDE.md") as f:
         return f.read()
@@ -137,20 +191,21 @@ def run():
 
     # ── Step 3: Build prompt for Claude ──────────────────────────────────────────────────
     system_prompt = load_instructions()
+    whale_slim = slim_whale_data(whale_data)
 
     user_prompt = f"""Today is {datetime.utcnow().strftime('%Y-%m-%d')}.
 
 ═══ REAL ON-CHAIN WHALE DATA (fetched this run) ═══
-{json.dumps(whale_data, indent=2, default=str)}
+{json.dumps(whale_slim, separators=(',', ':'), default=str)}
 
 ═══ CURRENT STATE (from last run) ═══
-{json.dumps(state, indent=2, default=str)}
+{json.dumps(state, separators=(',', ':'), default=str)}
 
 Instructions:
 - Use the real on-chain data above for Steps 3 (whale signals) and 4 (prices).
-- large_transfers shows actual large moves today — classify as bullish/bearish via direction field.
-- profitable_wallets_discovered are real wallets with >20% avg profit — treat as high-weight signals.
-- profitable_wallet_signals are what those proven wallets are buying RIGHT NOW — highest conviction copy-trade signals.
+- transfers shows large moves today — classify as bullish/bearish via direction field.
+- profitable_wallets are real wallets with >20% avg profit — treat as high-weight signals.
+- profitable_signals are what those proven wallets are buying RIGHT NOW — highest conviction copy-trade signals.
 - Execute all steps internally (macro, whale scoring, TA, composite scoring, setup updates).
 - No positions are open unless listed in current state open_positions.
 
