@@ -41,18 +41,15 @@ def load_env():
 
 def get_api_key():
     """Get ANTHROPIC_API_KEY from environment, .env file, or raise error."""
-    # Try environment variable first
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if api_key:
         return api_key
 
-    # Try .env file
     env_vars = load_env()
     api_key = env_vars.get("ANTHROPIC_API_KEY")
     if api_key:
         return api_key
 
-    # Not found
     raise ValueError(
         "ANTHROPIC_API_KEY not found. Please set it:\n"
         "  export ANTHROPIC_API_KEY='your-key-here'\n"
@@ -70,12 +67,10 @@ def run_agent():
         print(f"Error: {e}", file=sys.stderr)
         return 1
 
-    # Load instructions and state
     system_prompt = load_claude_instructions()
     current_state = load_state()
     env_vars = load_env()
 
-    # Build user prompt with current state
     user_prompt = f"""Today is {datetime.utcnow().strftime('%Y-%m-%d')}.
 
 Current state from last run:
@@ -88,12 +83,10 @@ Execute all 11 steps of the market intelligence analysis. Return:
 
 Ensure the output is valid JSON for state updates and includes the formatted email report."""
 
-    # Initialize Anthropic client with Haiku model
     client = anthropic.Anthropic(api_key=api_key)
 
     print(f"[{datetime.utcnow().isoformat()}] Calling Claude Haiku 4.5 API...")
 
-    # Call Claude with Haiku model
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=4096,
@@ -147,6 +140,16 @@ Ensure the output is valid JSON for state updates and includes the formatted ema
         print(f"[{datetime.utcnow().isoformat()}] Log updated: {report_log_path}")
     except Exception as e:
         print(f"[{datetime.utcnow().isoformat()}] Warning: Could not update report.log: {e}")
+
+    # Save daily report to file
+    try:
+        date_str = datetime.utcnow().strftime("%Y-%m-%d")
+        report_path = Path(__file__).parent / f"daily_report_{date_str}.txt"
+        with open(report_path, 'w') as f:
+            f.write(response_text)
+        print(f"[{datetime.utcnow().isoformat()}] Report saved: {report_path}")
+    except Exception as e:
+        print(f"[{datetime.utcnow().isoformat()}] Warning: Could not save report: {e}")
 
     # Display the full response
     print("\n" + "="*80)
