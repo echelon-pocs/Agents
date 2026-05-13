@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """
-Crypto Market Intelligence Agent - Haiku 4.5 Runner
-Executes the agent with claude-haiku-4-5-20251001 for cost-optimized daily runs.
+Crypto Market Intelligence Agent — Haiku 4.5 Runner
+
+Flow:
+  1. Fetch real on-chain whale data (whale_tracker.py)
+  2. Pass data + state to Claude Haiku 4.5 for analysis
+  3. Save report, update state, send email (email_sender.py)
 """
 
 import json
@@ -9,169 +13,202 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
+
 import anthropic
 
-def load_claude_instructions():
-    """Load the CLAUDE.md instructions as the system prompt."""
-    claude_md_path = Path(__file__).parent / "CLAUDE.md"
-    with open(claude_md_path, 'r') as f:
+from whale_tracker import get_all_whale_data
+from email_sender import send_report, build_subject
+
+BASE_DIR = Path(__file__).parent
+
+
+def load_instructions() -> str:
+    with open(BASE_DIR / "CLAUDE.md") as f:
         return f.read()
 
-def load_state():
-    """Load current state from state.json."""
-    state_path = Path(__file__).parent / "state.json"
-    if state_path.exists():
-        with open(state_path, 'r') as f:
+
+def load_state() -> dict:
+    p = BASE_DIR / "state.json"
+    if p.exists():
+        with open(p) as f:
             return json.load(f)
     return {}
 
-def load_env():
-    """Load environment variables from .env file."""
-    env_path = Path(__file__).parent / ".env"
+
+def save_state(state: dict):
+    with open(BASE_DIR / "state.json", "w") as f:
+        json.dump(state, f, indent=2)
+
+
+def load_env() -> dict:
     env_vars = {}
-    if env_path.exists():
-        with open(env_path, 'r') as f:
+    p = BASE_DIR / ".env"
+    if p.exists():
+        with open(p) as f:
             for line in f:
                 line = line.strip()
-                if line and not line.startswith('#'):
-                    if '=' in line:
-                        key, value = line.split('=', 1)
-                        env_vars[key] = value
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    env_vars[k.strip()] = v.strip()
     return env_vars
 
-def get_api_key():
-    """Get ANTHROPIC_API_KEY from environment, .env file, or raise error."""
-    # Try environment variable first
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if api_key:
-        return api_key
 
-    # Try .env file
-    env_vars = load_env()
-    api_key = env_vars.get("ANTHROPIC_API_KEY")
-    if api_key:
-        return api_key
+def get_api_key(env: dict) -> str:
+    key = os.environ.get("ANTHROPIC_API_KEY") or env.get("ANTHROPIC_API_KEY", "")
+    if not key:
+        raise ValueError(
+            "ANTHROPIC_API_KEY not found.\n"
+            "Add it to .env:  ANTHROPIC_API_KEY=sk-ant-..."
+        )
+    return key
 
-    # Not found
-    raise ValueError(
-        "ANTHROPIC_API_KEY not found. Please set it:\n"
-        "  export ANTHROPIC_API_KEY='your-key-here'\n"
-        "  or add it to /home/user/Agents/.env file"
+
+def extract_state_from_response(text: str) -> dict:
+    """Pull the first valid JSON object out of Claude's response."""
+    depth = 0
+    start = None
+    for i, ch in enumerate(text):
+        if ch == "{":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0 and start is not None:
+                try:
+                    return json.loads(text[start:i + 1])
+                except json.JSONDecodeError:
+                    start = None
+    return {}
+
+
+def extract_macro_bias(text: str) -> str:
+    for bias in ["BIFURCATED", "BULLISH", "BEARISH", "NEUTRAL"]:
+        if bias in text:
+            return bias
+    return "NEUTRAL"
+
+
+def count_enter_setups(state: dict) -> int:
+    return sum(
+        1 for s in state.get("active_setups", [])
+        if s.get("status") == "ENTER"
     )
 
-def run_agent():
-    """Execute the crypto market intelligence agent with Haiku 4.5."""
 
-    print(f"[{datetime.utcnow().isoformat()}] Starting Crypto Market Intelligence Agent (Haiku 4.5)...")
+def run():
+    print(f"[{datetime.utcnow().isoformat()}] ═══ Crypto Market Intelligence Agent (Haiku 4.5) ═══")
+
+    env = load_env()
 
     try:
-        api_key = get_api_key()
+        api_key = get_api_key(env)
     except ValueError as e:
-        print(f"Error: {e}", file=sys.stderr)
+        print(f"ERROR: {e}", file=sys.stderr)
         return 1
 
-    # Load instructions and state
-    system_prompt = load_claude_instructions()
-    current_state = load_state()
-    env_vars = load_env()
+    etherscan_key = env.get("ETHERSCAN_API_KEY", "")
 
-    # Build user prompt with current state
+    # ── Step 1: Load state ────────────────────────────────────────────────────
+    state = load_state()
+    print(f"[{datetime.utcnow().isoformat()}] State loaded — "
+          f"{len(state.get('active_setups', []))} setups, "
+          f"{len(state.get('open_positions', []))} open positions")
+
+    # ── Step 2: Fetch on-chain whale data ─────────────────────────────────────
+    existing_profitable = state.get("profitable_wallets_discovered", [])
+    whale_data = get_all_whale_data(
+        etherscan_key=etherscan_key,
+        existing_wallets=existing_profitable,
+    )
+    print(f"[{datetime.utcnow().isoformat()}] Whale data fetched — "
+          f"BTC moves:{whale_data['summary']['btc_large_moves']} "
+          f"ETH moves:{whale_data['summary']['eth_large_moves']} "
+          f"profitable wallets:{whale_data['summary']['profitable_wallets_tracked']}")
+
+    # ── Step 3: Build prompt for Claude ──────────────────────────────────────
+    system_prompt = load_instructions()
+
     user_prompt = f"""Today is {datetime.utcnow().strftime('%Y-%m-%d')}.
 
-Current state from last run:
-{json.dumps(current_state, indent=2)}
+═══ REAL ON-CHAIN WHALE DATA (fetched this run) ═══
+{json.dumps(whale_data, indent=2, default=str)}
 
-Execute all 11 steps of the market intelligence analysis. Return:
-1. Updated state.json structure with all fields populated
-2. Daily report formatted as shown in STEP 9
-3. Clear summary of actions taken
+═══ CURRENT STATE (from last run) ═══
+{json.dumps(state, indent=2, default=str)}
 
-Ensure the output is valid JSON for state updates and includes the formatted email report."""
+Instructions:
+- Use the real on-chain data above for Steps 3 (whale signals) and 4 (prices).
+- The whale_data.large_transfers shows actual large moves today — classify as bullish/bearish based on direction field.
+- The whale_data.profitable_wallets_discovered are real wallets with verified >20% avg profit — treat them as high-weight signals.
+- Execute Steps 2 (macro analysis), 5 (TA), 6 (opportunity scoring), 7 (update setups), 8 (alerts) fully.
+- Output format: first the complete daily report (Steps 9 format), then a JSON block for the updated state.json.
+- Mark open_positions P&L accurately. No positions are open unless listed in current state open_positions.
+"""
 
-    # Initialize Anthropic client with Haiku model
+    # ── Step 4: Call Claude Haiku ─────────────────────────────────────────────
     client = anthropic.Anthropic(api_key=api_key)
+    print(f"[{datetime.utcnow().isoformat()}] Calling Claude Haiku 4.5...")
 
-    print(f"[{datetime.utcnow().isoformat()}] Calling Claude Haiku 4.5 API...")
-
-    # Call Claude with Haiku model
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",
-        max_tokens=4096,
+        max_tokens=6000,
         system=system_prompt,
-        messages=[
-            {
-                "role": "user",
-                "content": user_prompt
-            }
-        ]
+        messages=[{"role": "user", "content": user_prompt}],
     )
 
-    response_text = message.content[0].text
+    response = message.content[0].text
+    tokens_in  = message.usage.input_tokens
+    tokens_out = message.usage.output_tokens
+    cost_usd   = (tokens_in * 0.80 + tokens_out * 4.00) / 1_000_000
 
-    print(f"[{datetime.utcnow().isoformat()}] Agent analysis complete.")
-    print(f"[{datetime.utcnow().isoformat()}] Tokens used - Input: {message.usage.input_tokens}, Output: {message.usage.output_tokens}")
+    print(f"[{datetime.utcnow().isoformat()}] Response received — "
+          f"in:{tokens_in} out:{tokens_out} cost:${cost_usd:.4f}")
 
-    # Extract and save state.json from response
-    # The response should contain a JSON block with the updated state
-    try:
-        # Look for JSON in the response
-        json_start = response_text.find('{')
-        json_end = response_text.rfind('}') + 1
+    # ── Step 5: Extract and save updated state ────────────────────────────────
+    updated_state = extract_state_from_response(response)
+    if updated_state:
+        # Preserve profitable wallets list from whale tracker
+        updated_state["profitable_wallets_discovered"] = \
+            whale_data["profitable_wallets_discovered"]
+        save_state(updated_state)
+        print(f"[{datetime.utcnow().isoformat()}] state.json updated")
+    else:
+        print(f"[{datetime.utcnow().isoformat()}] WARNING: Could not extract state JSON from response")
+        updated_state = state
 
-        if json_start >= 0 and json_end > json_start:
-            json_str = response_text[json_start:json_end]
-            updated_state = json.loads(json_str)
+    # ── Step 6: Save report to file ───────────────────────────────────────────
+    date_str = datetime.utcnow().strftime("%Y-%m-%d")
+    report_path = BASE_DIR / f"daily_report_{date_str}.txt"
+    with open(report_path, "w") as f:
+        f.write(response)
+    print(f"[{datetime.utcnow().isoformat()}] Report saved: {report_path}")
 
-            state_path = Path(__file__).parent / "state.json"
-            with open(state_path, 'w') as f:
-                json.dump(updated_state, f, indent=2)
+    # ── Step 7: Send email ────────────────────────────────────────────────────
+    macro_bias   = extract_macro_bias(response)
+    setup_count  = len(updated_state.get("active_setups", []))
+    enter_count  = count_enter_setups(updated_state)
+    subject      = build_subject(macro_bias, setup_count, enter_count, date_str)
 
-            print(f"[{datetime.utcnow().isoformat()}] State updated: {state_path}")
-    except (json.JSONDecodeError, ValueError) as e:
-        print(f"[{datetime.utcnow().isoformat()}] Warning: Could not extract state JSON from response: {e}")
+    email_ok = send_report(subject=subject, body=response, is_alert=enter_count > 0)
 
-    # Log to report.log
-    try:
-        report_log_path = Path(__file__).parent / "report.log"
-        timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+    # ── Step 8: Update report.log ─────────────────────────────────────────────
+    log_line = (f"{datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC | "
+                f"{macro_bias} | {setup_count} setups | {enter_count} ENTER | "
+                f"email:{'OK' if email_ok else 'FAIL'} | "
+                f"cost:${cost_usd:.4f} | Haiku 4.5\n")
+    with open(BASE_DIR / "report.log", "a") as f:
+        f.write(log_line)
 
-        # Extract macro bias and setup count if available
-        macro_bias = "N/A"
-        setup_count = "N/A"
+    print(f"[{datetime.utcnow().isoformat()}] Done. {log_line.strip()}")
 
-        if macro_bias in response_text:
-            for bias in ["BULLISH", "BEARISH", "NEUTRAL", "BIFURCATED"]:
-                if bias in response_text:
-                    macro_bias = bias
-                    break
-
-        log_entry = f"{timestamp} UTC | {macro_bias} | Agent run complete | Haiku 4.5"
-
-        with open(report_log_path, 'a') as f:
-            f.write(log_entry + "\n")
-
-        print(f"[{datetime.utcnow().isoformat()}] Log updated: {report_log_path}")
-    except Exception as e:
-        print(f"[{datetime.utcnow().isoformat()}] Warning: Could not update report.log: {e}")
-
-    # Save daily report to file
-    try:
-        date_str = datetime.utcnow().strftime("%Y-%m-%d")
-        report_path = Path(__file__).parent / f"daily_report_{date_str}.txt"
-        with open(report_path, 'w') as f:
-            f.write(response_text)
-        print(f"[{datetime.utcnow().isoformat()}] Report saved: {report_path}")
-    except Exception as e:
-        print(f"[{datetime.utcnow().isoformat()}] Warning: Could not save report: {e}")
-
-    # Display the full response
-    print("\n" + "="*80)
-    print("AGENT RESPONSE:")
-    print("="*80)
-    print(response_text)
-    print("="*80)
+    # Print report to stdout for terminal review
+    print("\n" + "=" * 80)
+    print(response)
+    print("=" * 80)
 
     return 0
 
+
 if __name__ == "__main__":
-    sys.exit(run_agent())
+    sys.exit(run())
