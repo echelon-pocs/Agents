@@ -94,6 +94,78 @@ def save_state(state: dict):
         json.dump(state, f, indent=2)
 
 
+def apply_pending_updates(state: dict) -> tuple[dict, list[str]]:
+    """
+    Read pending_updates.json (written by telegram_bot.py), apply position
+    changes to state, clear the file, and return (updated_state, log_lines).
+    """
+    pending_path = BASE_DIR / "pending_updates.json"
+    if not pending_path.exists():
+        return state, []
+
+    try:
+        updates = json.loads(pending_path.read_text())
+    except Exception:
+        return state, []
+
+    if not updates:
+        return state, []
+
+    log = []
+    positions = {p["symbol"]: p for p in state.get("open_positions", [])}
+    setups    = {s["symbol"]: s for s in state.get("active_setups", [])}
+
+    for u in updates:
+        action = u.get("action")
+        symbol = u.get("symbol", "")
+
+        if action == "ENTER":
+            price    = u.get("price", 0)
+            size_usd = u.get("size_usd")
+            # Find matching setup for direction/targets, fallback to LONG
+            setup = setups.get(symbol, {})
+            positions[symbol] = {
+                "symbol":      symbol,
+                "direction":   setup.get("direction", "LONG"),
+                "entry_price": price,
+                "entry_date":  u.get("timestamp", "")[:10],
+                "stop_loss":   setup.get("stop_loss"),
+                "target_1":    setup.get("target_1"),
+                "target_2":    setup.get("target_2"),
+                "size_usd":    size_usd,
+                "pnl_pct":     None,
+                "notes":       "User confirmed via Telegram.",
+            }
+            log.append(f"ENTERED {symbol} @ ${price:,}")
+
+        elif action == "CLOSE":
+            if symbol in positions:
+                if u.get("partial"):
+                    positions[symbol]["notes"] = (
+                        positions[symbol].get("notes", "") + " | Partial close flagged."
+                    )
+                    log.append(f"PARTIAL CLOSE flagged: {symbol}")
+                else:
+                    del positions[symbol]
+                    log.append(f"CLOSED {symbol}")
+            else:
+                log.append(f"CLOSE {symbol}: not in open positions (ignored)")
+
+        elif action == "NOTE":
+            if symbol in positions:
+                positions[symbol]["notes"] = (
+                    positions[symbol].get("notes", "") + f" | {u['note']}"
+                )
+                log.append(f"NOTE added to {symbol}: {u['note']}")
+
+    state["open_positions"] = list(positions.values())
+
+    # Clear the queue
+    pending_path.write_text("[]")
+
+    return state, log
+
+
 def load_env() -> dict:
     env_vars = {}
     p = BASE_DIR / ".env"
@@ -172,8 +244,12 @@ def run():
 
     etherscan_key = env.get("ETHERSCAN_API_KEY", "")
 
-    # ── Step 1: Load state ────────────────────────────────────────────────────
+    # ── Step 1: Load state + apply Telegram position updates ─────────────────
     state = load_state()
+    state, tg_log = apply_pending_updates(state)
+    if tg_log:
+        print(f"[{datetime.utcnow().isoformat()}] Telegram updates applied: {', '.join(tg_log)}")
+        save_state(state)
     print(f"[{datetime.utcnow().isoformat()}] State loaded — "
           f"{len(state.get('active_setups', []))} setups, "
           f"{len(state.get('open_positions', []))} open positions")
@@ -194,6 +270,12 @@ def run():
 
     whale_slim = slim_whale_data(whale_data)
 
+    tg_section = (
+        f"\n═══ POSITION UPDATES (received via Telegram before this run) ═══\n"
+        + "\n".join(f"- {l}" for l in tg_log)
+        if tg_log else ""
+    )
+
     user_prompt = f"""Today is {datetime.utcnow().strftime('%Y-%m-%d')}.
 
 ═══ REAL ON-CHAIN WHALE DATA (fetched this run) ═══
@@ -201,7 +283,7 @@ def run():
 
 ═══ CURRENT STATE (from last run) ═══
 {json.dumps(state, separators=(',', ':'), default=str)}
-
+{tg_section}
 Instructions:
 - Use the real on-chain data above for Steps 3 (whale signals) and 4 (prices).
 - large_transfers shows actual large moves today — classify as bullish/bearish via direction field.
