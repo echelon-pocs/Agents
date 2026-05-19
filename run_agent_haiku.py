@@ -94,7 +94,7 @@ def save_state(state: dict):
         json.dump(state, f, indent=2)
 
 
-def apply_pending_updates(state: dict) -> tuple[dict, list[str]]:
+def apply_pending_updates(state: dict):
     """
     Read pending_updates.json (written by telegram_bot.py), apply position
     changes to state, clear the file, and return (updated_state, log_lines).
@@ -122,7 +122,6 @@ def apply_pending_updates(state: dict) -> tuple[dict, list[str]]:
         if action == "ENTER":
             price    = u.get("price", 0)
             size_usd = u.get("size_usd")
-            # Find matching setup for direction/targets, fallback to LONG
             setup = setups.get(symbol, {})
             positions[symbol] = {
                 "symbol":      symbol,
@@ -370,7 +369,6 @@ CHANGES TODAY
           f"in:{tokens_in} out:{tokens_out} cost:${cost_usd:.4f}")
 
     # ── Step 5: Extract and save updated state ────────────────────────────────
-    # Extract state JSON — try [STATE_JSON] marker first, fall back to bare JSON
     state_text = response
     sj_start = response.find("[STATE_JSON]")
     sj_end   = response.find("[/STATE_JSON]")
@@ -419,7 +417,6 @@ CHANGES TODAY
 
     print(f"[{datetime.utcnow().isoformat()}] Done. {log_line.strip()}")
 
-    # Print report to stdout for terminal review
     print("\n" + "=" * 80)
     print(response)
     print("=" * 80)
