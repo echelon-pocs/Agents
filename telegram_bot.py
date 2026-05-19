@@ -106,7 +106,7 @@ def load_state() -> dict:
 
 # ─── Command parser ───────────────────────────────────────────────────────────
 
-def parse_command(text: str) -> dict | None:
+def parse_command(text: str):
     """
     Parse a Telegram message into a structured update dict.
     Returns None if not a recognised command.
