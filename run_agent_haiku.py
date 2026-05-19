@@ -30,24 +30,14 @@ def _slim_transfer(tx: dict) -> dict:
 
 
 def slim_whale_data(data: dict) -> dict:
-    """
-    Strip fields Claude can't use for analysis:
-    - tx hashes and raw from/to addresses (direction already encodes exchange flows)
-    - known_wallets addresses (just send label list per chain)
-    - profitable_wallets tokens_bought detail (send summary string instead)
-    - native token amounts where value_usd is present
-    Result: ~50-60% fewer tokens in the JSON dump.
-    """
     transfers = {
         chain: [_slim_transfer(tx) for tx in txs]
         for chain, txs in data.get("large_transfers", {}).items()
     }
-
     known = {
         chain: list(wallets.keys())
         for chain, wallets in data.get("known_wallets", {}).items()
     }
-
     profitable = []
     for w in data.get("profitable_wallets_discovered", [])[:8]:
         bought_summary = ", ".join(
@@ -60,12 +50,10 @@ def slim_whale_data(data: dict) -> dict:
             "trades":  w["trade_count"],
             "bought":  bought_summary or "—",
         })
-
     signals = [
         {k: v for k, v in s.items() if k != "wallet"}
         for s in data.get("profitable_wallet_signals", [])
     ]
-
     return {
         "prices":    data.get("prices", {}),
         "transfers": transfers,
@@ -95,25 +83,19 @@ def save_state(state: dict):
 
 
 def apply_pending_updates(state: dict):
-    """
-    Read pending_updates.json (written by telegram_bot.py), apply position
-    changes to state, clear the file, and return (updated_state, log_lines).
-    """
     pending_path = BASE_DIR / "pending_updates.json"
     if not pending_path.exists():
         return state, []
-
     try:
         updates = json.loads(pending_path.read_text())
     except Exception:
         return state, []
-
     if not updates:
         return state, []
 
     log = []
-    positions = {p["symbol"]: p for p in state.get("open_positions", [])}
-    setups    = {s["symbol"]: s for s in state.get("active_setups", [])}
+    positions = {p["symbol"]: p for p in state.get("open_positions", []) if p.get("symbol")}
+    setups    = {s["symbol"]: s for s in state.get("active_setups", []) if s.get("symbol")}
 
     for u in updates:
         action = u.get("action")
@@ -158,10 +140,7 @@ def apply_pending_updates(state: dict):
                 log.append(f"NOTE added to {symbol}: {u['note']}")
 
     state["open_positions"] = list(positions.values())
-
-    # Clear the queue
     pending_path.write_text("[]")
-
     return state, log
 
 
@@ -189,7 +168,6 @@ def get_api_key(env: dict) -> str:
 
 
 def extract_state_from_response(text: str) -> dict:
-    """Pull the first valid JSON object out of Claude's response."""
     depth = 0
     start = None
     for i, ch in enumerate(text):
@@ -222,12 +200,11 @@ def count_enter_setups(state: dict) -> int:
 
 
 def extract_email_body(text: str) -> str:
-    """Extract only the [EMAIL]...[/EMAIL] section from Claude's response."""
     start = text.find("[EMAIL]")
     end   = text.find("[/EMAIL]")
     if start != -1 and end != -1:
         return text[start + 7:end].strip()
-    return text  # fallback: send full response if markers missing
+    return text
 
 
 def run():
@@ -243,7 +220,6 @@ def run():
 
     etherscan_key = env.get("ETHERSCAN_API_KEY", "")
 
-    # ── Step 1: Load state + apply Telegram position updates ─────────────────
     state = load_state()
     state, tg_log = apply_pending_updates(state)
     if tg_log:
@@ -253,7 +229,6 @@ def run():
           f"{len(state.get('active_setups', []))} setups, "
           f"{len(state.get('open_positions', []))} open positions")
 
-    # ── Step 2: Fetch on-chain whale data ─────────────────────────────────────
     existing_profitable = state.get("profitable_wallets_discovered", [])
     whale_data = get_all_whale_data(
         etherscan_key=etherscan_key,
@@ -264,9 +239,7 @@ def run():
           f"ETH moves:{whale_data['summary']['eth_large_moves']} "
           f"profitable wallets:{whale_data['summary']['profitable_wallets_tracked']}")
 
-    # ── Step 3: Build prompt for Claude ──────────────────────────────────────
     system_prompt = load_instructions()
-
     whale_slim = slim_whale_data(whale_data)
 
     tg_section = (
@@ -330,7 +303,6 @@ CHANGES TODAY
 [/STATE_JSON]
 """
 
-    # ── Step 4: Call Claude Haiku ─────────────────────────────────────────────
     client = anthropic.Anthropic(api_key=api_key)
     print(f"[{datetime.utcnow().isoformat()}] Calling Claude Haiku 4.5...")
 
@@ -349,7 +321,6 @@ CHANGES TODAY
     print(f"[{datetime.utcnow().isoformat()}] Response received — "
           f"in:{tokens_in} out:{tokens_out} cost:${cost_usd:.4f}")
 
-    # ── Step 5: Extract and save updated state ────────────────────────────────
     state_text = response
     sj_start = response.find("[STATE_JSON]")
     sj_end   = response.find("[/STATE_JSON]")
@@ -366,14 +337,12 @@ CHANGES TODAY
         print(f"[{datetime.utcnow().isoformat()}] WARNING: Could not extract state JSON")
         updated_state = state
 
-    # ── Step 6: Save full response to file ────────────────────────────────────
     date_str = datetime.utcnow().strftime("%Y-%m-%d")
     report_path = BASE_DIR / f"daily_report_{date_str}.txt"
     with open(report_path, "w") as f:
         f.write(response)
     print(f"[{datetime.utcnow().isoformat()}] Report saved: {report_path}")
 
-    # ── Step 7: Send concise email ────────────────────────────────────────────
     email_body   = extract_email_body(response)
     macro_bias   = extract_macro_bias(email_body)
     setup_count  = len(updated_state.get("active_setups", []))
@@ -388,7 +357,6 @@ CHANGES TODAY
         attachment_filename=f"crypto_full_report_{date_str}.txt",
     )
 
-    # ── Step 8: Update report.log ─────────────────────────────────────────────
     log_line = (f"{datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC | "
                 f"{macro_bias} | {setup_count} setups | {enter_count} ENTER | "
                 f"email:{'OK' if email_ok else 'FAIL'} | "
