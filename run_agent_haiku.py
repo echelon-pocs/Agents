@@ -94,7 +94,7 @@ def save_state(state: dict):
         json.dump(state, f, indent=2)
 
 
-def apply_pending_updates(state: dict) -> tuple[dict, list[str]]:
+def apply_pending_updates(state: dict):
     """
     Read pending_updates.json (written by telegram_bot.py), apply position
     changes to state, clear the file, and return (updated_state, log_lines).
