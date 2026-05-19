@@ -112,8 +112,8 @@ def apply_pending_updates(state: dict):
         return state, []
 
     log = []
-    positions = {p["symbol"]: p for p in state.get("open_positions", [])}
-    setups    = {s["symbol"]: s for s in state.get("active_setups", [])}
+    positions = {p["symbol"]: p for p in state.get("open_positions", []) if p.get("symbol")}
+    setups    = {s["symbol"]: s for s in state.get("active_setups", []) if s.get("symbol")}
 
     for u in updates:
         action = u.get("action")
