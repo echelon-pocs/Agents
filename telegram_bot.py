@@ -195,8 +195,8 @@ def format_status(state: dict) -> str:
             pnl = p.get("pnl_pct")
             pnl_str = f" | P&L {pnl:+.1f}%" if pnl is not None else ""
             lines.append(
-                f"  {p['symbol']} {p.get('direction','')} "
-                f"@ ${p.get('entry_price', '?'):,}{pnl_str}"
+                f"  {p.get('symbol','?')} {p.get('direction','')} "
+                f"@ ${p.get('entry_price', '?')}{pnl_str}"
             )
     else:
         lines.append("*Open Positions:* None confirmed")
