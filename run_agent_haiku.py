@@ -295,27 +295,8 @@ Output EXACTLY this structure — nothing else:
 
 [EMAIL]
 ═══════════════════════════════════════════════════════════
-CRYPTO DAILY BRIEF — {{DATE}} | {{MACRO_BIAS}}
+CRYPTO DAILY BRIEF — {{DATE}} | {{MACRO_BIAS}} | BTC ${{price}} | Dom {{btc_dom}}% | F&G {{fear_greed}}
 ═══════════════════════════════════════════════════════════
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-STEP 1 — STATE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Last run : {{last_run}}
-Positions: {{N open confirmed}} | Setups: {{N active}}
-Alerted  : {{alerted symbols or none}}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-STEP 2 — MACRO
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-BTC       : ${{price}} | {{trend}} | {{% from 200d MA}}
-BTC Dom   : {{%}} — {{above/below 60% interpretation}}
-Alt Season: {{index}}/100 — {{interpretation}}
-Fear&Greed: {{index}} — {{label}}
-DXY/Gold  : {{one line}}
-Macro Bias: {{BULLISH|BEARISH|NEUTRAL|BIFURCATED}}
-
-{{2-3 sentences: what is driving the market, key risk or catalyst this week.}}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 OPEN POSITIONS
