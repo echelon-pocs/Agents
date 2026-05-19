@@ -22,108 +22,126 @@ from email_sender import send_report, build_subject
 BASE_DIR = Path(__file__).parent
 
 
-def _slim_transfer(tx: dict) -> dict:
-    """Keep only what Claude needs for signal scoring — drop hash, raw addresses, native amounts."""
+def sanitize_state(state):
+    """
+    Normalize state to a predictable structure regardless of what Claude wrote
+    or what legacy format was on disk. Called after every load and after every
+    save to ensure downstream code never sees malformed data.
+    """
+    if not isinstance(state, dict):
+        state = {}
+
+    # Lists that must contain only dicts with a 'symbol' key
+    for key in ("open_positions", "active_setups"):
+        raw = state.get(key, [])
+        if not isinstance(raw, list):
+            raw = []
+        state[key] = [e for e in raw if isinstance(e, dict) and e.get("symbol")]
+
+    # Lists that must simply be lists
+    for key in ("alerted", "profitable_wallets_discovered"):
+        if not isinstance(state.get(key), list):
+            state[key] = []
+
+    return state
+
+
+def _slim_transfer(tx):
     return {k: v for k, v in tx.items()
             if k in ("chain", "value_usd", "direction", "amount_ondo",
                      "amount_xrp", "wallet_label", "slot", "err")}
 
 
-def slim_whale_data(data: dict) -> dict:
-    """
-    Strip fields Claude can't use for analysis:
-    - tx hashes and raw from/to addresses (direction already encodes exchange flows)
-    - known_wallets addresses (just send label list per chain)
-    - profitable_wallets tokens_bought detail (send summary string instead)
-    - native token amounts where value_usd is present
-    Result: ~50-60% fewer tokens in the JSON dump.
-    """
+def slim_whale_data(data):
     transfers = {
         chain: [_slim_transfer(tx) for tx in txs]
         for chain, txs in data.get("large_transfers", {}).items()
     }
-
     known = {
         chain: list(wallets.keys())
         for chain, wallets in data.get("known_wallets", {}).items()
     }
-
     profitable = []
     for w in data.get("profitable_wallets_discovered", [])[:8]:
+        if not isinstance(w, dict):
+            continue
+        addr = w.get("address", "")
         bought_summary = ", ".join(
-            f"{t['symbol']} +{t['profit_pct']}%"
+            f"{t.get('symbol','?')} +{t.get('profit_pct','?')}%"
             for t in w.get("tokens_bought", [])
+            if isinstance(t, dict)
         )
         profitable.append({
-            "addr":    w["address"][:10] + "…",
-            "profit":  f"+{w['avg_profit_pct']}%",
-            "trades":  w["trade_count"],
-            "bought":  bought_summary or "—",
+            "addr":   (addr[:10] + "…") if addr else "?",
+            "profit": f"+{w.get('avg_profit_pct', 0)}%",
+            "trades": w.get("trade_count", 0),
+            "bought": bought_summary or "—",
         })
-
     signals = [
         {k: v for k, v in s.items() if k != "wallet"}
         for s in data.get("profitable_wallet_signals", [])
+        if isinstance(s, dict)
     ]
-
     return {
-        "prices":    data.get("prices", {}),
-        "transfers": transfers,
+        "prices":             data.get("prices", {}),
+        "transfers":          transfers,
         "known_wallet_labels": known,
         "profitable_wallets": profitable,
         "profitable_signals": signals,
-        "summary":   data.get("summary", {}),
+        "summary":            data.get("summary", {}),
     }
 
 
-def load_instructions() -> str:
+def load_instructions():
     with open(BASE_DIR / "CLAUDE.md") as f:
         return f.read()
 
 
-def load_state() -> dict:
+def load_state():
     p = BASE_DIR / "state.json"
     if p.exists():
-        with open(p) as f:
-            return json.load(f)
-    return {}
+        try:
+            with open(p) as f:
+                return sanitize_state(json.load(f))
+        except Exception as e:
+            print(f"[Agent] WARNING: could not load state.json ({e}) — starting fresh")
+    return sanitize_state({})
 
 
-def save_state(state: dict):
+def save_state(state):
     with open(BASE_DIR / "state.json", "w") as f:
-        json.dump(state, f, indent=2)
+        json.dump(sanitize_state(state), f, indent=2)
 
 
-def apply_pending_updates(state: dict):
-    """
-    Read pending_updates.json (written by telegram_bot.py), apply position
-    changes to state, clear the file, and return (updated_state, log_lines).
-    """
+def apply_pending_updates(state):
     pending_path = BASE_DIR / "pending_updates.json"
     if not pending_path.exists():
         return state, []
-
     try:
         updates = json.loads(pending_path.read_text())
+        if not isinstance(updates, list):
+            updates = []
     except Exception:
         return state, []
-
     if not updates:
         return state, []
 
     log = []
-    positions = {p["symbol"]: p for p in state.get("open_positions", []) if p.get("symbol")}
-    setups    = {s["symbol"]: s for s in state.get("active_setups", []) if s.get("symbol")}
+    positions = {p["symbol"]: p for p in state.get("open_positions", [])}
+    setups    = {s["symbol"]: s for s in state.get("active_setups", [])}
 
     for u in updates:
+        if not isinstance(u, dict):
+            continue
         action = u.get("action")
         symbol = u.get("symbol", "")
+        if not symbol and action not in ("STATUS", "HELP"):
+            continue
 
         if action == "ENTER":
             price    = u.get("price", 0)
             size_usd = u.get("size_usd")
-            # Find matching setup for direction/targets, fallback to LONG
-            setup = setups.get(symbol, {})
+            setup    = setups.get(symbol, {})
             positions[symbol] = {
                 "symbol":      symbol,
                 "direction":   setup.get("direction", "LONG"),
@@ -154,19 +172,19 @@ def apply_pending_updates(state: dict):
         elif action == "NOTE":
             if symbol in positions:
                 positions[symbol]["notes"] = (
-                    positions[symbol].get("notes", "") + f" | {u['note']}"
+                    positions[symbol].get("notes", "") + f" | {u.get('note', '')}"
                 )
-                log.append(f"NOTE added to {symbol}: {u['note']}")
+                log.append(f"NOTE added to {symbol}: {u.get('note', '')}")
 
     state["open_positions"] = list(positions.values())
-
-    # Clear the queue
-    pending_path.write_text("[]")
-
+    try:
+        pending_path.write_text("[]")
+    except Exception as e:
+        print(f"[Agent] WARNING: could not clear pending_updates.json: {e}")
     return state, log
 
 
-def load_env() -> dict:
+def load_env():
     env_vars = {}
     p = BASE_DIR / ".env"
     if p.exists():
@@ -179,7 +197,7 @@ def load_env() -> dict:
     return env_vars
 
 
-def get_api_key(env: dict) -> str:
+def get_api_key(env):
     key = os.environ.get("ANTHROPIC_API_KEY") or env.get("ANTHROPIC_API_KEY", "")
     if not key:
         raise ValueError(
@@ -189,8 +207,7 @@ def get_api_key(env: dict) -> str:
     return key
 
 
-def extract_state_from_response(text: str) -> dict:
-    """Pull the first valid JSON object out of Claude's response."""
+def extract_state_from_response(text):
     depth = 0
     start = None
     for i, ch in enumerate(text):
@@ -208,27 +225,26 @@ def extract_state_from_response(text: str) -> dict:
     return {}
 
 
-def extract_macro_bias(text: str) -> str:
+def extract_macro_bias(text):
     for bias in ["BIFURCATED", "BULLISH", "BEARISH", "NEUTRAL"]:
         if bias in text:
             return bias
     return "NEUTRAL"
 
 
-def count_enter_setups(state: dict) -> int:
+def count_enter_setups(state):
     return sum(
         1 for s in state.get("active_setups", [])
-        if s.get("status") == "ENTER"
+        if isinstance(s, dict) and s.get("status") == "ENTER"
     )
 
 
-def extract_email_body(text: str) -> str:
-    """Extract only the [EMAIL]...[/EMAIL] section from Claude's response."""
+def extract_email_body(text):
     start = text.find("[EMAIL]")
     end   = text.find("[/EMAIL]")
     if start != -1 and end != -1:
         return text[start + 7:end].strip()
-    return text  # fallback: send full response if markers missing
+    return text
 
 
 def run():
@@ -260,15 +276,15 @@ def run():
         etherscan_key=etherscan_key,
         existing_wallets=existing_profitable,
     )
+    summary = whale_data.get("summary", {})
     print(f"[{datetime.utcnow().isoformat()}] Whale data fetched — "
-          f"BTC moves:{whale_data['summary']['btc_large_moves']} "
-          f"ETH moves:{whale_data['summary']['eth_large_moves']} "
-          f"profitable wallets:{whale_data['summary']['profitable_wallets_tracked']}")
+          f"BTC moves:{summary.get('btc_large_moves', 0)} "
+          f"ETH moves:{summary.get('eth_large_moves', 0)} "
+          f"profitable wallets:{summary.get('profitable_wallets_tracked', 0)}")
 
     # ── Step 3: Build prompt for Claude ──────────────────────────────────────
     system_prompt = load_instructions()
-
-    whale_slim = slim_whale_data(whale_data)
+    whale_slim    = slim_whale_data(whale_data)
 
     tg_section = (
         f"\n═══ POSITION UPDATES (received via Telegram before this run) ═══\n"
@@ -342,7 +358,7 @@ CHANGES TODAY
         messages=[{"role": "user", "content": user_prompt}],
     )
 
-    response = message.content[0].text
+    response   = message.content[0].text
     tokens_in  = message.usage.input_tokens
     tokens_out = message.usage.output_tokens
     cost_usd   = (tokens_in * 0.80 + tokens_out * 4.00) / 1_000_000
@@ -351,7 +367,6 @@ CHANGES TODAY
           f"in:{tokens_in} out:{tokens_out} cost:${cost_usd:.4f}")
 
     # ── Step 5: Extract and save updated state ────────────────────────────────
-    # Extract state JSON — try [STATE_JSON] marker first, fall back to bare JSON
     state_text = response
     sj_start = response.find("[STATE_JSON]")
     sj_end   = response.find("[/STATE_JSON]")
@@ -361,26 +376,27 @@ CHANGES TODAY
     updated_state = extract_state_from_response(state_text)
     if updated_state:
         updated_state["profitable_wallets_discovered"] = \
-            whale_data["profitable_wallets_discovered"]
+            whale_data.get("profitable_wallets_discovered", [])
         save_state(updated_state)
+        updated_state = sanitize_state(updated_state)
         print(f"[{datetime.utcnow().isoformat()}] state.json updated")
     else:
         print(f"[{datetime.utcnow().isoformat()}] WARNING: Could not extract state JSON")
         updated_state = state
 
     # ── Step 6: Save full response to file ────────────────────────────────────
-    date_str = datetime.utcnow().strftime("%Y-%m-%d")
+    date_str    = datetime.utcnow().strftime("%Y-%m-%d")
     report_path = BASE_DIR / f"daily_report_{date_str}.txt"
     with open(report_path, "w") as f:
         f.write(response)
     print(f"[{datetime.utcnow().isoformat()}] Report saved: {report_path}")
 
-    # ── Step 7: Send concise email ────────────────────────────────────────────
-    email_body   = extract_email_body(response)
-    macro_bias   = extract_macro_bias(email_body)
-    setup_count  = len(updated_state.get("active_setups", []))
-    enter_count  = count_enter_setups(updated_state)
-    subject      = build_subject(macro_bias, setup_count, enter_count, date_str)
+    # ── Step 7: Send email ────────────────────────────────────────────────────
+    email_body  = extract_email_body(response)
+    macro_bias  = extract_macro_bias(email_body)
+    setup_count = len(updated_state.get("active_setups", []))
+    enter_count = count_enter_setups(updated_state)
+    subject     = build_subject(macro_bias, setup_count, enter_count, date_str)
 
     email_ok = send_report(
         subject=subject,
@@ -400,7 +416,6 @@ CHANGES TODAY
 
     print(f"[{datetime.utcnow().isoformat()}] Done. {log_line.strip()}")
 
-    # Print report to stdout for terminal review
     print("\n" + "=" * 80)
     print(response)
     print("=" * 80)

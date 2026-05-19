@@ -28,7 +28,6 @@ Setup:
 
 import json
 import sys
-import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -42,7 +41,7 @@ ENV_FILE     = BASE_DIR / ".env"
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 
-def load_env() -> dict:
+def load_env():
     cfg = {}
     if ENV_FILE.exists():
         for line in ENV_FILE.read_text().splitlines():
@@ -53,7 +52,7 @@ def load_env() -> dict:
     return cfg
 
 
-def save_env_value(key: str, value: str):
+def save_env_value(key, value):
     """Append or update a key in .env (used to persist chat_id on first use)."""
     lines = ENV_FILE.read_text().splitlines() if ENV_FILE.exists() else []
     new_lines = [l for l in lines if not l.startswith(f"{key}=")]
@@ -61,9 +60,29 @@ def save_env_value(key: str, value: str):
     ENV_FILE.write_text("\n".join(new_lines) + "\n")
 
 
+# ─── State sanitization (mirrors run_agent_haiku.py) ─────────────────────────
+
+def sanitize_state(state):
+    """
+    Normalize state to a predictable structure regardless of what Claude wrote
+    or what legacy format was on disk. Called after every load.
+    """
+    if not isinstance(state, dict):
+        state = {}
+    for key in ("open_positions", "active_setups"):
+        raw = state.get(key, [])
+        if not isinstance(raw, list):
+            raw = []
+        state[key] = [e for e in raw if isinstance(e, dict) and e.get("symbol")]
+    for key in ("alerted", "profitable_wallets_discovered"):
+        if not isinstance(state.get(key), list):
+            state[key] = []
+    return state
+
+
 # ─── Telegram API helpers ─────────────────────────────────────────────────────
 
-def tg(token: str, method: str, **params) -> dict:
+def tg(token, method, **params):
     try:
         r = requests.post(
             f"https://api.telegram.org/bot{token}/{method}",
@@ -75,13 +94,13 @@ def tg(token: str, method: str, **params) -> dict:
         return {}
 
 
-def send(token: str, chat_id: str, text: str):
+def send(token, chat_id, text):
     tg(token, "sendMessage", chat_id=chat_id, text=text, parse_mode="Markdown")
 
 
 # ─── Pending updates file ─────────────────────────────────────────────────────
 
-def load_pending() -> list:
+def load_pending():
     if PENDING_FILE.exists():
         try:
             return json.loads(PENDING_FILE.read_text())
@@ -90,23 +109,23 @@ def load_pending() -> list:
     return []
 
 
-def save_pending(updates: list):
+def save_pending(updates):
     PENDING_FILE.write_text(json.dumps(updates, indent=2))
 
 
-def load_state() -> dict:
+def load_state():
     p = BASE_DIR / "state.json"
     if p.exists():
         try:
-            return json.loads(p.read_text())
-        except Exception:
-            pass
-    return {}
+            return sanitize_state(json.loads(p.read_text()))
+        except Exception as e:
+            print(f"[TG] WARNING: could not load state.json ({e}) — using empty state")
+    return sanitize_state({})
 
 
 # ─── Command parser ───────────────────────────────────────────────────────────
 
-def parse_command(text: str):
+def parse_command(text):
     """
     Parse a Telegram message into a structured update dict.
     Returns None if not a recognised command.
@@ -182,46 +201,79 @@ def parse_command(text: str):
     return {"error": f"Unknown command: /{cmd}"}
 
 
-def format_status(state: dict) -> str:
-    positions = state.get("open_positions", [])
-    setups    = state.get("active_setups", [])
-    pending   = load_pending()
+def _fmt_price(price):
+    """Format a price value safely — returns a string regardless of input type."""
+    try:
+        return f"${float(price):,.2f}"
+    except (TypeError, ValueError):
+        return str(price) if price is not None else "?"
 
-    lines = ["*Crypto Agent Status*\n"]
 
-    if positions:
-        lines.append("*Open Positions:*")
-        for p in positions:
-            pnl = p.get("pnl_pct")
-            pnl_str = f" | P&L {pnl:+.1f}%" if pnl is not None else ""
+def _fmt_pnl(pnl):
+    """Format a P&L value safely — returns empty string if not a number."""
+    try:
+        return f" | P&L {float(pnl):+.1f}%"
+    except (TypeError, ValueError):
+        return ""
+
+
+def format_status(state):
+    try:
+        positions = state.get("open_positions", [])
+        setups    = state.get("active_setups", [])
+        pending   = load_pending()
+
+        lines = ["*Crypto Agent Status*\n"]
+
+        if positions:
+            lines.append("*Open Positions:*")
+            for p in positions:
+                if not isinstance(p, dict):
+                    continue
+                pnl_str = _fmt_pnl(p.get("pnl_pct"))
+                lines.append(
+                    f"  {p.get('symbol', '?')} {p.get('direction', '')} "
+                    f"@ {_fmt_price(p.get('entry_price'))}{pnl_str}"
+                )
+        else:
+            lines.append("*Open Positions:* None confirmed")
+
+        enter_setups = [s for s in setups if isinstance(s, dict) and s.get("status") == "ENTER"]
+        if enter_setups:
+            lines.append(f"\n*ENTER Alerts ({len(enter_setups)}):*")
+            for s in enter_setups:
+                lines.append(
+                    f"  {s.get('symbol', '?')} {s.get('direction', '')} "
+                    f"— {s.get('conviction', '')} conviction"
+                )
+
+        approaching = [s for s in setups if isinstance(s, dict) and s.get("status") == "APPROACHING"]
+        if approaching:
             lines.append(
-                f"  {p.get('symbol','?')} {p.get('direction','')} "
-                f"@ ${p.get('entry_price', '?')}{pnl_str}"
+                f"\n*Approaching ({len(approaching)}):* " +
+                ", ".join(s.get("symbol", "?") for s in approaching)
             )
-    else:
-        lines.append("*Open Positions:* None confirmed")
 
-    enter_setups = [s for s in setups if s.get("status") == "ENTER"]
-    if enter_setups:
-        lines.append(f"\n*ENTER Alerts ({len(enter_setups)}):*")
-        for s in enter_setups:
-            lines.append(f"  {s['symbol']} {s.get('direction','')} — {s.get('conviction','')} conviction")
+        if pending:
+            lines.append(f"\n*Pending updates ({len(pending)}):*")
+            for u in pending:
+                if not isinstance(u, dict):
+                    continue
+                sym = u.get("symbol", "")
+                action = u.get("action", "?")
+                price = u.get("price")
+                if price is not None:
+                    lines.append(f"  {action} {sym} @ {_fmt_price(price)}")
+                else:
+                    lines.append(f"  {action} {sym}")
 
-    approaching = [s for s in setups if s.get("status") == "APPROACHING"]
-    if approaching:
-        lines.append(f"\n*Approaching ({len(approaching)}):* " +
-                     ", ".join(s["symbol"] for s in approaching))
+        last = state.get("last_run", "never")
+        lines.append(f"\n_Last run: {last}_")
+        return "\n".join(lines)
 
-    if pending:
-        lines.append(f"\n*Pending updates ({len(pending)}):*")
-        for u in pending:
-            lines.append(f"  {u.get('action')} {u.get('symbol','')} "
-                         f"@ ${u.get('price',''):,}" if u.get('price') else
-                         f"  {u.get('action')} {u.get('symbol','')}")
-
-    last = state.get("last_run", "never")
-    lines.append(f"\n_Last run: {last}_")
-    return "\n".join(lines)
+    except Exception as e:
+        print(f"[TG] ERROR in format_status: {e}")
+        return f"⚠️ Could not render status: {e}"
 
 
 HELP_TEXT = """*Crypto Agent — Commands*
@@ -268,69 +320,80 @@ def run():
     new_offset = offset
 
     for upd in updates:
-        new_offset = max(new_offset, upd["update_id"] + 1)
-        msg = upd.get("message", {})
-        text = msg.get("text", "")
-        from_id = str(msg.get("chat", {}).get("id", ""))
+        try:
+            new_offset = max(new_offset, upd.get("update_id", new_offset - 1) + 1)
+            msg = upd.get("message", {})
+            if not isinstance(msg, dict):
+                continue
+            text = msg.get("text", "")
+            from_id = str(msg.get("chat", {}).get("id", ""))
 
-        if not text or not from_id:
-            continue
+            if not text or not from_id:
+                continue
 
-        # Auto-register chat_id on first message
-        if not chat_id:
-            chat_id = from_id
-            save_env_value("TELEGRAM_CHAT_ID", chat_id)
-            print(f"[TG] Registered chat_id: {chat_id}")
+            # Auto-register chat_id on first message
+            if not chat_id:
+                chat_id = from_id
+                save_env_value("TELEGRAM_CHAT_ID", chat_id)
+                print(f"[TG] Registered chat_id: {chat_id}")
 
-        # Only accept messages from the registered chat
-        if from_id != chat_id:
-            send(token, from_id, "⛔ Unauthorised.")
-            continue
+            # Only accept messages from the registered chat
+            if from_id != chat_id:
+                send(token, from_id, "⛔ Unauthorised.")
+                continue
 
-        print(f"[TG] Message: {text!r}")
-        parsed = parse_command(text)
+            print(f"[TG] Message: {text!r}")
+            parsed = parse_command(text)
 
-        if parsed is None:
-            send(token, chat_id,
-                 "Not a command. Send /help to see available commands.")
-            continue
+            if parsed is None:
+                send(token, chat_id,
+                     "Not a command. Send /help to see available commands.")
+                continue
 
-        if "error" in parsed:
-            send(token, chat_id, f"⚠️ {parsed['error']}")
-            continue
+            if "error" in parsed:
+                send(token, chat_id, f"⚠️ {parsed['error']}")
+                continue
 
-        action = parsed.get("action")
+            action = parsed.get("action")
 
-        if action == "HELP":
-            send(token, chat_id, HELP_TEXT)
-            continue
+            if action == "HELP":
+                send(token, chat_id, HELP_TEXT)
+                continue
 
-        if action == "STATUS":
-            state = load_state()
-            send(token, chat_id, format_status(state))
-            continue
+            if action == "STATUS":
+                state = load_state()
+                send(token, chat_id, format_status(state))
+                continue
 
-        # Queue the update
-        pending.append(parsed)
-        save_pending(pending)
+            # Queue the update
+            pending.append(parsed)
+            save_pending(pending)
 
-        if action == "ENTER":
-            size_note = (f", size ${parsed['size_usd']:,.0f}"
-                         if parsed.get("size_usd") else "")
-            send(token, chat_id,
-                 f"✅ Queued: *ENTER {parsed['symbol']}* @ "
-                 f"${parsed['price']:,.2f}{size_note}\n"
-                 f"_Will be applied on next daily run._")
+            if action == "ENTER":
+                size_usd = parsed.get("size_usd")
+                size_note = f", size ${size_usd:,.0f}" if size_usd is not None else ""
+                send(token, chat_id,
+                     f"✅ Queued: *ENTER {parsed['symbol']}* @ "
+                     f"{_fmt_price(parsed.get('price'))}{size_note}\n"
+                     f"_Will be applied on next daily run._")
 
-        elif action == "CLOSE":
-            kind = "partial close" if parsed.get("partial") else "close"
-            send(token, chat_id,
-                 f"✅ Queued: *{kind.upper()} {parsed['symbol']}*\n"
-                 f"_Will be applied on next daily run._")
+            elif action == "CLOSE":
+                kind = "partial close" if parsed.get("partial") else "close"
+                send(token, chat_id,
+                     f"✅ Queued: *{kind.upper()} {parsed['symbol']}*\n"
+                     f"_Will be applied on next daily run._")
 
-        elif action == "NOTE":
-            send(token, chat_id,
-                 f"✅ Queued note for *{parsed['symbol']}*: _{parsed['note']}_")
+            elif action == "NOTE":
+                send(token, chat_id,
+                     f"✅ Queued note for *{parsed['symbol']}*: _{parsed.get('note', '')}_")
+
+        except Exception as e:
+            print(f"[TG] ERROR processing update {upd.get('update_id', '?')}: {e}")
+            try:
+                if chat_id:
+                    send(token, chat_id, f"⚠️ Internal error: {e}")
+            except Exception:
+                pass
 
     OFFSET_FILE.write_text(str(new_offset))
     print(f"[TG] Processed {len(updates)} update(s), new offset={new_offset}, "
