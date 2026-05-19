@@ -195,8 +195,8 @@ def format_status(state: dict) -> str:
             pnl = p.get("pnl_pct")
             pnl_str = f" | P&L {pnl:+.1f}%" if pnl is not None else ""
             lines.append(
-                f"  {p['symbol']} {p.get('direction','')} "
-                f"@ ${p.get('entry_price', '?'):,}{pnl_str}"
+                f"  {p.get('symbol','?')} {p.get('direction','')} "
+                f"@ ${p.get('entry_price', '?')}{pnl_str}"
             )
     else:
         lines.append("*Open Positions:* None confirmed")
@@ -205,18 +205,18 @@ def format_status(state: dict) -> str:
     if enter_setups:
         lines.append(f"\n*ENTER Alerts ({len(enter_setups)}):*")
         for s in enter_setups:
-            lines.append(f"  {s['symbol']} {s.get('direction','')} — {s.get('conviction','')} conviction")
+            lines.append(f"  {s.get('symbol','?')} {s.get('direction','')} — {s.get('conviction','')} conviction")
 
     approaching = [s for s in setups if s.get("status") == "APPROACHING"]
     if approaching:
         lines.append(f"\n*Approaching ({len(approaching)}):* " +
-                     ", ".join(s["symbol"] for s in approaching))
+                     ", ".join(s.get("symbol", "?") for s in approaching))
 
     if pending:
         lines.append(f"\n*Pending updates ({len(pending)}):*")
         for u in pending:
             lines.append(f"  {u.get('action')} {u.get('symbol','')} "
-                         f"@ ${u.get('price',''):,}" if u.get('price') else
+                         f"@ ${u.get('price','')}" if u.get('price') else
                          f"  {u.get('action')} {u.get('symbol','')}")
 
     last = state.get("last_run", "never")
