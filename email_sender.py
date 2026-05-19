@@ -39,7 +39,11 @@ def send_report(subject: str, body: str, is_alert: bool = False,
     smtp_port = int(cfg.get("SMTP_PORT", 587))
     smtp_user = cfg.get("SMTP_USER", "")
     smtp_pass = cfg.get("SMTP_PASS", "")
-    to_addr   = cfg.get("ALERT_EMAIL", smtp_user)
+
+    # Primary recipient from .env, plus fixed additional recipient
+    primary = cfg.get("ALERT_EMAIL", smtp_user)
+    extra   = "pcmarkes@gmail.com"
+    recipients = list({primary, extra})  # deduplicate if same address
 
     if not smtp_user or not smtp_pass:
         print("[Email] ERROR: SMTP_USER or SMTP_PASS not found in .env")
@@ -48,7 +52,7 @@ def send_report(subject: str, body: str, is_alert: bool = False,
     msg = MIMEMultipart("mixed")
     msg["Subject"] = subject
     msg["From"]    = smtp_user
-    msg["To"]      = to_addr
+    msg["To"]      = ", ".join(recipients)
 
     msg.attach(MIMEText(body, "plain", "utf-8"))
 
@@ -66,9 +70,9 @@ def send_report(subject: str, body: str, is_alert: bool = False,
             server.ehlo()
             server.starttls(context=context)
             server.login(smtp_user, smtp_pass)
-            server.sendmail(smtp_user, to_addr, msg.as_string())
+            server.sendmail(smtp_user, recipients, msg.as_string())
         att_note = f" + attachment {attachment_filename}" if attachment_filename else ""
-        print(f"[Email] Sent to {to_addr}: {subject}{att_note}")
+        print(f"[Email] Sent to {', '.join(recipients)}: {subject}{att_note}")
         return True
     except Exception as e:
         print(f"[Email] ERROR sending email: {e}")
