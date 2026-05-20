@@ -18,6 +18,12 @@ User says "I entered X at $Y" → move to `open_positions` with their entry.
 User says "I closed X" → mark COMPLETED, remove from tracking.
 No confirmation → stay in `active_setups`, never track P&L.
 
+**Unplanned positions rule:** If a position appears in `open_positions` with no matching entry in `active_setups` (status = "OPEN", conviction = "UNKNOWN"), it was opened outside the analysis. You MUST:
+1. Run full whale + TA analysis for that symbol immediately (Steps 3–5).
+2. Create a proper `active_setups` entry with real levels: stop_loss, tp1, tp2, r_r_ratio, conviction, rationale.
+3. Flag it in CHANGES TODAY as "ADOPTED: {SYM} — position opened outside analysis, now tracked."
+4. Evaluate risk immediately: if the position is already underwater or whale signal is bearish, flag as ⚠️ DANGER in the email.
+
 ---
 
 ## Steps — execute in order every run
@@ -99,6 +105,8 @@ For new setups discovered in Step 5: add only if composite score clears threshol
 
 **6b — Open Positions (user-confirmed trades)**
 
+Every open position — whether it came from an active setup or was opened directly via Telegram — MUST be analysed here. No position is ever skipped.
+
 For each position in `open_positions`, calculate and update:
 
 1. **P&L %** — `(current_price - entry_price) / entry_price × 100` (invert for shorts)
@@ -106,14 +114,18 @@ For each position in `open_positions`, calculate and update:
    - If P&L > +5% → suggest trailing stop to breakeven
    - If P&L > +10% → suggest trailing stop to lock in 5%
    - If P&L > +20% → suggest trailing stop to lock in 10%, consider partial exit at T1
-   - If price approaching stop (within 2%) → flag as "stop close — monitor"
+   - If price approaching stop (within 2%) → flag as "⚠️ STOP CLOSE — act now"
 3. **Target management:**
    - If price within 3% of target_1 → flag "T1 approaching — consider partial take-profit (50%)"
    - If target_1 already hit → track remaining position vs target_2
-4. **Conviction re-assessment:**
-   - If whale signal has reversed since entry → flag as "whale reversal — consider exit"
-   - If macro bias contradicts direction → note as risk, do not exit automatically
-5. **Action column in email** — always give a specific action: "Hold", "Trail stop to $X", "Take partial profit at $Y", "Exit — stop at $Z", "Reduce size — whale reversal"
+4. **Danger flags — always check, always surface in email:**
+   - P&L < -5% → flag "DRAWDOWN — review thesis"
+   - P&L < -10% → flag "⚠️ HIGH RISK — consider cutting or hedging"
+   - P&L < -15% → flag "🚨 DANGER — position near critical loss, act now"
+   - Whale signal opposes direction → flag "⚠️ WHALE REVERSAL — consider exit"
+   - Macro bias opposes direction AND P&L negative → flag "⚠️ DOUBLE RISK — macro + loss"
+   - Stop_loss is None (unplanned position) → flag "⚠️ NO STOP SET — define risk immediately"
+5. **Action column in email** — always give a specific action: "Hold", "Trail stop to $X", "Take partial profit at $Y", "Cut loss — exit now", "Reduce size — whale reversal", "Set stop at $X immediately"
 
 Never close a position in state without user confirmation. Only recommend actions; the user decides.
 
