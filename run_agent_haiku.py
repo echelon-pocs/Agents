@@ -328,39 +328,61 @@ Instructions:
 - Execute all steps internally (macro, whale scoring, TA, composite scoring, setup updates).
 - No positions are open unless listed in current state open_positions.
 
-Output EXACTLY this structure — nothing else:
+Output EXACTLY this structure — nothing else.
+IMPORTANT FORMATTING RULES (mobile-first, max ~35 chars per line):
+- NO wide tables. Use card blocks — one entry per card, fields stacked vertically.
+- Separator lines use plain dashes, max 30 chars: ------------------------------
+- Every field on its own line with a short label.
+- Numbers: use $ and commas. Percentages: +4.9% not 0.049.
 
 [EMAIL]
-═════════════════════════════════════════════════════════
-CRYPTO DAILY BRIEF — {{DATE}} | {{MACRO_BIAS}} | BTC ${{price}} | Dom {{btc_dom}}% | F&G {{fear_greed}}
-═════════════════════════════════════════════════════════
+CRYPTO DAILY BRIEF
+{{DATE}} | {{MACRO_BIAS}}
+BTC ${{price}} | Dom {{btc_dom}}% | F&G {{fear_greed}}
+------------------------------
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 OPEN POSITIONS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[If no open positions, write: None confirmed.]
-[If open positions exist, one row per position:]
-SYM  DIR    ENTRY     NOW       P&L%   STOP      ACTION
----  -----  --------  --------  -----  --------  --------------------------
-ETH  SHORT  $2,650    $2,520    +4.9%  $2,820    Trail stop to $2,600
+------------------------------
+[If none: write "None confirmed."]
+[One card per position, exactly this layout:]
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-ACTIONABLE SETUPS  (ENTER and APPROACHING only)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SYM   DIR    STATUS    ENTRY ZONE       STOP      T1        T2        R/R  CONV    WHALE
-----  -----  --------  ---------------  --------  --------  --------  ---  ------  ----------
-[One row per ENTER or APPROACHING setup. Skip WAITING setups.]
+ETH SHORT (futures)
+  Entry : $2,650
+  Now   : $2,520  P&L: +4.9%
+  Stop  : $2,820
+  Action: Trail stop to $2,600
+------------------------------
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ACTIONABLE SETUPS
+------------------------------
+[ENTER and APPROACHING only. One card each:]
+
+\U0001f534 BTC LONG — HIGH
+  Status: ENTER
+  Zone  : $76,000–$79,000
+  Stop  : $73,000
+  T1    : $88,000  T2: $96,000
+  R/R   : 2.3x | Whale: STRONG BULL
+------------------------------
+
+\U0001f7e1 SUI LONG — MEDIUM
+  Status: APPROACHING
+  Zone  : $1.05–$1.15
+  Stop  : $0.95
+  T1    : $1.60  T2: $2.20
+  R/R   : 3.3x | Whale: MILD BULL
+------------------------------
+
 WAITING (monitor only)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[Comma-separated list: SYM DIR — reason in 5 words]
+------------------------------
+[One line each: SYM DIR — 5-word reason]
+BTC LONG — pullback to zone needed
+ETH SHORT — price below entry zone
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CHANGES TODAY
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[Bullet list: NEW / ENTER / INVALIDATED / REVISED setups only. One line each.]
-═════════════════════════════════════════════════════════
+------------------------------
+[Bullet per change: NEW / ENTER / INVALIDATED / REVISED]
+- NEW: HYPE LONG — whale accumulation signal
 [/EMAIL]
 
 [STATE_JSON]
