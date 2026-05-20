@@ -7,14 +7,17 @@ parses position commands, and writes them to pending_updates.json for the
 main agent to process on next run.
 
 Commands (send to your bot on Telegram):
-  /enter BTC 103000          — entered BTC at $103,000 (size optional)
-  /enter ETH 2450 500usd     — entered ETH at $2,450 with $500 size
-  /enter SOL 165 2.5         — entered SOL at $165, 2.5 coins
-  /close ETH                 — closed ETH position
-  /close BTC partial         — partially closed BTC
-  /note ETH trail stop 2300  — add a note/action to open position
-  /status                    — bot replies with current open positions
-  /help                      — show command list
+  /enter BTC 103000              — entered BTC spot (long) at $103,000
+  /enter BTC long 103000         — same, direction explicit
+  /enter BTC short 103000        — entered BTC short (futures) at $103,000
+  /enter ETH long 2450 500usd    — entered ETH long with $500 size
+  /enter SOL short 165 2.5       — entered SOL short, 2.5 coins at $165
+  /close ETH                     — closed ETH position
+  /close BTC short               — closed BTC short leg (futures)
+  /close BTC partial             — partial close
+  /note ETH trail stop 2300      — add a note/action to open position
+  /status                        — bot replies with current open positions
+  /help                          — show command list
 
 Setup:
   1. Message @BotFather on Telegram → /newbot → copy the token
@@ -140,18 +143,45 @@ def parse_command(text):
 
     cmd = parts[0].lower()
 
-    # /enter SYM PRICE [SIZE[usd]]
+    # /enter SYM [long|short|spot|buy|sell] PRICE [SIZE[usd]]
+    # Direction keyword is optional; default is LONG/spot.
+    # Examples:
+    #   /enter BTC 103000
+    #   /enter BTC long 103000
+    #   /enter BTC short 103000 500usd
+    #   /enter ETH spot 2450 1.5
+    DIRECTION_MAP = {
+        "long":    ("LONG",  "spot"),
+        "buy":     ("LONG",  "spot"),
+        "spot":    ("LONG",  "spot"),
+        "short":   ("SHORT", "futures"),
+        "sell":    ("SHORT", "futures"),
+        "futures": ("LONG",  "futures"),
+    }
     if cmd == "enter" and len(parts) >= 3:
         symbol = parts[1].upper()
+
+        # Detect optional direction keyword at parts[2]
+        direction   = "LONG"
+        market_type = "spot"
+        price_idx   = 2
+        if parts[2].lower() in DIRECTION_MAP:
+            direction, market_type = DIRECTION_MAP[parts[2].lower()]
+            price_idx = 3
+
+        if len(parts) <= price_idx:
+            return {"error": "Missing price. Usage: /enter SYM [long|short] PRICE [SIZE]"}
+
         try:
-            price = float(parts[2].replace(",", "").replace("$", ""))
+            price = float(parts[price_idx].replace(",", "").replace("$", ""))
         except ValueError:
-            return {"error": f"Invalid price: {parts[2]}"}
+            return {"error": f"Invalid price: {parts[price_idx]}"}
 
         size_usd = None
         size_qty = None
-        if len(parts) >= 4:
-            raw = parts[3].lower().replace(",", "")
+        size_idx = price_idx + 1
+        if len(parts) > size_idx:
+            raw = parts[size_idx].lower().replace(",", "")
             if raw.endswith("usd"):
                 try:
                     size_usd = float(raw[:-3])
@@ -165,24 +195,43 @@ def parse_command(text):
                     pass
 
         return {
-            "action":    "ENTER",
-            "symbol":    symbol,
-            "price":     price,
-            "size_usd":  size_usd,
-            "size_qty":  size_qty,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "action":      "ENTER",
+            "symbol":      symbol,
+            "direction":   direction,
+            "market_type": market_type,
+            "price":       price,
+            "size_usd":    size_usd,
+            "size_qty":    size_qty,
+            "timestamp":   datetime.now(timezone.utc).isoformat(),
         }
 
-    # /close SYM [partial|full]
+    # /close SYM [long|short|spot|partial|full]
+    # Examples:
+    #   /close ETH
+    #   /close BTC short
+    #   /close BTC partial
     if cmd == "close" and len(parts) >= 2:
         symbol = parts[1].upper()
-        partial = len(parts) >= 3 and "partial" in parts[2].lower()
-        return {
+        modifiers = [p.lower() for p in parts[2:]]
+        partial = any(m in ("partial",) for m in modifiers)
+        # Direction hint (helps agent identify which leg to close in futures)
+        direction = None
+        for m in modifiers:
+            if m in ("long", "buy", "spot"):
+                direction = "LONG"
+                break
+            if m in ("short", "sell"):
+                direction = "SHORT"
+                break
+        result = {
             "action":    "CLOSE",
             "symbol":    symbol,
             "partial":   partial,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
+        if direction:
+            result["direction"] = direction
+        return result
 
     # /note SYM free text...
     if cmd == "note" and len(parts) >= 3:
@@ -278,12 +327,20 @@ def format_status(state):
 
 HELP_TEXT = """*Crypto Agent — Commands*
 
-`/enter BTC 103000` — entered BTC at $103,000
-`/enter ETH 2450 500usd` — entered with $500 size
-`/enter SOL 165 2.5` — entered 2.5 SOL at $165
-`/close ETH` — closed ETH position fully
-`/close BTC partial` — partially closed BTC
-`/note ETH trailing stop to $2300` — add action note
+*Enter a position:*
+`/enter BTC 103000` — spot long at $103,000
+`/enter BTC long 103000` — spot long (explicit)
+`/enter BTC short 103000` — futures short at $103,000
+`/enter ETH long 2450 500usd` — long with $500 size
+`/enter SOL short 165 2.5` — short 2.5 SOL at $165
+
+*Close a position:*
+`/close ETH` — close ETH (all)
+`/close BTC short` — close BTC short leg
+`/close BTC partial` — flag partial close
+
+*Other:*
+`/note ETH trailing stop to $2300` — add note to position
 `/status` — show open positions & active setups
 `/help` — this message
 
@@ -370,17 +427,20 @@ def run():
             save_pending(pending)
 
             if action == "ENTER":
-                size_usd = parsed.get("size_usd")
-                size_note = f", size ${size_usd:,.0f}" if size_usd is not None else ""
+                size_usd    = parsed.get("size_usd")
+                size_note   = f", size ${size_usd:,.0f}" if size_usd is not None else ""
+                direction   = parsed.get("direction", "LONG")
+                market_type = parsed.get("market_type", "spot")
                 send(token, chat_id,
-                     f"✅ Queued: *ENTER {parsed['symbol']}* @ "
+                     f"✅ Queued: *{direction} {parsed['symbol']}* ({market_type}) @ "
                      f"{_fmt_price(parsed.get('price'))}{size_note}\n"
                      f"_Will be applied on next daily run._")
 
             elif action == "CLOSE":
-                kind = "partial close" if parsed.get("partial") else "close"
+                kind = "PARTIAL CLOSE" if parsed.get("partial") else "CLOSE"
+                dir_note = f" {parsed['direction']}" if parsed.get("direction") else ""
                 send(token, chat_id,
-                     f"✅ Queued: *{kind.upper()} {parsed['symbol']}*\n"
+                     f"✅ Queued: *{kind} {parsed['symbol']}{dir_note}*\n"
                      f"_Will be applied on next daily run._")
 
             elif action == "NOTE":

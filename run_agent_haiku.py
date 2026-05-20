@@ -139,12 +139,17 @@ def apply_pending_updates(state):
             continue
 
         if action == "ENTER":
-            price    = u.get("price", 0)
-            size_usd = u.get("size_usd")
-            setup    = setups.get(symbol, {})
-            positions[symbol] = {
+            price       = u.get("price", 0)
+            size_usd    = u.get("size_usd")
+            setup       = setups.get(symbol, {})
+            # Telegram update direction takes precedence over the setup's direction
+            direction   = u.get("direction") or setup.get("direction", "LONG")
+            market_type = u.get("market_type", "spot")
+            key = f"{symbol}_{direction}"  # allow both legs of a futures pair
+            positions[key] = {
                 "symbol":      symbol,
-                "direction":   setup.get("direction", "LONG"),
+                "direction":   direction,
+                "market_type": market_type,
                 "entry_price": price,
                 "entry_date":  u.get("timestamp", "")[:10],
                 "stop_loss":   setup.get("stop_loss"),
@@ -154,27 +159,43 @@ def apply_pending_updates(state):
                 "pnl_pct":     None,
                 "notes":       "User confirmed via Telegram.",
             }
-            log.append(f"ENTERED {symbol} @ ${price:,}")
+            log.append(f"ENTERED {direction} {symbol} ({market_type}) @ ${price:,}")
 
         elif action == "CLOSE":
-            if symbol in positions:
+            # Build candidate keys: direction-specific first, then symbol-only fallback
+            direction = u.get("direction")
+            candidates = []
+            if direction:
+                candidates.append(f"{symbol}_{direction}")
+            candidates.append(symbol)
+            # Also match any key starting with symbol_ (covers both legs if no direction given)
+            if not direction:
+                candidates += [k for k in list(positions) if k.startswith(f"{symbol}_")]
+
+            matched = next((k for k in candidates if k in positions), None)
+            if matched:
                 if u.get("partial"):
-                    positions[symbol]["notes"] = (
-                        positions[symbol].get("notes", "") + " | Partial close flagged."
+                    positions[matched]["notes"] = (
+                        positions[matched].get("notes", "") + " | Partial close flagged."
                     )
-                    log.append(f"PARTIAL CLOSE flagged: {symbol}")
+                    log.append(f"PARTIAL CLOSE flagged: {matched}")
                 else:
-                    del positions[symbol]
-                    log.append(f"CLOSED {symbol}")
+                    del positions[matched]
+                    log.append(f"CLOSED {matched}")
             else:
                 log.append(f"CLOSE {symbol}: not in open positions (ignored)")
 
         elif action == "NOTE":
-            if symbol in positions:
-                positions[symbol]["notes"] = (
-                    positions[symbol].get("notes", "") + f" | {u.get('note', '')}"
+            direction = u.get("direction")
+            note_key  = f"{symbol}_{direction}" if direction else symbol
+            if note_key not in positions:
+                # fallback: first matching key
+                note_key = next((k for k in positions if k == symbol or k.startswith(f"{symbol}_")), None)
+            if note_key and note_key in positions:
+                positions[note_key]["notes"] = (
+                    positions[note_key].get("notes", "") + f" | {u.get('note', '')}"
                 )
-                log.append(f"NOTE added to {symbol}: {u.get('note', '')}")
+                log.append(f"NOTE added to {note_key}: {u.get('note', '')}")
 
     state["open_positions"] = list(positions.values())
     try:
