@@ -281,7 +281,7 @@ def run():
 
     etherscan_key = env.get("ETHERSCAN_API_KEY", "")
 
-    # ── Step 1: Load state + apply Telegram position updates ─────────────────
+    # ── Step 1: Load state + apply Telegram position updates ───────────────────────
     state = load_state()
     state, tg_log = apply_pending_updates(state)
     if tg_log:
@@ -291,7 +291,7 @@ def run():
           f"{len(state.get('active_setups', []))} setups, "
           f"{len(state.get('open_positions', []))} open positions")
 
-    # ── Step 2: Fetch on-chain whale data ─────────────────────────────────────
+    # ── Step 2: Fetch on-chain whale data ─────────────────────────────
     existing_profitable = state.get("profitable_wallets_discovered", [])
     whale_data = get_all_whale_data(
         etherscan_key=etherscan_key,
@@ -303,7 +303,7 @@ def run():
           f"ETH moves:{summary.get('eth_large_moves', 0)} "
           f"profitable wallets:{summary.get('profitable_wallets_tracked', 0)}")
 
-    # ── Step 3: Build prompt for Claude ──────────────────────────────────────
+    # ── Step 3: Build prompt for Claude ──────────────────────────────
     system_prompt = load_instructions()
     whale_slim    = slim_whale_data(whale_data)
 
@@ -328,39 +328,61 @@ Instructions:
 - Execute all steps internally (macro, whale scoring, TA, composite scoring, setup updates).
 - No positions are open unless listed in current state open_positions.
 
-Output EXACTLY this structure — nothing else:
+Output EXACTLY this structure — nothing else.
+IMPORTANT FORMATTING RULES (mobile-first, max ~35 chars per line):
+- NO wide tables. Use card blocks — one entry per card, fields stacked vertically.
+- Separator lines use plain dashes, max 30 chars: ------------------------------
+- Every field on its own line with a short label.
+- Numbers: use $ and commas. Percentages: +4.9% not 0.049.
 
 [EMAIL]
-═══════════════════════════════════════════════════════════
-CRYPTO DAILY BRIEF — {{DATE}} | {{MACRO_BIAS}} | BTC ${{price}} | Dom {{btc_dom}}% | F&G {{fear_greed}}
-═══════════════════════════════════════════════════════════
+CRYPTO DAILY BRIEF
+{{DATE}} | {{MACRO_BIAS}}
+BTC ${{price}} | Dom {{btc_dom}}% | F&G {{fear_greed}}
+------------------------------
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 OPEN POSITIONS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[If no open positions, write: None confirmed.]
-[If open positions exist, one row per position:]
-SYM  DIR    ENTRY     NOW       P&L%   STOP      ACTION
----  -----  --------  --------  -----  --------  --------------------------
-ETH  SHORT  $2,650    $2,520    +4.9%  $2,820    Trail stop to $2,600
+------------------------------
+[If none: write "None confirmed."]
+[One card per position, exactly this layout:]
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-ACTIONABLE SETUPS  (ENTER and APPROACHING only)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SYM   DIR    STATUS    ENTRY ZONE       STOP      T1        T2        R/R  CONV    WHALE
-----  -----  --------  ---------------  --------  --------  --------  ---  ------  ----------
-[One row per ENTER or APPROACHING setup. Skip WAITING setups.]
+ETH SHORT (futures)
+  Entry : $2,650
+  Now   : $2,520  P&L: +4.9%
+  Stop  : $2,820
+  Action: Trail stop to $2,600
+------------------------------
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ACTIONABLE SETUPS
+------------------------------
+[ENTER and APPROACHING only. One card each:]
+
+🔴 BTC LONG — HIGH
+  Status: ENTER
+  Zone  : $76,000–$79,000
+  Stop  : $73,000
+  T1    : $88,000  T2: $96,000
+  R/R   : 2.3x | Whale: STRONG BULL
+------------------------------
+
+🟡 SUI LONG — MEDIUM
+  Status: APPROACHING
+  Zone  : $1.05–$1.15
+  Stop  : $0.95
+  T1    : $1.60  T2: $2.20
+  R/R   : 3.3x | Whale: MILD BULL
+------------------------------
+
 WAITING (monitor only)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[Comma-separated list: SYM DIR — reason in 5 words]
+------------------------------
+[One line each: SYM DIR — 5-word reason]
+BTC LONG — pullback to zone needed
+ETH SHORT — price below entry zone
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CHANGES TODAY
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[Bullet list: NEW / ENTER / INVALIDATED / REVISED setups only. One line each.]
-═══════════════════════════════════════════════════════════
+------------------------------
+[Bullet per change: NEW / ENTER / INVALIDATED / REVISED]
+- NEW: HYPE LONG — whale accumulation signal
 [/EMAIL]
 
 [STATE_JSON]
@@ -368,7 +390,7 @@ CHANGES TODAY
 [/STATE_JSON]
 """
 
-    # ── Step 4: Call Claude Haiku ─────────────────────────────────────────────
+    # ── Step 4: Call Claude Haiku ───────────────────────────────────
     client = anthropic.Anthropic(api_key=api_key)
     print(f"[{datetime.utcnow().isoformat()}] Calling Claude Haiku 4.5...")
 
@@ -387,7 +409,7 @@ CHANGES TODAY
     print(f"[{datetime.utcnow().isoformat()}] Response received — "
           f"in:{tokens_in} out:{tokens_out} cost:${cost_usd:.4f}")
 
-    # ── Step 5: Extract and save updated state ────────────────────────────────
+    # ── Step 5: Extract and save updated state ────────────────────────────
     state_text = response
     sj_start = response.find("[STATE_JSON]")
     sj_end   = response.find("[/STATE_JSON]")
@@ -405,14 +427,14 @@ CHANGES TODAY
         print(f"[{datetime.utcnow().isoformat()}] WARNING: Could not extract state JSON")
         updated_state = state
 
-    # ── Step 6: Save full response to file ────────────────────────────────────
+    # ── Step 6: Save full response to file ────────────────────────────────
     date_str    = datetime.utcnow().strftime("%Y-%m-%d")
     report_path = BASE_DIR / f"daily_report_{date_str}.txt"
     with open(report_path, "w") as f:
         f.write(response)
     print(f"[{datetime.utcnow().isoformat()}] Report saved: {report_path}")
 
-    # ── Step 7: Send email ────────────────────────────────────────────────────
+    # ── Step 7: Send email ────────────────────────────────────────────
     email_body  = extract_email_body(response)
     macro_bias  = extract_macro_bias(email_body)
     setup_count = len(updated_state.get("active_setups", []))
@@ -427,7 +449,7 @@ CHANGES TODAY
         attachment_filename=f"crypto_full_report_{date_str}.txt",
     )
 
-    # ── Step 8: Update report.log ─────────────────────────────────────────────
+    # ── Step 8: Update report.log ─────────────────────────────────────────
     log_line = (f"{datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC | "
                 f"{macro_bias} | {setup_count} setups | {enter_count} ENTER | "
                 f"email:{'OK' if email_ok else 'FAIL'} | "
