@@ -161,6 +161,29 @@ def apply_pending_updates(state):
             }
             log.append(f"ENTERED {direction} {symbol} ({market_type}) @ ${price:,}")
 
+            # If no active setup exists for this symbol, create a placeholder so
+            # Claude analyses it on the next run and fills in targets/stop/whale score.
+            if symbol not in setups:
+                setups[symbol] = {
+                    "symbol":          symbol,
+                    "direction":       direction,
+                    "market_type":     market_type,
+                    "conviction":      "UNKNOWN",
+                    "entry_zone":      [price, price],
+                    "stop_loss":       None,
+                    "tp1":             None,
+                    "tp2":             None,
+                    "tp3":             None,
+                    "r_r_ratio":       None,
+                    "status":          "OPEN",
+                    "whale_signal":    "UNKNOWN",
+                    "composite_score": 0,
+                    "rationale":       f"Opened via Telegram at ${price:,}. No prior setup — agent will analyse on next run.",
+                    "timeframe":       "UNKNOWN",
+                    "added":           u.get("timestamp", "")[:10],
+                }
+                log.append(f"AUTO-SETUP created for {symbol} (no prior setup found)")
+
         elif action == "CLOSE":
             # Build candidate keys: direction-specific first, then symbol-only fallback
             direction = u.get("direction")
@@ -198,6 +221,7 @@ def apply_pending_updates(state):
                 log.append(f"NOTE added to {note_key}: {u.get('note', '')}")
 
     state["open_positions"] = list(positions.values())
+    state["active_setups"]  = list(setups.values())
     try:
         pending_path.write_text("[]")
     except Exception as e:
@@ -327,6 +351,9 @@ Instructions:
 - profitable_wallets_discovered are real wallets with >20% avg profit — treat as high-weight signals.
 - Execute all steps internally (macro, whale scoring, TA, composite scoring, setup updates).
 - No positions are open unless listed in current state open_positions.
+- ALL open positions must appear in the email with P&L, stop status, and a specific action.
+- Positions with status=OPEN and conviction=UNKNOWN were opened outside analysis — run full whale+TA on them and adopt them into active_setups with real levels.
+- Flag any position with P&L < -10% or no stop_loss as high risk. Flag P&L < -15% as DANGER.
 
 Output EXACTLY this structure — nothing else.
 IMPORTANT FORMATTING RULES (mobile-first, max ~35 chars per line):
@@ -344,13 +371,31 @@ BTC ${{price}} | Dom {{btc_dom}}% | F&G {{fear_greed}}
 OPEN POSITIONS
 ------------------------------
 [If none: write "None confirmed."]
-[One card per position, exactly this layout:]
+[One card per position. Include ALL open positions,
+ even those opened outside active setups.
+ Use danger icons when conditions apply:]
 
 ETH SHORT (futures)
   Entry : $2,650
   Now   : $2,520  P&L: +4.9%
   Stop  : $2,820
   Action: Trail stop to $2,600
+------------------------------
+
+[Danger example — use when P&L < -10% or stop missing:]
+⚠️ BTC LONG (futures)
+  Entry : $95,000
+  Now   : $84,000  P&L: -11.6%
+  Stop  : NONE SET
+  Action: Set stop at $82,000 immediately
+------------------------------
+
+[Critical example — use when P&L < -15%:]
+\U0001f6a8 SOL SHORT (futures)
+  Entry : $140
+  Now   : $165  P&L: -17.9%
+  Stop  : $155 (BREACHED)
+  Action: EXIT NOW — stop breached, cut loss
 ------------------------------
 
 ACTIONABLE SETUPS
