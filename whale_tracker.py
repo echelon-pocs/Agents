@@ -11,7 +11,7 @@ import requests
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
-# ─── Known institutional / named whale wallets ──────────────────────────────────
+# ─── Known institutional / named whale wallets ──────────────────────────────────────
 
 KNOWN_WALLETS = {
     "BTC": {
@@ -60,7 +60,7 @@ COINGECKO_IDS = {
     "XRP": "ripple", "SUI": "sui", "ONDO": "ondo-finance",
 }
 
-# ─── Helpers ───────────────────────────────────────────────────────────────
+# ─── Helpers ────────────────────────────────────────────────────────────────────────────────
 
 def _get(url: str, params: dict = None, timeout: int = 12) -> Optional[dict]:
     try:
@@ -94,7 +94,7 @@ def get_historical_price(symbol: str, date_str: str) -> float:
         return data.get("market_data", {}).get("current_price", {}).get("usd", 0)
     return 0
 
-# ─── BTC ─────────────────────────────────────────────────────────────────────────
+# ─── BTC ───────────────────────────────────────────────────────────────────────────────────
 
 def get_btc_large_transfers(min_usd: float = 1_000_000) -> List[Dict]:
     """Detect large BTC transfers in last 24h via Blockchair."""
@@ -104,7 +104,7 @@ def get_btc_large_transfers(min_usd: float = 1_000_000) -> List[Dict]:
 
     data = _get("https://api.blockchair.com/bitcoin/transactions",
                 params={"limit": 100, "s": "output_total(desc)",
-                        "q": f"output_total({int(min_btc * 1e8)}..),"
+                        "q": f"output_total({int(min_btc * 1e8)}..)."
                              f"time({(datetime.utcnow()-timedelta(hours=24)).strftime('%Y-%m-%d %H:%M:%S')}..)"})
     if not data:
         return []
@@ -133,7 +133,7 @@ def get_btc_wallet_activity(address: str) -> Dict:
         "recent_txs": len(data.get("txs", [])),
     }
 
-# ─── ETH / ONDO ──────────────────────────────────────────────────────────
+# ─── ETH / ONDO ────────────────────────────────────────────────────────────────────────────
 
 ETHERSCAN_KEY = "YourEtherscanKey"  # set in .env as ETHERSCAN_API_KEY (optional, free tier works without)
 
@@ -228,7 +228,7 @@ def _block_from_hours_ago(hours: int, etherscan_key: str = "") -> int:
             pass
     return 21500000
 
-# ─── SOL ─────────────────────────────────────────────────────────────────────────
+# ─── SOL ───────────────────────────────────────────────────────────────────────────────────
 
 def get_sol_large_transfers(min_usd: float = 1_000_000) -> List[Dict]:
     """Detect large SOL transfers via public Solana RPC."""
@@ -260,7 +260,7 @@ def get_sol_large_transfers(min_usd: float = 1_000_000) -> List[Dict]:
             pass
     return results
 
-# ─── XRP ─────────────────────────────────────────────────────────────────────────
+# ─── XRP ───────────────────────────────────────────────────────────────────────────────────
 
 def get_xrp_large_transfers(min_usd: float = 500_000) -> List[Dict]:
     """Detect large XRP payments via XRPL public API."""
@@ -289,14 +289,13 @@ def get_xrp_large_transfers(min_usd: float = 500_000) -> List[Dict]:
                     })
     return results
 
-# ─── Profitable Wallet Discovery — Early Buyer Method ────────────────────────────
+# ─── Profitable Wallet Discovery — Early Buyer Method ────────────────────────────────────────
 #
 # Strategy: work BACKWARDS from confirmed price moves.
 # If token X is up >20% vs 30 days ago, find wallets that bought large amounts
-# BEFORE the move (first 7 days of the window). Those wallets are proven smart money.
+# BEFORE the move (first 5 days of the window). Those wallets are proven smart money.
 # Track what they're buying TODAY as a copy-trade signal.
 
-# Tokens to scan for early buyers.
 SCANNABLE_TOKENS: Dict[str, str] = {
     "ONDO": ONDO_CONTRACT,
     "UNI":  "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984",
@@ -361,7 +360,6 @@ def discover_early_buyers(
 
         for tx in data.get("result", [])[:300]:
             buyer = tx.get("to", "").lower()
-
             if not buyer or buyer in _exchange_addrs():
                 continue
             if buyer.startswith("0x000000"):
@@ -483,7 +481,7 @@ def get_profitable_wallet_current_activity(
 
     return signals
 
-# ─── Known exchange deposit addresses (bearish signal) ───────────────────────────────
+# ─── Known exchange deposit addresses (bearish signal) ────────────────────────────────────────────
 
 EXCHANGE_HOT_WALLETS = {
     "ETH": {
@@ -509,18 +507,113 @@ def classify_transfer_direction(from_addr: str, to_addr: str, chain: str = "ETH"
         return "WITHDRAWAL_FROM_EXCHANGE"
     return "WALLET_TO_WALLET"
 
-# ─── Main aggregator ───────────────────────────────────────────────────────────────
+# ─── Macro Liquidity Regime Data ──────────────────────────────────────────────────────────────────
+
+def get_macro_data() -> Dict:
+    """
+    Fetch macro indicators for liquidity regime analysis.
+    Sources: stooq.com (yields, SPX) — free, no key.
+             Binance fapi — free, no key (BTC funding + OI as liquidation proxy).
+    All fetches are independent; failures return None and are noted.
+    """
+    result: Dict = {
+        "us_10y": None, "us_30y": None, "japan_30y": None,
+        "spx": None, "btc_funding_rate_pct": None, "btc_oi_usd_bn": None,
+    }
+
+    def _stooq(symbol: str):
+        try:
+            r = requests.get(f"https://stooq.com/q/d/l/?s={symbol}&i=d",
+                             timeout=12, headers={"User-Agent": "Mozilla/5.0"})
+            if r.status_code != 200:
+                return None
+            lines = [l for l in r.text.strip().splitlines() if l and not l.lower().startswith("date")]
+            if not lines:
+                return None
+            parts = lines[-1].split(",")
+            return float(parts[4]) if len(parts) >= 5 else None
+        except Exception:
+            return None
+
+    result["us_10y"]    = _stooq("10ustb.b")
+    result["us_30y"]    = _stooq("30ustb.b")
+    result["japan_30y"] = _stooq("30ygjb.b")
+    result["spx"]       = _stooq("^spx")
+
+    try:
+        r = requests.get("https://fapi.binance.com/fapi/v1/premiumIndex",
+                         params={"symbol": "BTCUSDT"}, timeout=10)
+        if r.status_code == 200:
+            result["btc_funding_rate_pct"] = round(float(r.json().get("lastFundingRate", 0)) * 100, 4)
+    except Exception:
+        pass
+
+    try:
+        r = requests.get("https://fapi.binance.com/fapi/v1/openInterest",
+                         params={"symbol": "BTCUSDT"}, timeout=10)
+        if r.status_code == 200:
+            oi_btc = float(r.json().get("openInterest", 0))
+            prices = get_prices()
+            btc_price = prices.get("BTC", 80000)
+            result["btc_oi_usd_bn"] = round(oi_btc * btc_price / 1e9, 2)
+    except Exception:
+        pass
+
+    if result["us_10y"] and result["us_30y"]:
+        spread = round(result["us_30y"] - result["us_10y"], 3)
+        result["us_curve_10_30_spread"] = spread
+        result["us_curve_status"] = (
+            "INVERTED" if spread < 0 else
+            "FLAT"     if spread < 0.3 else
+            "STEEP"
+        )
+
+    jgb = result["japan_30y"]
+    if jgb is not None:
+        result["japan_stress"] = (
+            "CRITICAL" if jgb > 2.8 else
+            "HIGH"     if jgb > 2.5 else
+            "ELEVATED" if jgb > 2.0 else
+            "NORMAL"
+        )
+
+    fr = result["btc_funding_rate_pct"]
+    if fr is not None:
+        result["btc_leverage_signal"] = (
+            "EXTREME_LONGS"  if fr >  0.05 else
+            "ELEVATED_LONGS" if fr >  0.02 else
+            "EXTREME_SHORTS" if fr < -0.02 else
+            "NEUTRAL"
+        )
+
+    print(f"[MacroData] US10Y:{result['us_10y']} US30Y:{result['us_30y']} "
+          f"JGB30Y:{result['japan_30y']} SPX:{result['spx']} "
+          f"BTC_FR:{result['btc_funding_rate_pct']}% OI:{result['btc_oi_usd_bn']}B")
+    return result
+
+
+# ─── Main aggregator ────────────────────────────────────────────────────────────────────────────
 
 def get_all_whale_data(etherscan_key: str = "",
                        existing_wallets: List[Dict] = None) -> Dict:
+    """
+    Aggregate all on-chain whale data into a structured dict for Claude.
+    Merges known wallets with any previously discovered profitable wallets.
+    """
     print("[WhaleTracker] Fetching on-chain data...")
+
+    try:
+        macro_data = get_macro_data()
+    except Exception as e:
+        print(f"[WhaleTracker] Macro data fetch failed: {e}")
+        macro_data = {}
 
     prices = get_prices()
 
-    btc_txs      = get_btc_large_transfers(min_usd=2_000_000)
-    eth_txs      = get_eth_large_transfers(etherscan_key, min_usd=1_000_000)
-    ondo_txs     = get_ondo_large_transfers(etherscan_key, min_usd=300_000)
-    xrp_txs      = get_xrp_large_transfers(min_usd=500_000)
+    btc_txs = get_btc_large_transfers(min_usd=2_000_000)
+    eth_txs = get_eth_large_transfers(etherscan_key, min_usd=1_000_000)
+    ondo_txs = get_ondo_large_transfers(etherscan_key, min_usd=300_000)
+    xrp_txs = get_xrp_large_transfers(min_usd=500_000)
     sol_activity = get_sol_large_transfers(min_usd=1_000_000)
 
     print(f"[WhaleTracker] BTC:{len(btc_txs)} ETH:{len(eth_txs)} "
@@ -570,24 +663,25 @@ def get_all_whale_data(etherscan_key: str = "",
 
     return {
         "timestamp": datetime.utcnow().isoformat(),
+        "macro": macro_data,
         "prices": prices,
         "large_transfers": {
-            "BTC":  btc_txs[:10],
-            "ETH":  eth_txs[:10],
+            "BTC": btc_txs[:10],
+            "ETH": eth_txs[:10],
             "ONDO": ondo_txs[:10],
-            "XRP":  xrp_txs[:10],
-            "SOL":  sol_activity[:10],
+            "XRP": xrp_txs[:10],
+            "SOL": sol_activity[:10],
         },
         "known_wallets": KNOWN_WALLETS,
         "profitable_wallets_discovered": tracked_wallets,
         "profitable_wallet_signals": profitable_signals,
         "summary": {
-            "btc_large_moves":               len(btc_txs),
-            "eth_large_moves":               len(eth_txs),
-            "ondo_large_moves":              len(ondo_txs),
-            "xrp_large_moves":               len(xrp_txs),
-            "sol_active_wallets":            len(sol_activity),
-            "profitable_wallets_tracked":    len(tracked_wallets),
+            "btc_large_moves": len(btc_txs),
+            "eth_large_moves": len(eth_txs),
+            "ondo_large_moves": len(ondo_txs),
+            "xrp_large_moves": len(xrp_txs),
+            "sol_active_wallets": len(sol_activity),
+            "profitable_wallets_tracked": len(tracked_wallets),
             "profitable_wallet_signals_today": len(profitable_signals),
         },
     }
