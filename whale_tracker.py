@@ -557,29 +557,46 @@ def get_macro_data() -> Dict:
     All fetches are independent; failures return None and are noted.
     """
     result: Dict = {
-        "us_10y": None, "us_30y": None, "japan_30y": None,
+        "us_10y": None, "us_30y": None,
+        "japan_10y": None, "japan_30y": None,
+        "usdjpy": None, "usdjpy_5d_ago": None,
         "spx": None, "btc_funding_rate_pct": None, "btc_oi_usd_bn": None,
     }
 
-    # stooq CSV: last non-header row, index 4 = Close
-    def _stooq(symbol: str):
+    # stooq CSV helper: returns (latest_close, [last_n_closes])
+    def _stooq(symbol: str, history: int = 1):
         try:
             r = requests.get(f"https://stooq.com/q/d/l/?s={symbol}&i=d",
                              timeout=12, headers={"User-Agent": "Mozilla/5.0"})
             if r.status_code != 200:
-                return None
-            lines = [l for l in r.text.strip().splitlines() if l and not l.lower().startswith("date")]
+                return (None, [])
+            lines = [l for l in r.text.strip().splitlines()
+                     if l and not l.lower().startswith("date")]
             if not lines:
-                return None
-            parts = lines[-1].split(",")
-            return float(parts[4]) if len(parts) >= 5 else None
+                return (None, [])
+            closes = []
+            for row in lines[-(history + 1):]:
+                parts = row.split(",")
+                if len(parts) >= 5:
+                    try:
+                        closes.append(float(parts[4]))
+                    except ValueError:
+                        pass
+            return (closes[-1] if closes else None, closes)
         except Exception:
-            return None
+            return (None, [])
 
-    result["us_10y"]    = _stooq("10ustb.b")
-    result["us_30y"]    = _stooq("30ustb.b")
-    result["japan_30y"] = _stooq("30ygjb.b")
-    result["spx"]       = _stooq("^spx")
+    result["us_10y"],  _    = _stooq("10ustb.b")
+    result["us_30y"],  _    = _stooq("30ustb.b")
+    result["japan_10y"], _  = _stooq("10ygjb.b")
+    result["japan_30y"], _  = _stooq("30ygjb.b")
+    result["spx"],     _    = _stooq("^spx")
+
+    # USDJPY — current rate + 5-day-ago close for weekly change calculation
+    usdjpy_now, usdjpy_hist = _stooq("usdjpy", history=8)
+    result["usdjpy"] = usdjpy_now
+    if len(usdjpy_hist) >= 6:
+        result["usdjpy_5d_ago"] = usdjpy_hist[-6]  # 5 trading days back
 
     # Binance USDT-M futures — BTC funding rate
     try:
@@ -621,6 +638,36 @@ def get_macro_data() -> Dict:
             "NORMAL"
         )
 
+    # Japan yield curve steepness (10Y–30Y spread): widening = BOJ losing control of long end
+    j10 = result["japan_10y"]
+    j30 = result["japan_30y"]
+    if j10 is not None and j30 is not None:
+        result["japan_curve_spread"] = round(j30 - j10, 3)
+
+    # Yen carry trade regime — USDJPY weekly change drives classification
+    usdjpy = result["usdjpy"]
+    usdjpy_5d = result["usdjpy_5d_ago"]
+    if usdjpy is not None:
+        carry_regime = "CARRY_STABLE"
+        usdjpy_weekly_chg_pct = None
+        if usdjpy_5d and usdjpy_5d > 0:
+            usdjpy_weekly_chg_pct = round((usdjpy - usdjpy_5d) / usdjpy_5d * 100, 2)
+            result["usdjpy_weekly_chg_pct"] = usdjpy_weekly_chg_pct
+            if usdjpy_weekly_chg_pct <= -3.0 or usdjpy < 140:
+                carry_regime = "CARRY_COLLAPSE"   # August-2024-style event
+            elif usdjpy_weekly_chg_pct <= -1.5 or usdjpy < 145:
+                carry_regime = "CARRY_UNWIND"     # active unwind in progress
+            elif usdjpy_weekly_chg_pct <= -0.8:
+                carry_regime = "CARRY_STRESS"     # early warning
+        elif usdjpy < 145:
+            carry_regime = "CARRY_UNWIND"
+        result["carry_regime"] = carry_regime
+
+        # Architecture shift flag: if USDJPY making lower-highs over prior readings
+        # stored in state, Claude evaluates the multi-run trend; here we just flag
+        # if we're meaningfully below the 155+ range that defined prior stable carry
+        result["carry_architecture_alert"] = usdjpy < 148 and carry_regime != "CARRY_STABLE"
+
     fr = result["btc_funding_rate_pct"]
     if fr is not None:
         result["btc_leverage_signal"] = (
@@ -631,8 +678,10 @@ def get_macro_data() -> Dict:
         )
 
     print(f"[MacroData] US10Y:{result['us_10y']} US30Y:{result['us_30y']} "
-          f"JGB30Y:{result['japan_30y']} SPX:{result['spx']} "
-          f"BTC_FR:{result['btc_funding_rate_pct']}% OI:{result['btc_oi_usd_bn']}B")
+          f"JGB10Y:{result['japan_10y']} JGB30Y:{result['japan_30y']} "
+          f"USDJPY:{result['usdjpy']} ({result.get('usdjpy_weekly_chg_pct','?')}%/wk) "
+          f"Carry:{result.get('carry_regime','?')} "
+          f"SPX:{result['spx']} BTC_FR:{result['btc_funding_rate_pct']}% OI:{result['btc_oi_usd_bn']}B")
     return result
 
 

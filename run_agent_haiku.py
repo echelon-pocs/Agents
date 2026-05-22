@@ -361,6 +361,11 @@ Instructions:
 - bias_short covers days-to-weeks setups (timeframe=SHORT_TERM).
 - bias_long covers months+ setups (timeframe=MEDIUM_TERM or LONG_TERM).
 - A setup whose direction conflicts with its matching bias gets conviction downgraded one level and flagged.
+- macro.carry_regime: CARRY_STABLE=no adjustment | CARRY_STRESS=add -0.1 to all risk longs | CARRY_UNWIND=bias_short BEARISH override, add -0.2 | CARRY_COLLAPSE=both biases BEARISH, -0.35, flag SYSTEMIC.
+- macro.carry_architecture_alert=true means USDJPY is below stable-carry range: add -0.1 to bias_long and note structural concern in email.
+- macro.japan_curve_spread narrowing run-over-run = BOJ losing long-end control; amplifies japan_stress signal.
+- Track macro.usdjpy across runs in macro_snapshot.usdjpy_history (list of last 4 weekly closes); flag if making lower-highs.
+- If carry_regime is CARRY_UNWIND or COLLAPSE and user holds a long position → always flag ⚠️ CARRY RISK regardless of P&L.
 
 Output EXACTLY this structure — nothing else.
 IMPORTANT FORMATTING RULES (mobile-first, max ~35 chars per line):
@@ -379,10 +384,20 @@ MACRO REGIME
 ------------------------------
 US 10Y: {{us_10y}}%  30Y: {{us_30y}}%
 Curve : {{curve_spread}}% ({{curve_status}})
-JGB30Y: {{japan_30y}}%  {{japan_stress_icon}}{{japan_stress}}
+JGB10Y: {{japan_10y}}%  30Y: {{japan_30y}}%
+JGB   : {{japan_stress_icon}}{{japan_stress}}
 SPX   : {{spx}}
 BTC OI: ${{btc_oi}}B  FR: {{btc_fr}}%
 Lev   : {{btc_lev_signal}}
+------------------------------
+YEN CARRY
+USDJPY: {{usdjpy}}  ({{usdjpy_weekly_chg}}%/wk)
+Regime: {{carry_regime_icon}}{{carry_regime}}
+[If carry_architecture_alert: write one sentence
+ on the structural trend — e.g.
+ "⚠️ CARRY ARCHITECTURE: USDJPY lower-highs
+ 3 runs. Carry range compressing. Bearish
+ weight added to medium-term longs."]
 ------------------------------
 SHORT bias: {{bias_short}}  (weeks)
 LONG  bias: {{bias_long}}   (months+)

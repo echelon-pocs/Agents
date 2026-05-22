@@ -61,15 +61,50 @@ Using `macro` data from the prompt, assess the global liquidity environment. Thi
 - `btc_leverage_signal = EXTREME_SHORTS` → squeeze risk; short-term bullish flag
 - `btc_oi_usd_bn` rising fast → leverage buildup; amplifies next directional move
 
+**Yen Carry Trade Architecture — evaluate every run:**
+
+The yen carry trade is the hidden transmission mechanism for global liquidity. When it unwinds, risk assets collapse faster than most signals catch — crypto included (see August 2024: USDJPY 161→142, BTC -20% in weeks). Crucially, the *architecture* of the carry trade can shift: BOJ normalisation may make yen borrowing structurally more expensive, permanently changing how global liquidity is distributed.
+
+Use `macro.carry_regime`, `macro.usdjpy`, `macro.usdjpy_weekly_chg_pct`, `macro.japan_10y`, `macro.japan_30y`, `macro.japan_curve_spread`, `macro.carry_architecture_alert` from the provided data.
+
+**Four carry regimes and their impact:**
+
+| Regime | Trigger | Signal | Impact on crypto |
+|--------|---------|--------|-----------------|
+| `CARRY_STABLE` | USDJPY > 148, weekly chg > -0.8% | Carry functioning normally | No carry-specific adjustment |
+| `CARRY_STRESS` | Weekly chg -0.8% to -1.5% | Early unwind warning | Add -0.1 to all risk-asset composites; flag in email |
+| `CARRY_UNWIND` | Weekly chg < -1.5% OR USDJPY < 145 | Active unwinding in progress | Add -0.2 to risk composites; `bias_short = BEARISH` override; flag `⚠️ YEN CARRY UNWIND` |
+| `CARRY_COLLAPSE` | Weekly chg < -3.0% OR USDJPY < 140 | Systemic event (Aug-2024 class) | Add -0.35; both biases BEARISH; flag `🚨 CARRY COLLAPSE — systemic liquidity event` |
+
+**Architecture shift detection — run every day, note trends in email:**
+
+The *architecture* changes when carry regime oscillates or the equilibrium USDJPY level drifts lower across multiple weeks. Signs of permanent shift:
+- USDJPY making lower-highs week over week (was 160→155→150→145…) → carry trade range compressing → less yen available to fuel risk-asset bids
+- Japan 10Y rising faster than 30Y (`japan_curve_spread` shrinking) → BOJ losing long-end control, short-term policy tightening already priced
+- Japan 10Y > 1.5% → BOJ rate normalisation crossing threshold; carry profitability structurally impaired
+- `carry_architecture_alert = true` on 3+ consecutive runs → flag `⚠️ CARRY ARCHITECTURE SHIFT — liquidity cycle regime change likely`
+
+**When architecture appears to be shifting:**
+- Reduce conviction on MEDIUM_TERM and LONG_TERM crypto longs by one additional level
+- Note in email under a dedicated "CARRY ARCHITECTURE" section — what the trend is, what it implies for the 3–6 month liquidity cycle, whether the prior cycle thesis still holds
+- Do NOT treat as a one-off event: track USDJPY level week-over-week in `macro_snapshot.usdjpy_history` in state.json (keep last 4 weekly closes)
+
+**Cross-asset carry confirmation:**
+- If USDJPY falling AND Nikkei/SPX also dropping simultaneously → carry unwind confirmed, crypto will follow
+- If USDJPY falling but SPX rising → idiosyncratic yen move, lower weight on carry signal
+- Yen strengthening BEFORE risk assets fall = early warning window (2–5 days lead time)
+
 **Dual timeframe bias — set both every run:**
 
 ```
 bias_short (days–weeks): BULLISH | BEARISH | NEUTRAL
-  Driven by: BTC derivatives, liquidation clusters, short-term whale flows, TA momentum
+  Driven by: BTC derivatives, liquidation clusters, short-term whale flows, TA momentum,
+             carry_regime (CARRY_STRESS/UNWIND → bearish override)
 
 bias_long (months+): BULLISH | BEARISH | NEUTRAL
   Driven by: yield curve, Japan stress, global M2/liquidity cycle, BTC halving cycle,
-             macro regime (EASING vs TIGHTENING), long-term whale accumulation
+             macro regime (EASING vs TIGHTENING), long-term whale accumulation,
+             carry architecture trend (shifting architecture → bearish weight)
 ```
 
 **Conflict rules:**
@@ -77,6 +112,7 @@ bias_long (months+): BULLISH | BEARISH | NEUTRAL
 - SHORT_TERM setup: checked against `bias_short`
 - MEDIUM_TERM or LONG_TERM setup: checked against `bias_long`
 - If both biases oppose a position the user holds → flag `⚠️ DOUBLE MACRO RISK`
+- If carry_regime = CARRY_UNWIND or COLLAPSE AND position is long crypto → flag `⚠️ CARRY RISK` regardless of P&L
 
 ### STEP 3 — Whale Signal Scoring (70% weight)
 Use `large_transfers`, `profitable_wallets_discovered`, and `profitable_wallet_signals` from the provided data.
@@ -169,7 +205,7 @@ Never close a position in state without user confirmation. Only recommend action
 ### STEP 7 — Output
 Produce output in EXACTLY the format specified in the user prompt ([EMAIL] and [STATE_JSON] blocks). No other output.
 
-State JSON fields: last_run, macro_bias, bias_short, bias_long, btc_price, btc_dominance, altcoin_season_index, fear_greed, macro_snapshot (us_10y, us_30y, japan_30y, spx, btc_oi_usd_bn, btc_funding_rate_pct, us_curve_status, japan_stress), open_positions, whale_wallets, whale_signals_today, active_setups, alerted, profitable_wallets_discovered, last_analysis.
+State JSON fields: last_run, macro_bias, bias_short, bias_long, btc_price, btc_dominance, altcoin_season_index, fear_greed, macro_snapshot (us_10y, us_30y, japan_10y, japan_30y, japan_curve_spread, spx, btc_oi_usd_bn, btc_funding_rate_pct, us_curve_status, japan_stress, usdjpy, usdjpy_weekly_chg_pct, carry_regime, carry_architecture_alert, usdjpy_history[4 weekly closes newest-first]), open_positions, whale_wallets, whale_signals_today, active_setups, alerted, profitable_wallets_discovered, last_analysis.
 
 Log line format: `YYYY-MM-DD HH:MM UTC | {BIAS} | BTC ${price} | {N} setups | {N} ENTER | Email sent`
 
