@@ -83,6 +83,7 @@ def slim_whale_data(data):
         if isinstance(s, dict)
     ]
     return {
+        "macro":              data.get("macro", {}),
         "prices":             data.get("prices", {}),
         "transfers":          transfers,
         "known_wallet_labels": known,
@@ -354,6 +355,12 @@ Instructions:
 - ALL open positions must appear in the email with P&L, stop status, and a specific action.
 - Positions with status=OPEN and conviction=UNKNOWN were opened outside analysis — run full whale+TA on them and adopt them into active_setups with real levels.
 - Flag any position with P&L < -10% or no stop_loss as high risk. Flag P&L < -15% as DANGER.
+- macro.japan_stress HIGH/CRITICAL = liquidity tightening risk, increase bearish weight on risk assets.
+- macro.us_curve_status INVERTED = recession signal, favour defensive bias_long = BEARISH.
+- macro.btc_leverage_signal EXTREME_LONGS = crowded, reversion risk; EXTREME_SHORTS = squeeze risk.
+- bias_short covers days-to-weeks setups (timeframe=SHORT_TERM).
+- bias_long covers months+ setups (timeframe=MEDIUM_TERM or LONG_TERM).
+- A setup whose direction conflicts with its matching bias gets conviction downgraded one level and flagged.
 
 Output EXACTLY this structure — nothing else.
 IMPORTANT FORMATTING RULES (mobile-first, max ~35 chars per line):
@@ -364,8 +371,21 @@ IMPORTANT FORMATTING RULES (mobile-first, max ~35 chars per line):
 
 [EMAIL]
 CRYPTO DAILY BRIEF
-{{DATE}} | {{MACRO_BIAS}}
+{{DATE}}
 BTC ${{price}} | Dom {{btc_dom}}% | F&G {{fear_greed}}
+------------------------------
+
+MACRO REGIME
+------------------------------
+US 10Y: {{us_10y}}%  30Y: {{us_30y}}%
+Curve : {{curve_spread}}% ({{curve_status}})
+JGB30Y: {{japan_30y}}%  {{japan_stress_icon}}{{japan_stress}}
+SPX   : {{spx}}
+BTC OI: ${{btc_oi}}B  FR: {{btc_fr}}%
+Lev   : {{btc_lev_signal}}
+------------------------------
+SHORT bias: {{bias_short}}  (weeks)
+LONG  bias: {{bias_long}}   (months+)
 ------------------------------
 
 OPEN POSITIONS

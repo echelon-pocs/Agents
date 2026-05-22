@@ -547,6 +547,95 @@ def classify_transfer_direction(from_addr: str, to_addr: str, chain: str = "ETH"
         return "WITHDRAWAL_FROM_EXCHANGE"  # bullish
     return "WALLET_TO_WALLET"
 
+# ─── Macro Liquidity Regime Data ─────────────────────────────────────────────
+
+def get_macro_data() -> Dict:
+    """
+    Fetch macro indicators for liquidity regime analysis.
+    Sources: stooq.com (yields, SPX) — free, no key.
+             Binance fapi — free, no key (BTC funding + OI as liquidation proxy).
+    All fetches are independent; failures return None and are noted.
+    """
+    result: Dict = {
+        "us_10y": None, "us_30y": None, "japan_30y": None,
+        "spx": None, "btc_funding_rate_pct": None, "btc_oi_usd_bn": None,
+    }
+
+    # stooq CSV: last non-header row, index 4 = Close
+    def _stooq(symbol: str):
+        try:
+            r = requests.get(f"https://stooq.com/q/d/l/?s={symbol}&i=d",
+                             timeout=12, headers={"User-Agent": "Mozilla/5.0"})
+            if r.status_code != 200:
+                return None
+            lines = [l for l in r.text.strip().splitlines() if l and not l.lower().startswith("date")]
+            if not lines:
+                return None
+            parts = lines[-1].split(",")
+            return float(parts[4]) if len(parts) >= 5 else None
+        except Exception:
+            return None
+
+    result["us_10y"]    = _stooq("10ustb.b")
+    result["us_30y"]    = _stooq("30ustb.b")
+    result["japan_30y"] = _stooq("30ygjb.b")
+    result["spx"]       = _stooq("^spx")
+
+    # Binance USDT-M futures — BTC funding rate
+    try:
+        r = requests.get("https://fapi.binance.com/fapi/v1/premiumIndex",
+                         params={"symbol": "BTCUSDT"}, timeout=10)
+        if r.status_code == 200:
+            result["btc_funding_rate_pct"] = round(float(r.json().get("lastFundingRate", 0)) * 100, 4)
+    except Exception:
+        pass
+
+    # Binance — BTC open interest (proxy for leverage buildup / liquidation risk)
+    try:
+        r = requests.get("https://fapi.binance.com/fapi/v1/openInterest",
+                         params={"symbol": "BTCUSDT"}, timeout=10)
+        if r.status_code == 200:
+            oi_btc = float(r.json().get("openInterest", 0))
+            prices = get_prices()
+            btc_price = prices.get("BTC", 80000)
+            result["btc_oi_usd_bn"] = round(oi_btc * btc_price / 1e9, 2)
+    except Exception:
+        pass
+
+    # Derived signals
+    if result["us_10y"] and result["us_30y"]:
+        spread = round(result["us_30y"] - result["us_10y"], 3)
+        result["us_curve_10_30_spread"] = spread
+        result["us_curve_status"] = (
+            "INVERTED" if spread < 0 else
+            "FLAT"     if spread < 0.3 else
+            "STEEP"
+        )
+
+    jgb = result["japan_30y"]
+    if jgb is not None:
+        result["japan_stress"] = (
+            "CRITICAL" if jgb > 2.8 else
+            "HIGH"     if jgb > 2.5 else
+            "ELEVATED" if jgb > 2.0 else
+            "NORMAL"
+        )
+
+    fr = result["btc_funding_rate_pct"]
+    if fr is not None:
+        result["btc_leverage_signal"] = (
+            "EXTREME_LONGS"  if fr >  0.05 else
+            "ELEVATED_LONGS" if fr >  0.02 else
+            "EXTREME_SHORTS" if fr < -0.02 else
+            "NEUTRAL"
+        )
+
+    print(f"[MacroData] US10Y:{result['us_10y']} US30Y:{result['us_30y']} "
+          f"JGB30Y:{result['japan_30y']} SPX:{result['spx']} "
+          f"BTC_FR:{result['btc_funding_rate_pct']}% OI:{result['btc_oi_usd_bn']}B")
+    return result
+
+
 # ─── Main aggregator ─────────────────────────────────────────────────────────
 
 def get_all_whale_data(etherscan_key: str = "",
@@ -556,6 +645,13 @@ def get_all_whale_data(etherscan_key: str = "",
     Merges known wallets with any previously discovered profitable wallets.
     """
     print("[WhaleTracker] Fetching on-chain data...")
+
+    # Macro liquidity regime data (yields, SPX, BTC derivatives)
+    try:
+        macro_data = get_macro_data()
+    except Exception as e:
+        print(f"[WhaleTracker] Macro data fetch failed: {e}")
+        macro_data = {}
 
     prices = get_prices()
 
@@ -617,6 +713,7 @@ def get_all_whale_data(etherscan_key: str = "",
 
     return {
         "timestamp": datetime.utcnow().isoformat(),
+        "macro": macro_data,
         "prices": prices,
         "large_transfers": {
             "BTC": btc_txs[:10],

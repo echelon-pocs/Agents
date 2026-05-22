@@ -41,6 +41,43 @@ From the whale data provided, assess:
 - BIFURCATED = BTC strong, alts weak (BTC dom >60%)
 - Dom >60% → avoid alt longs. Dom <50% → alts viable.
 
+### STEP 2b — Macro Liquidity Regime
+
+Using `macro` data from the prompt, assess the global liquidity environment. This overrides or amplifies whale/TA signals.
+
+**Yield curve (US):**
+- `us_curve_status = INVERTED` → credit stress building, recession risk → add -0.15 to long-term composite for risk assets
+- `us_30y > 5.0%` → funding cost pressure on leveraged players → mild bearish
+- `us_30y > 5.5%` → systemic stress territory → strong bearish long-term
+
+**Japan liquidity (JGB 30Y):**
+- `japan_stress = NORMAL` (< 2.0%) → no stress
+- `japan_stress = ELEVATED` (2.0–2.5%) → monitor; carry trade unwind risk
+- `japan_stress = HIGH` (2.5–2.8%) → ⚠️ tightening signal; global liquidity shrinking; add -0.1 to risk-asset longs
+- `japan_stress = CRITICAL` (> 2.8%) → 🚨 systemic; major carry unwind likely; add -0.25 to all risk-asset longs
+
+**BTC derivatives:**
+- `btc_leverage_signal = EXTREME_LONGS` → crowded long trade; reversion risk; short-term bearish flag
+- `btc_leverage_signal = EXTREME_SHORTS` → squeeze risk; short-term bullish flag
+- `btc_oi_usd_bn` rising fast → leverage buildup; amplifies next directional move
+
+**Dual timeframe bias — set both every run:**
+
+```
+bias_short (days–weeks): BULLISH | BEARISH | NEUTRAL
+  Driven by: BTC derivatives, liquidation clusters, short-term whale flows, TA momentum
+
+bias_long (months+): BULLISH | BEARISH | NEUTRAL
+  Driven by: yield curve, Japan stress, global M2/liquidity cycle, BTC halving cycle,
+             macro regime (EASING vs TIGHTENING), long-term whale accumulation
+```
+
+**Conflict rules:**
+- Setup direction conflicts with its matching bias → downgrade conviction one level + flag `⚠️ MACRO CONFLICT`
+- SHORT_TERM setup: checked against `bias_short`
+- MEDIUM_TERM or LONG_TERM setup: checked against `bias_long`
+- If both biases oppose a position the user holds → flag `⚠️ DOUBLE MACRO RISK`
+
 ### STEP 3 — Whale Signal Scoring (70% weight)
 Use `large_transfers`, `profitable_wallets_discovered`, and `profitable_wallet_signals` from the provided data.
 
@@ -132,7 +169,7 @@ Never close a position in state without user confirmation. Only recommend action
 ### STEP 7 — Output
 Produce output in EXACTLY the format specified in the user prompt ([EMAIL] and [STATE_JSON] blocks). No other output.
 
-State JSON fields: last_run, macro_bias, btc_price, btc_dominance, altcoin_season_index, fear_greed, open_positions, whale_wallets, whale_signals_today, active_setups, alerted, profitable_wallets_discovered, last_analysis.
+State JSON fields: last_run, macro_bias, bias_short, bias_long, btc_price, btc_dominance, altcoin_season_index, fear_greed, macro_snapshot (us_10y, us_30y, japan_30y, spx, btc_oi_usd_bn, btc_funding_rate_pct, us_curve_status, japan_stress), open_positions, whale_wallets, whale_signals_today, active_setups, alerted, profitable_wallets_discovered, last_analysis.
 
 Log line format: `YYYY-MM-DD HH:MM UTC | {BIAS} | BTC ${price} | {N} setups | {N} ENTER | Email sent`
 
