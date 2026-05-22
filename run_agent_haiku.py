@@ -393,14 +393,38 @@ Lev   : {{btc_lev_signal}}
 YEN CARRY
 USDJPY: {{usdjpy}}  ({{usdjpy_weekly_chg}}%/wk)
 Regime: {{carry_regime_icon}}{{carry_regime}}
-[If carry_architecture_alert: write one sentence
- on the structural trend — e.g.
- "⚠️ CARRY ARCHITECTURE: USDJPY lower-highs
- 3 runs. Carry range compressing. Bearish
- weight added to medium-term longs."]
 ------------------------------
 SHORT bias: {{bias_short}}  (weeks)
 LONG  bias: {{bias_long}}   (months+)
+------------------------------
+
+LIQUIDITY ANALYSIS
+------------------------------
+[Write 4–6 short bullet points — one per signal.
+ Each bullet = what the data shows + what it means
+ for crypto right now. Be specific. No filler.
+ Cover ALL of the following that have non-neutral readings:
+ - US yield curve: inverted/flat/steep → implication
+ - US 30Y level: above/below 5% → leverage cost impact
+ - JGB 30Y stress level → global liquidity implication
+ - JGB curve spread trend → BOJ control signal
+ - Yen carry regime → composite score adjustment applied
+ - Carry architecture alert → structural shift note if active
+ - BTC leverage signal → crowding or squeeze risk
+ - How signals combined to set bias_short and bias_long
+ Example bullets:
+ • US curve STEEP (+0.49%): no recession signal,
+   long-term liquidity supportive.
+ • JGB30Y 2.61% — HIGH stress: BOJ tightening
+   risk; -0.1 applied to all risk-asset longs.
+ • USDJPY -1.2%/wk — CARRY_STRESS: early unwind
+   warning; bias_short weighted bearish.
+ • BTC OI $18B rising, FR neutral: leverage
+   building but no crowding signal yet.
+ • bias_short BEARISH: carry stress + BTC TA
+   momentum weaker than support.
+ • bias_long BULLISH: halving cycle intact,
+   JGB stress not yet CRITICAL.]
 ------------------------------
 
 OPEN POSITIONS
