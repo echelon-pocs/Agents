@@ -346,7 +346,7 @@ def run():
 ═══ CURRENT STATE (from last run) ═══
 {json.dumps(state, separators=(',', ':'), default=str)}
 {tg_section}
-Instructions:
+Analysis instructions:
 - Use the real on-chain data above for Steps 3 (whale signals) and 4 (prices).
 - large_transfers shows actual large moves today — classify as bullish/bearish via direction field.
 - profitable_wallets_discovered are real wallets with >20% avg profit — treat as high-weight signals.
@@ -367,126 +367,114 @@ Instructions:
 - Track macro.usdjpy across runs in macro_snapshot.usdjpy_history (list of last 4 weekly closes); flag if making lower-highs.
 - If carry_regime is CARRY_UNWIND or COLLAPSE and user holds a long position → always flag ⚠️ CARRY RISK regardless of P&L.
 
-Output EXACTLY this structure — nothing else.
-IMPORTANT FORMATTING RULES (mobile-first, max ~35 chars per line):
-- NO wide tables. Use card blocks — one entry per card, fields stacked vertically.
-- Separator lines use plain dashes, max 30 chars: ------------------------------
-- Every field on its own line with a short label.
-- Numbers: use $ and commas. Percentages: +4.9% not 0.049.
+═══ EMAIL FORMAT — MANDATORY RULES ═══
+VIOLATION OF ANY RULE BELOW = WRONG OUTPUT.
+
+1. SECTIONS ARE FIXED. Copy the exact section names below, in this exact order.
+   Never rename, merge, skip, or add sections.
+
+2. NO MARKDOWN. No **, no *, no ##, no _underscores_. Plain text only.
+   Section headers are written as-is (e.g. "MACRO REGIME", not "**MACRO REGIME**").
+
+3. EVERY SECTION IS REQUIRED IN EVERY EMAIL.
+   If a value is unavailable write N/A — never omit the section.
+
+4. MACRO REGIME card: fill every field with real values from macro data.
+   If a fetch failed, write "N/A (fetch failed)". Never skip the card.
+
+5. LIQUIDITY ANALYSIS: always write 4-6 bullet points explaining what each
+   macro signal means for crypto. This section is NOT optional.
+   If macro data is all N/A, write what is known from prior state and BTC price action.
+
+6. OPEN POSITIONS: every entry in open_positions MUST appear as a card.
+   No exceptions. If none: write exactly "None confirmed."
+
+7. Max ~35 characters per line (mobile screen). No wide lines.
+
 
 [EMAIL]
 CRYPTO DAILY BRIEF
-{{DATE}}
-BTC ${{price}} | Dom {{btc_dom}}% | F&G {{fear_greed}}
+<DATE> | <MACRO_BIAS>
+BTC $<price> | Dom <btc_dom>% | F&G <fear_greed>
 ------------------------------
 
 MACRO REGIME
 ------------------------------
-US 10Y: {{us_10y}}%  30Y: {{us_30y}}%
-Curve : {{curve_spread}}% ({{curve_status}})
-JGB10Y: {{japan_10y}}%  30Y: {{japan_30y}}%
-JGB   : {{japan_stress_icon}}{{japan_stress}}
-SPX   : {{spx}}
-BTC OI: ${{btc_oi}}B  FR: {{btc_fr}}%
-Lev   : {{btc_lev_signal}}
+US 10Y: <us_10y>%   30Y: <us_30y>%
+Curve : <curve_spread>% (<curve_status>)
+JGB10Y: <japan_10y>%  30Y: <japan_30y>%
+JGB   : <japan_stress>
+SPX   : <spx>
+BTC OI: $<btc_oi>B  FR: <btc_fr>%
+Lev   : <btc_lev_signal>
 ------------------------------
 YEN CARRY
-USDJPY: {{usdjpy}}  ({{usdjpy_weekly_chg}}%/wk)
-Regime: {{carry_regime_icon}}{{carry_regime}}
+USDJPY: <usdjpy>  (<usdjpy_weekly_chg>%/wk)
+Regime: <carry_regime>
+<If carry_architecture_alert is true, add one
+ line here, e.g.:
+ "Arch: lower-highs 3 runs — range compress">
 ------------------------------
-SHORT bias: {{bias_short}}  (weeks)
-LONG  bias: {{bias_long}}   (months+)
+SHORT bias: <bias_short>  (weeks)
+LONG  bias: <bias_long>   (months+)
 ------------------------------
 
 LIQUIDITY ANALYSIS
 ------------------------------
-[Write 4–6 short bullet points — one per signal.
- Each bullet = what the data shows + what it means
- for crypto right now. Be specific. No filler.
- Cover ALL of the following that have non-neutral readings:
- - US yield curve: inverted/flat/steep → implication
- - US 30Y level: above/below 5% → leverage cost impact
- - JGB 30Y stress level → global liquidity implication
- - JGB curve spread trend → BOJ control signal
- - Yen carry regime → composite score adjustment applied
- - Carry architecture alert → structural shift note if active
- - BTC leverage signal → crowding or squeeze risk
- - How signals combined to set bias_short and bias_long
- Example bullets:
- • US curve STEEP (+0.49%): no recession signal,
-   long-term liquidity supportive.
- • JGB30Y 2.61% — HIGH stress: BOJ tightening
-   risk; -0.1 applied to all risk-asset longs.
- • USDJPY -1.2%/wk — CARRY_STRESS: early unwind
-   warning; bias_short weighted bearish.
- • BTC OI $18B rising, FR neutral: leverage
-   building but no crowding signal yet.
- • bias_short BEARISH: carry stress + BTC TA
-   momentum weaker than support.
- • bias_long BULLISH: halving cycle intact,
-   JGB stress not yet CRITICAL.]
+<REQUIRED — write exactly 4 to 6 bullet points.
+ Each bullet must name the signal and state its
+ crypto impact. Cover in this order (skip only
+ if value is truly N/A):
+ 1. US yield curve level/status
+ 2. US 30Y vs 5% threshold
+ 3. JGB 30Y stress level
+ 4. Yen carry regime + adjustment applied
+ 5. BTC OI trend and leverage signal
+ 6. How 1-5 combined to produce bias_short/long>
+• <bullet 1>
+• <bullet 2>
+• <bullet 3>
+• <bullet 4>
+• <bullet 5>
+• <bullet 6 if needed>
 ------------------------------
 
 OPEN POSITIONS
 ------------------------------
-[If none: write "None confirmed."]
-[One card per position. Include ALL open positions,
- even those opened outside active setups.
- Use danger icons when conditions apply:]
-
-ETH SHORT (futures)
-  Entry : $2,650
-  Now   : $2,520  P&L: +4.9%
-  Stop  : $2,820
-  Action: Trail stop to $2,600
+<If open_positions is empty: write "None confirmed.">
+<One card per position — NO EXCEPTIONS.
+ Normal:>
+<SYM> <DIRECTION> (<market_type>)
+  Entry : $<entry_price>
+  Now   : $<current>  P&L: <pnl>%
+  Stop  : $<stop_loss>
+  Action: <action>
 ------------------------------
-
-[Danger example — use when P&L < -10% or stop missing:]
-⚠️ BTC LONG (futures)
-  Entry : $95,000
-  Now   : $84,000  P&L: -11.6%
-  Stop  : NONE SET
-  Action: Set stop at $82,000 immediately
-------------------------------
-
-[Critical example — use when P&L < -15%:]
-🚨 SOL SHORT (futures)
-  Entry : $140
-  Now   : $165  P&L: -17.9%
-  Stop  : $155 (BREACHED)
-  Action: EXIT NOW — stop breached, cut loss
-------------------------------
+<P&L < -10% or stop missing — prefix with ⚠️>
+<P&L < -15% or stop breached — prefix with 🚨>
 
 ACTIONABLE SETUPS
 ------------------------------
-[ENTER and APPROACHING only. One card each:]
-
-🔴 BTC LONG — HIGH
+<ENTER and APPROACHING setups only.
+ If none: write "No setups actionable today."
+ One card per setup:>
+🔴 <SYM> <DIR> — <CONVICTION>
   Status: ENTER
-  Zone  : $76,000–$79,000
-  Stop  : $73,000
-  T1    : $88,000  T2: $96,000
-  R/R   : 2.3x | Whale: STRONG BULL
-------------------------------
-
-🟡 SUI LONG — MEDIUM
-  Status: APPROACHING
-  Zone  : $1.05–$1.15
-  Stop  : $0.95
-  T1    : $1.60  T2: $2.20
-  R/R   : 3.3x | Whale: MILD BULL
+  Zone  : $<low>–$<high>
+  Stop  : $<stop>
+  T1    : $<t1>  T2: $<t2>
+  R/R   : <ratio>x | Whale: <whale_signal>
 ------------------------------
 
 WAITING (monitor only)
 ------------------------------
-[One line each: SYM DIR — 5-word reason]
-BTC LONG — pullback to zone needed
-ETH SHORT — price below entry zone
+<One line each: SYM DIR — reason in <7 words>
+ If none: write "None.">
 
 CHANGES TODAY
 ------------------------------
-[Bullet per change: NEW / ENTER / INVALIDATED / REVISED]
-- NEW: HYPE LONG — whale accumulation signal
+<One bullet per change. Tags: NEW / ENTER /
+ INVALIDATED / REVISED / ADOPTED / COMPLETED>
 [/EMAIL]
 
 [STATE_JSON]
