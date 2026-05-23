@@ -54,15 +54,12 @@ def _slim_transfer(tx):
 
 def slim_whale_data(data):
     transfers = {
-        chain: [_slim_transfer(tx) for tx in txs]
+        chain: [_slim_transfer(tx) for tx in txs[:5]]   # top 5 not 10
         for chain, txs in data.get("large_transfers", {}).items()
     }
-    known = {
-        chain: list(wallets.keys())
-        for chain, wallets in data.get("known_wallets", {}).items()
-    }
+    # Drop known_wallet_labels entirely — Claude doesn't use them
     profitable = []
-    for w in data.get("profitable_wallets_discovered", [])[:8]:
+    for w in data.get("profitable_wallets_discovered", [])[:3]:   # top 3 not 8
         if not isinstance(w, dict):
             continue
         addr = w.get("address", "")
@@ -83,9 +80,11 @@ def slim_whale_data(data):
         if isinstance(s, dict)
     ]
     return {
+        "macro":              data.get("macro", {}),
+        "market_globals":     data.get("market_globals", {}),
+        "cycle_metrics":      data.get("cycle_metrics", {}),
         "prices":             data.get("prices", {}),
         "transfers":          transfers,
-        "known_wallet_labels": known,
         "profitable_wallets": profitable,
         "profitable_signals": signals,
         "summary":            data.get("summary", {}),
@@ -156,10 +155,34 @@ def apply_pending_updates(state):
                 "target_1":    setup.get("target_1"),
                 "target_2":    setup.get("target_2"),
                 "size_usd":    size_usd,
+                "tf":          u.get("tf") or setup.get("timeframe") or "UNKNOWN",
                 "pnl_pct":     None,
                 "notes":       "User confirmed via Telegram.",
             }
             log.append(f"ENTERED {direction} {symbol} ({market_type}) @ ${price:,}")
+
+            # If no active setup exists for this symbol, create a placeholder so
+            # Claude analyses it on the next run and fills in targets/stop/whale score.
+            if symbol not in setups:
+                setups[symbol] = {
+                    "symbol":          symbol,
+                    "direction":       direction,
+                    "market_type":     market_type,
+                    "conviction":      "UNKNOWN",
+                    "entry_zone":      [price, price],
+                    "stop_loss":       None,
+                    "tp1":             None,
+                    "tp2":             None,
+                    "tp3":             None,
+                    "r_r_ratio":       None,
+                    "status":          "OPEN",
+                    "whale_signal":    "UNKNOWN",
+                    "composite_score": 0,
+                    "rationale":       f"Opened via Telegram at ${price:,}. No prior setup — agent will analyse on next run.",
+                    "timeframe":       "UNKNOWN",
+                    "added":           u.get("timestamp", "")[:10],
+                }
+                log.append(f"AUTO-SETUP created for {symbol} (no prior setup found)")
 
         elif action == "CLOSE":
             # Build candidate keys: direction-specific first, then symbol-only fallback
@@ -198,6 +221,7 @@ def apply_pending_updates(state):
                 log.append(f"NOTE added to {note_key}: {u.get('note', '')}")
 
     state["open_positions"] = list(positions.values())
+    state["active_setups"]  = list(setups.values())
     try:
         pending_path.write_text("[]")
     except Exception as e:
@@ -251,6 +275,209 @@ def extract_macro_bias(text):
         if bias in text:
             return bias
     return "NEUTRAL"
+
+
+def compute_position_analytics(positions, prices):
+    """Pre-compute P&L, flags, and stop distances. Python is authoritative."""
+    analytics = {}
+    for pos in positions:
+        sym       = pos.get("symbol", "")
+        direction = pos.get("direction", "LONG")
+        entry     = pos.get("entry_price")
+        stop      = pos.get("stop_loss")
+        t1        = pos.get("target_1")
+        key       = f"{sym}_{direction}"
+        current   = prices.get(sym)
+
+        pnl = None
+        if entry and current:
+            pnl = (entry - current if direction == "SHORT" else current - entry) / entry * 100
+
+        flags = []
+        if pnl is not None:
+            if pnl < -15:    flags.append("DANGER_LOSS")
+            elif pnl < -10:  flags.append("HIGH_RISK_LOSS")
+            elif pnl < -5:   flags.append("DRAWDOWN")
+            if pnl > 20:     flags.append("TRAIL_10PCT")
+            elif pnl > 10:   flags.append("TRAIL_5PCT")
+            elif pnl > 5:    flags.append("TRAIL_BREAKEVEN")
+        if stop is None:
+            flags.append("NO_STOP_SET")
+        elif current and stop:
+            stop_dist_pct = abs(current - stop) / current * 100
+            if stop_dist_pct < 2:
+                flags.append("STOP_CLOSE")
+        if t1 and current:
+            if (direction == "LONG"  and current >= t1 * 0.97) or \
+               (direction == "SHORT" and current <= t1 * 1.03):
+                flags.append("T1_APPROACHING")
+
+        analytics[key] = {
+            "current_price": current,
+            "pnl_pct":       round(pnl, 2) if pnl is not None else None,
+            "flags":         flags,
+        }
+    return analytics
+
+
+def compute_setup_statuses(setups, prices):
+    """Pre-compute ENTER/APPROACHING/WAITING/INVALIDATED for each setup."""
+    statuses = {}
+    for setup in setups:
+        sym       = setup.get("symbol", "")
+        direction = setup.get("direction", "LONG")
+        zone      = setup.get("entry_zone", [])
+        stop      = setup.get("stop_loss")
+        current   = prices.get(sym)
+
+        if not current or not zone or len(zone) < 2:
+            statuses[sym] = "WAITING"
+            continue
+
+        z_low, z_high = zone[0], zone[1]
+
+        # Stop breach → invalidated
+        if stop:
+            if direction == "LONG"  and current < stop: statuses[sym] = "INVALIDATED"; continue
+            if direction == "SHORT" and current > stop: statuses[sym] = "INVALIDATED"; continue
+
+        if z_low <= current <= z_high:
+            statuses[sym] = "ENTER"
+        elif direction == "LONG":
+            statuses[sym] = "APPROACHING" if current >= z_low * 0.97 else "WAITING"
+        else:
+            statuses[sym] = "APPROACHING" if current <= z_high * 1.03 else "WAITING"
+
+    return statuses
+
+
+def _update_usdjpy_history(history, current_usdjpy):
+    """Keep last 4 weekly closes for carry architecture trend detection."""
+    if not isinstance(history, list):
+        history = []
+    if current_usdjpy is not None:
+        history = (history + [current_usdjpy])[-4:]
+    return history
+
+
+def merge_state_delta(prior_state, delta, macro_data, prices, profitable_wallets):
+    """
+    Claude outputs only analysis fields (delta). Python owns:
+      last_run, btc_price, macro_snapshot, profitable_wallets_discovered, usdjpy_history.
+    """
+    if not isinstance(delta, dict):
+        return prior_state
+
+    new_state = dict(prior_state)
+
+    # Python-managed
+    new_state["last_run"]  = datetime.utcnow().isoformat()
+    new_state["btc_price"] = prices.get("BTC") or prior_state.get("btc_price")
+    new_state["profitable_wallets_discovered"] = profitable_wallets
+    new_state["macro_snapshot"] = {
+        "us_10y":                 macro_data.get("us_10y"),
+        "us_30y":                 macro_data.get("us_30y"),
+        "japan_10y":              macro_data.get("japan_10y"),
+        "japan_30y":              macro_data.get("japan_30y"),
+        "japan_curve_spread":     macro_data.get("japan_curve_spread"),
+        "spx":                    macro_data.get("spx"),
+        "btc_oi_usd_bn":          macro_data.get("btc_oi_usd_bn"),
+        "btc_funding_rate_pct":   macro_data.get("btc_funding_rate_pct"),
+        "us_curve_status":        macro_data.get("us_curve_status"),
+        "japan_stress":           macro_data.get("japan_stress"),
+        "usdjpy":                 macro_data.get("usdjpy"),
+        "usdjpy_weekly_chg_pct":  macro_data.get("usdjpy_weekly_chg_pct"),
+        "carry_regime":           macro_data.get("carry_regime"),
+        "carry_architecture_alert": macro_data.get("carry_architecture_alert"),
+        "usdjpy_history": _update_usdjpy_history(
+            prior_state.get("macro_snapshot", {}).get("usdjpy_history", []),
+            macro_data.get("usdjpy"),
+        ),
+    }
+
+    # Claude-managed fields
+    for field in (
+        "macro_bias", "bias_short", "bias_long",
+        "cycle_phase", "cycle_year", "cycle_thesis", "cycle_bias_impact",
+        "btc_dominance", "altcoin_season_index", "fear_greed",
+        "active_setups", "open_positions", "alerted",
+        "whale_signals_today", "last_analysis",
+    ):
+        if field in delta:
+            new_state[field] = delta[field]
+
+    return sanitize_state(new_state)
+
+
+def extract_state_delta(text):
+    """Extract JSON from [STATE_DELTA]...[/STATE_DELTA] block."""
+    start = text.find("[STATE_DELTA]")
+    end   = text.find("[/STATE_DELTA]")
+    if start == -1 or end == -1:
+        return {}
+    delta_text = text[start + 13:end]
+    depth, json_start = 0, None
+    for i, ch in enumerate(delta_text):
+        if ch == "{":
+            if depth == 0: json_start = i
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0 and json_start is not None:
+                try:
+                    return json.loads(delta_text[json_start:i + 1])
+                except json.JSONDecodeError:
+                    json_start = None
+    return {}
+
+
+def log_setup_snapshot(state: dict, run_date: str) -> None:
+    """Append each active setup to setups_history.jsonl for monthly hit-rate analysis."""
+    path = BASE_DIR / "setups_history.jsonl"
+    btc_price = state.get("btc_price")
+    for setup in state.get("active_setups", []):
+        record = {
+            "date":            run_date,
+            "symbol":          setup.get("symbol"),
+            "direction":       setup.get("direction"),
+            "status":          setup.get("status"),
+            "conviction":      setup.get("conviction"),
+            "composite_score": setup.get("composite_score"),
+            "entry_zone":      setup.get("entry_zone"),
+            "stop_loss":       setup.get("stop_loss"),
+            "target_1":        setup.get("target_1"),
+            "target_2":        setup.get("target_2"),
+            "r_r_ratio":       setup.get("r_r_ratio"),
+            "timeframe":       setup.get("timeframe"),
+            "btc_price_at_log": btc_price,
+        }
+        with open(path, "a") as f:
+            f.write(json.dumps(record) + "\n")
+
+
+_FOMC_DATES = [
+    # 2026
+    datetime(2026, 1, 28), datetime(2026, 3, 18), datetime(2026, 4, 29),
+    datetime(2026, 6, 10), datetime(2026, 7, 29), datetime(2026, 9, 16),
+    datetime(2026, 10, 28), datetime(2026, 12, 9),
+    # 2027
+    datetime(2027, 1, 27), datetime(2027, 3, 17), datetime(2027, 4, 28),
+    datetime(2027, 6, 9),  datetime(2027, 7, 28), datetime(2027, 9, 15),
+    datetime(2027, 10, 27), datetime(2027, 12, 8),
+]
+
+def get_fomc_context() -> dict:
+    now = datetime.utcnow()
+    future = [d for d in _FOMC_DATES if d >= now]
+    if not future:
+        return {"days_to_fomc": None, "next_fomc": None, "pre_fomc_window": False}
+    nxt = future[0]
+    days = (nxt - now).days
+    return {
+        "days_to_fomc":    days,
+        "next_fomc":       nxt.strftime("%Y-%m-%d"),
+        "pre_fomc_window": days <= 3,
+    }
 
 
 def count_enter_setups(state):
@@ -307,65 +534,314 @@ def run():
     system_prompt = load_instructions()
     whale_slim    = slim_whale_data(whale_data)
 
+    # Pre-compute authoritative analytics before building the prompt
+    fomc = get_fomc_context()
+    pre_computed = {
+        "position_analytics": compute_position_analytics(
+            state.get("open_positions", []),
+            whale_slim.get("prices", {}),
+        ),
+        "setup_statuses": compute_setup_statuses(
+            state.get("active_setups", []),
+            whale_slim.get("prices", {}),
+        ),
+        "cycle_metrics":    whale_slim.get("cycle_metrics", {}),
+        "market_globals":   whale_slim.get("market_globals", {}),
+        "fomc":             fomc,
+    }
+
     tg_section = (
         f"\n═══ POSITION UPDATES (received via Telegram before this run) ═══\n"
         + "\n".join(f"- {l}" for l in tg_log)
         if tg_log else ""
     )
 
-    user_prompt = f"""Today is {datetime.utcnow().strftime('%Y-%m-%d')}.
+    today_str = datetime.utcnow().strftime('%Y-%m-%d')
+
+    # ── Build data-driven prefill ─────────────────────────────────────
+    # MACRO REGIME and YEN CARRY are pre-filled from Python using the
+    # freshly-fetched macro data. This makes it physically impossible for
+    # Claude to skip those sections — they're already in the response before
+    # Claude writes its first token. Claude only needs to fill analysis
+    # sections (biases, cycle view, liquidity bullets, positions, setups).
+
+    macro = whale_slim.get("macro", {})
+    prices = whale_slim.get("prices", {})
+
+    def _fv(v, suffix="", na="N/A"):
+        return f"{v}{suffix}" if v is not None else na
+
+    us_10y_raw  = macro.get("us_10y")
+    us_30y_raw  = macro.get("us_30y")
+    j_10y_raw   = macro.get("japan_10y")
+    j_30y_raw   = macro.get("japan_30y")
+
+    us_spread_v = (
+        f"{(us_30y_raw - us_10y_raw):.2f}%"
+        if us_10y_raw is not None and us_30y_raw is not None else "N/A"
+    )
+    j_spread_v  = _fv(macro.get("japan_curve_spread"), "%")
+
+    us_10y_v    = _fv(us_10y_raw, "%")
+    us_30y_v    = _fv(us_30y_raw, "%")
+    j_10y_v     = _fv(j_10y_raw,  "%")
+    j_30y_v     = _fv(j_30y_raw,  "%")
+    us_status_v = macro.get("us_curve_status")   or "N/A"
+    j_stress_v  = macro.get("japan_stress")      or "N/A"
+    spx_v       = _fv(macro.get("spx"))
+    oi_v        = _fv(macro.get("btc_oi_usd_bn"),        "B")
+    fr_v        = _fv(macro.get("btc_funding_rate_pct"),  "%")
+    lev_v       = macro.get("btc_leverage_signal") or "N/A"
+    usdjpy_v    = _fv(macro.get("usdjpy"))
+    usdjpy_chg  = _fv(macro.get("usdjpy_weekly_chg_pct"), "%/wk")
+    carry_v     = macro.get("carry_regime") or "N/A"
+    arch_alert  = macro.get("carry_architecture_alert", False)
+    arch_line   = "\nArch  : ⚠️ lower-highs (arch alert)" if arch_alert else ""
+
+    mg          = whale_slim.get("market_globals", {})
+    cm          = whale_slim.get("cycle_metrics", {})
+
+    btc_price_v = _fv(prices.get("BTC") or state.get("btc_price"))
+    btc_dom_v   = _fv(mg.get("btc_dominance") or state.get("btc_dominance"))
+    fg_v        = _fv(mg.get("fear_greed") or state.get("fear_greed"))
+
+    # Cycle metrics for prefill
+    cy_year     = cm.get("cycle_year") or state.get("cycle_year") or "?"
+    cy_ma       = cm.get("btc_200w_ma")
+    cy_ma_prem  = cm.get("btc_200w_ma_premium_pct")
+    cy_mvrv     = cm.get("btc_mvrv_approx")
+    cy_ma_v     = f"${cy_ma:,.0f}" if cy_ma is not None else "N/A"
+    cy_prem_v   = f"({cy_ma_prem:+.1f}%)" if cy_ma_prem is not None else ""
+    cy_mvrv_v   = f"{cy_mvrv}" if cy_mvrv is not None else "N/A"
+
+    # FOMC for prefill
+    fomc_days   = fomc.get("days_to_fomc")
+    next_fomc   = fomc.get("next_fomc") or "N/A"
+    pre_fomc_w  = fomc.get("pre_fomc_window", False)
+    fomc_v      = f"{fomc_days}d to {next_fomc}" if fomc_days is not None else f"next {next_fomc}"
+    fomc_flag   = " ⚠️ PRE-FOMC" if pre_fomc_w else ""
+
+    # Prefill: MACRO REGIME and YEN CARRY are pre-filled from Python so
+    # Claude cannot skip them. Claude continues from SHORT bias onwards.
+    prefill = (
+        f"[EMAIL]\n"
+        f"CRYPTO DAILY BRIEF\n"
+        f"{today_str} | "
+    )
+
+    # The macro card suffix is appended to whatever macro_bias Claude writes.
+    # Because it's in the prefill it cannot be omitted.
+    macro_card_suffix = (
+        f"\n"
+        f"BTC ${btc_price_v} | Dom {btc_dom_v}% | F&G {fg_v}\n"
+        f"------------------------------\n"
+        f"\n"
+        f"MACRO REGIME\n"
+        f"------------------------------\n"
+        f"US 10Y: {us_10y_v}   30Y: {us_30y_v}\n"
+        f"Curve : {us_spread_v} ({us_status_v})\n"
+        f"JGB10Y: {j_10y_v}  30Y: {j_30y_v}\n"
+        f"JGB   : {j_stress_v}\n"
+        f"SPX   : {spx_v}\n"
+        f"BTC OI: ${oi_v}  FR: {fr_v}\n"
+        f"Lev   : {lev_v}\n"
+        f"------------------------------\n"
+        f"YEN CARRY\n"
+        f"USDJPY: {usdjpy_v}  ({usdjpy_chg})\n"
+        f"Regime: {carry_v}{arch_line}\n"
+        f"------------------------------\n"
+        f"FOMC  : {fomc_v}{fomc_flag}\n"
+        f"Cycle : Y{cy_year}/4 | MA1000d: {cy_ma_v} {cy_prem_v} | MVRV≈{cy_mvrv_v}\n"
+        f"------------------------------\n"
+        f"SHORT bias: "
+    )
+    prefill = prefill + macro_card_suffix
+
+    user_prompt = f"""Today is {today_str}.
+
+═══ OUTPUT FORMAT — READ THIS FIRST ═══
+Your response MUST contain two blocks: [EMAIL]...[/EMAIL] then [STATE_DELTA]...[/STATE_DELTA].
+The [EMAIL] block MUST contain ALL of these sections IN THIS EXACT ORDER:
+  1.  Header line  (date | bias | BTC price | dom | F&G)
+  2.  MACRO REGIME card  ← REQUIRED even if all values are N/A
+  3.  YEN CARRY card     ← REQUIRED even if USDJPY is N/A
+  4.  SHORT bias / LONG bias lines
+  5.  CYCLE VIEW (BTC 4-yr halving cycle position) ← REQUIRED
+  6.  LIQUIDITY ANALYSIS (4-6 bullets) ← REQUIRED, never skip
+  7.  OPEN POSITIONS (each card MUST show TF: SHORT/MED/LONG_TERM)
+  8.  SHORT-TERM SETUPS (days–2wk)  ← always present, "None." if empty
+  9.  LONG-TERM SETUPS  (weeks–months+) ← always present, "None." if empty
+  10. WAITING (monitor only)
+  11. CHANGES TODAY
+NEVER rename, merge, reorder, or skip any section.
+If a value is unavailable write N/A — do NOT remove the section or its header.
+No markdown: no **, no ##, no _underscores_. Plain text only.
+Max ~35 chars per line (mobile).
 
 ═══ REAL ON-CHAIN WHALE DATA (fetched this run) ═══
 {json.dumps(whale_slim, separators=(',', ':'), default=str)}
 
+═══ PRE-COMPUTED ANALYTICS (Python-verified — use these, do NOT recalculate) ═══
+{json.dumps(pre_computed, separators=(',', ':'), default=str)}
+
 ═══ CURRENT STATE (from last run) ═══
 {json.dumps(state, separators=(',', ':'), default=str)}
 {tg_section}
-Instructions:
+Analysis instructions:
 - Use the real on-chain data above for Steps 3 (whale signals) and 4 (prices).
 - large_transfers shows actual large moves today — classify as bullish/bearish via direction field.
 - profitable_wallets_discovered are real wallets with >20% avg profit — treat as high-weight signals.
 - Execute all steps internally (macro, whale scoring, TA, composite scoring, setup updates).
 - No positions are open unless listed in current state open_positions.
+- ALL open positions must appear in the email with P&L, stop status, and a specific action.
+- Positions with status=OPEN and conviction=UNKNOWN were opened outside analysis — run full whale+TA on them and adopt them into active_setups with real levels.
+- pre_computed.position_analytics contains Python-verified P&L and flags for each position. Use these values exactly — do NOT recalculate P&L. Keys are "SYMBOL_DIRECTION" (e.g. "BTC_LONG").
+- pre_computed.setup_statuses contains Python-verified ENTER/APPROACHING/WAITING/INVALIDATED for each setup. Use these, do NOT re-derive from price.
+- pre_computed.cycle_metrics contains btc_mvrv_approx: MVRV>3.0 = historically expensive (cycle top risk), MVRV<1.0 = historically cheap (bottom zone). Use this for cycle analysis.
+- pre_computed.market_globals contains fresh fear_greed and btc_dominance — use these values, not stale state values.
+- pre_computed.fomc: if pre_fomc_window=true, a Fed decision is within 3 days — suppress new SHORT_TERM setups and flag elevated volatility risk. If days_to_fomc < 7, note in CHANGES TODAY as catalyst risk.
+- Flag any position with P&L < -10% or no stop_loss as high risk. Flag P&L < -15% as DANGER.
+- macro.japan_stress HIGH/CRITICAL = liquidity tightening risk, increase bearish weight on risk assets.
+- macro.us_curve_status INVERTED = recession signal, favour defensive bias_long = BEARISH.
+- macro.btc_leverage_signal EXTREME_LONGS = crowded, reversion risk; EXTREME_SHORTS = squeeze risk.
+- bias_short covers days-to-weeks setups (timeframe=SHORT_TERM).
+- bias_long covers months+ setups (timeframe=MEDIUM_TERM or LONG_TERM).
+- A setup whose direction conflicts with its matching bias gets conviction downgraded one level and flagged.
+- macro.carry_regime: CARRY_STABLE=no adjustment | CARRY_STRESS=add -0.1 to all risk longs | CARRY_UNWIND=bias_short BEARISH override, add -0.2 | CARRY_COLLAPSE=both biases BEARISH, -0.35, flag SYSTEMIC.
+- macro.carry_architecture_alert=true means USDJPY is below stable-carry range: add -0.1 to bias_long and note structural concern in email.
+- macro.japan_curve_spread narrowing run-over-run = BOJ losing long-end control; amplifies japan_stress signal.
+- Track macro.usdjpy across runs in macro_snapshot.usdjpy_history (list of last 4 weekly closes); flag if making lower-highs.
+- If carry_regime is CARRY_UNWIND or COLLAPSE and user holds a long position → always flag ⚠️ CARRY RISK regardless of P&L.
+- BTC CYCLE: today is in the 2024-04 halving cycle. Y1=2024, Y2=2025, Y3=2026 (now, bear/bottom year), Y4=2027 (pre-halving accumulation). Historical Y3 drawdown is 70–85% from cycle peak — multi-month longs in Y3 have been wrong every prior cycle. Always state `cycle_phase`, `cycle_year`, `cycle_thesis`, `cycle_bias_impact` in state and in the CYCLE VIEW email section.
+- TIMEFRAME-RESPECTING ACTION RULE: every open position has a `tf` field (SHORT_TERM, MEDIUM_TERM, LONG_TERM). Evaluate each position ONLY against the bias of its own timeframe:
+    • SHORT_TERM position → vs bias_short
+    • MEDIUM_TERM / LONG_TERM position → vs bias_long + cycle_phase
+  NEVER recommend closing a MEDIUM/LONG_TERM position because of opposing SHORT_TERM whale flow or TA. Note such conflicts as "ST noise — hold thesis", but the action must respect the long-term thesis unless stop breached or cycle/bias_long has actually flipped.
+- SETUP TIMEFRAMES: every setup MUST have a `timeframe` field. Place SHORT_TERM setups under "SHORT-TERM SETUPS" section, MEDIUM_TERM/LONG_TERM under "LONG-TERM SETUPS". If a section has no setups write "None.".
 
-Output EXACTLY this structure — nothing else:
+═══ EMAIL FORMAT — MANDATORY RULES ═══
+VIOLATION OF ANY RULE BELOW = WRONG OUTPUT.
 
-[EMAIL]
-═════════════════════════════════════════════════════════
-CRYPTO DAILY BRIEF — {{DATE}} | {{MACRO_BIAS}} | BTC ${{price}} | Dom {{btc_dom}}% | F&G {{fear_greed}}
-═════════════════════════════════════════════════════════
+1. SECTIONS ARE FIXED. Copy the exact section names below, in this exact order.
+   Never rename, merge, skip, or add sections.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2. NO MARKDOWN. No **, no *, no ##, no _underscores_. Plain text only.
+   Section headers are written as-is (e.g. "MACRO REGIME", not "**MACRO REGIME**").
+
+3. EVERY SECTION IS REQUIRED IN EVERY EMAIL.
+   If a value is unavailable write N/A — never omit the section.
+
+4. MACRO REGIME card: fill every field with real values from macro data.
+   If a fetch failed, write "N/A (fetch failed)". Never skip the card.
+
+5. LIQUIDITY ANALYSIS: always write 4-6 bullet points explaining what each
+   macro signal means for crypto. This section is NOT optional.
+   If macro data is all N/A, write what is known from prior state and BTC price action.
+
+6. OPEN POSITIONS: every entry in open_positions MUST appear as a card.
+   No exceptions. If none: write exactly "None confirmed."
+
+7. Max ~35 characters per line (mobile screen). No wide lines.
+
+
+[NOTE: The email has already been started for you.
+ The MACRO REGIME and YEN CARRY cards are pre-filled.
+ Your response will be appended after "SHORT bias: "
+ Continue from there. Write ONLY what comes after
+ the prefill — do not repeat sections already written.]
+
+Your output must continue as:
+<BIAS>  (weeks)
+LONG  bias: <bias_long>   (months+)
+------------------------------
+
+CYCLE VIEW
+------------------------------
+Phase  : <cycle_phase> (Y<cycle_year>/4)
+Halving: 2024-04 → next ~2028-04
+Thesis : <cycle_thesis>
+Impact : <cycle_bias_impact>
+------------------------------
+
+LIQUIDITY ANALYSIS
+------------------------------
+<REQUIRED — write exactly 4 to 6 bullet points.
+ Each bullet must name the signal and state its
+ crypto impact. Cover in this order (skip only
+ if value is truly N/A):
+ 1. US yield curve level/status
+ 2. US 30Y vs 5% threshold
+ 3. JGB 30Y stress level
+ 4. Yen carry regime + adjustment applied
+ 5. BTC OI trend and leverage signal
+ 6. How 1-5 combined to produce bias_short/long>
+• <bullet 1>
+• <bullet 2>
+• <bullet 3>
+• <bullet 4>
+• <bullet 5>
+• <bullet 6 if needed>
+------------------------------
+
 OPEN POSITIONS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[If no open positions, write: None confirmed.]
-[If open positions exist, one row per position:]
-SYM  DIR    ENTRY     NOW       P&L%   STOP      ACTION
----  -----  --------  --------  -----  --------  --------------------------
-ETH  SHORT  $2,650    $2,520    +4.9%  $2,820    Trail stop to $2,600
+------------------------------
+<If open_positions is empty: write "None confirmed.">
+<One card per position — NO EXCEPTIONS.
+ TF MUST appear and drives the bias check:>
+<SYM> <DIRECTION> (<market_type>)
+  TF    : <SHORT_TERM|MEDIUM_TERM|LONG_TERM>
+  Entry : $<entry_price>
+  Now   : $<current>  P&L: <pnl>%
+  Stop  : $<stop_loss>
+  Bias  : <Aligned with bias_<tf>|CONFLICT>
+  Action: <action respects TF — see rules>
+------------------------------
+<P&L < -10% or stop missing — prefix with ⚠️>
+<P&L < -15% or stop breached — prefix with 🚨>
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-ACTIONABLE SETUPS  (ENTER and APPROACHING only)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SYM   DIR    STATUS    ENTRY ZONE       STOP      T1        T2        R/R  CONV    WHALE
-----  -----  --------  ---------------  --------  --------  --------  ---  ------  ----------
-[One row per ENTER or APPROACHING setup. Skip WAITING setups.]
+SHORT-TERM SETUPS (days–2wk)
+------------------------------
+<Setups with timeframe=SHORT_TERM only.
+ If none: write "None.">
+🔴 <SYM> <DIR> — <CONVICTION>
+  Status: <ENTER|APPROACHING|WAITING>
+  Zone  : $<low>–$<high>
+  Stop  : $<stop>
+  T1    : $<t1>  T2: $<t2>
+  R/R   : <ratio>x | Whale: <whale_signal>
+------------------------------
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+LONG-TERM SETUPS (weeks–months+)
+------------------------------
+<Setups with timeframe=MEDIUM_TERM or LONG_TERM.
+ If none: write "None.">
+🟣 <SYM> <DIR> — <CONVICTION>
+  Status: <ENTER|APPROACHING|WAITING>
+  Zone  : $<low>–$<high>
+  Stop  : $<stop>
+  T1    : $<t1>  T2: $<t2>
+  R/R   : <ratio>x | Cycle: <aligned|against>
+------------------------------
+
 WAITING (monitor only)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[Comma-separated list: SYM DIR — reason in 5 words]
+------------------------------
+<One line each: SYM DIR — reason in <7 words>
+ If none: write "None.">
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CHANGES TODAY
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[Bullet list: NEW / ENTER / INVALIDATED / REVISED setups only. One line each.]
-═════════════════════════════════════════════════════════
+------------------------------
+<One bullet per change. Tags: NEW / ENTER /
+ INVALIDATED / REVISED / ADOPTED / COMPLETED>
 [/EMAIL]
 
-[STATE_JSON]
-{{updated state.json as valid JSON}}
-[/STATE_JSON]
+[STATE_DELTA]
+{{JSON with ONLY these fields — Python manages the rest:
+  macro_bias, bias_short, bias_long,
+  cycle_phase, cycle_year, cycle_thesis, cycle_bias_impact,
+  btc_dominance, altcoin_season_index, fear_greed,
+  active_setups, open_positions, alerted,
+  whale_signals_today, last_analysis}}
+[/STATE_DELTA]
 """
 
     # ── Step 4: Call Claude Haiku ───────────────────────────────────
@@ -375,38 +851,66 @@ CHANGES TODAY
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=6000,
-        system=system_prompt,
-        messages=[{"role": "user", "content": user_prompt}],
+        system=[{
+            "type": "text",
+            "text": system_prompt,
+            "cache_control": {"type": "ephemeral"},
+        }],
+        messages=[
+            {"role": "user",      "content": user_prompt},
+            {"role": "assistant", "content": prefill},
+        ],
     )
 
-    response   = message.content[0].text
-    tokens_in  = message.usage.input_tokens
-    tokens_out = message.usage.output_tokens
-    cost_usd   = (tokens_in * 0.80 + tokens_out * 4.00) / 1_000_000
+    # Prepend the prefilled text — the API does not echo it back in the response.
+    response          = prefill + message.content[0].text
+    tokens_in         = message.usage.input_tokens
+    tokens_cache_read  = getattr(message.usage, "cache_read_input_tokens", 0)
+    tokens_cache_write = getattr(message.usage, "cache_creation_input_tokens", 0)
+    tokens_out        = message.usage.output_tokens
+    cost_usd = (
+        (tokens_in         * 0.80) +
+        (tokens_cache_read  * 0.08) +
+        (tokens_cache_write * 1.00) +
+        (tokens_out        * 4.00)
+    ) / 1_000_000
 
     print(f"[{datetime.utcnow().isoformat()}] Response received — "
-          f"in:{tokens_in} out:{tokens_out} cost:${cost_usd:.4f}")
+          f"in:{tokens_in} cache_read:{tokens_cache_read} "
+          f"cache_write:{tokens_cache_write} out:{tokens_out} cost:${cost_usd:.4f}")
 
-    # ── Step 5: Extract and save updated state ────────────────────────────
-    state_text = response
-    sj_start = response.find("[STATE_JSON]")
-    sj_end   = response.find("[/STATE_JSON]")
-    if sj_start != -1 and sj_end != -1:
-        state_text = response[sj_start + 12:sj_end]
+    # ── Step 5: Extract state delta and merge ──────────────────────────────
+    date_str = datetime.utcnow().strftime("%Y-%m-%d")
 
-    updated_state = extract_state_from_response(state_text)
-    if updated_state:
-        updated_state["profitable_wallets_discovered"] = \
-            whale_data.get("profitable_wallets_discovered", [])
+    delta = extract_state_delta(response)
+    if delta:
+        updated_state = merge_state_delta(
+            prior_state=state,
+            delta=delta,
+            macro_data=whale_data.get("macro", {}),
+            prices=whale_data.get("prices", {}),
+            profitable_wallets=whale_data.get("profitable_wallets_discovered", []),
+        )
         save_state(updated_state)
-        updated_state = sanitize_state(updated_state)
-        print(f"[{datetime.utcnow().isoformat()}] state.json updated")
+        log_setup_snapshot(updated_state, date_str)
+        print(f"[{datetime.utcnow().isoformat()}] state.json updated via delta merge")
     else:
-        print(f"[{datetime.utcnow().isoformat()}] WARNING: Could not extract state JSON")
-        updated_state = state
+        # Fallback: try old-style full STATE_JSON extraction
+        sj_start = response.find("[STATE_JSON]")
+        sj_end   = response.find("[/STATE_JSON]")
+        state_text = response[sj_start + 12:sj_end] if sj_start != -1 and sj_end != -1 else response
+        fallback = extract_state_from_response(state_text)
+        if fallback:
+            fallback["profitable_wallets_discovered"] = whale_data.get("profitable_wallets_discovered", [])
+            updated_state = sanitize_state(fallback)
+            save_state(updated_state)
+            log_setup_snapshot(updated_state, date_str)
+            print(f"[{datetime.utcnow().isoformat()}] state.json updated via fallback full-JSON")
+        else:
+            print(f"[{datetime.utcnow().isoformat()}] WARNING: Could not extract state — state unchanged")
+            updated_state = state
 
     # ── Step 6: Save full response to file ────────────────────────────────
-    date_str    = datetime.utcnow().strftime("%Y-%m-%d")
     report_path = BASE_DIR / f"daily_report_{date_str}.txt"
     with open(report_path, "w") as f:
         f.write(response)
