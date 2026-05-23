@@ -734,9 +734,11 @@ VIOLATION OF ANY RULE BELOW = WRONG OUTPUT.
 4. MACRO REGIME card: fill every field with real values from macro data.
    If a fetch failed, write "N/A (fetch failed)". Never skip the card.
 
-5. LIQUIDITY ANALYSIS: always write 4-6 bullet points explaining what each
-   macro signal means for crypto. This section is NOT optional.
-   If macro data is all N/A, write what is known from prior state and BTC price action.
+5. LIQUIDITY ANALYSIS: always write 4-6 bullets in the EMAIL BODY.
+   Each bullet must include: signal value, what it means NOW, crypto impact.
+   Example: "US 10Y 4.52%: near multi-yr high → raises opportunity cost vs BTC"
+   NOT optional. If macro data is N/A, use prior state + BTC price action context.
+   The full attached report can add detail; the body bullets must be self-contained.
 
 6. OPEN POSITIONS: every entry in open_positions MUST appear as a card.
    No exceptions. If none: write exactly "None confirmed."
@@ -765,22 +767,33 @@ Impact : <cycle_bias_impact>
 
 LIQUIDITY ANALYSIS
 ------------------------------
-<REQUIRED — write exactly 4 to 6 bullet points.
- Each bullet must name the signal and state its
- crypto impact. Cover in this order (skip only
- if value is truly N/A):
- 1. US yield curve level/status
- 2. US 30Y vs 5% threshold
- 3. JGB 30Y stress level
- 4. Yen carry regime + adjustment applied
- 5. BTC OI trend and leverage signal
- 6. How 1-5 combined to produce bias_short/long>
-• <bullet 1>
-• <bullet 2>
-• <bullet 3>
-• <bullet 4>
-• <bullet 5>
-• <bullet 6 if needed>
+<REQUIRED — 4 to 6 bullets. Each bullet MUST:
+ (a) name the signal with its current value,
+ (b) state what it means right now (not generic),
+ (c) state the direct crypto impact.
+ Format: "• Signal X%/level: what it means → crypto impact"
+ Cover in order (skip only if value is N/A):
+ 1. US 10Y yield — level vs historical norm,
+    rising/falling trend, what it means for
+    risk-asset valuations right now
+ 2. US 30Y vs 5% threshold — funding cost
+    pressure on leveraged players, credit stress
+ 3. US yield curve (normal/flat/inverted) —
+    recession signal or growth signal
+ 4. JGB 30Y / Japan stress — BOJ policy stress,
+    yen carry trade fragility, global liquidity
+ 5. Yen carry regime — USDJPY trend, carry
+    adjustment applied to composites, risk
+ 6. BTC OI + funding rate — leverage positioning,
+    forced-liquidation risk or squeeze risk
+ 7. Combined verdict: how 1-6 produced
+    bias_short and bias_long values above>
+• <bullet 1 with value, meaning, crypto impact>
+• <bullet 2 with value, meaning, crypto impact>
+• <bullet 3 with value, meaning, crypto impact>
+• <bullet 4 with value, meaning, crypto impact>
+• <bullet 5 with value, meaning, crypto impact>
+• <bullet 6 or 7 if needed>
 ------------------------------
 
 OPEN POSITIONS
