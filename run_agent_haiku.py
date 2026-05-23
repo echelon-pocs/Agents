@@ -341,13 +341,96 @@ def run():
 
     today_str = datetime.utcnow().strftime('%Y-%m-%d')
 
-    # The prefill forces Claude to begin its response with the [EMAIL] block
-    # and the fixed header — it cannot skip sections because it's already past them.
+    # ── Build data-driven prefill ─────────────────────────────────────
+    # MACRO REGIME and YEN CARRY are pre-filled from Python using the
+    # freshly-fetched macro data. This makes it physically impossible for
+    # Claude to skip those sections — they're already in the response before
+    # Claude writes its first token. Claude only needs to fill analysis
+    # sections (biases, cycle view, liquidity bullets, positions, setups).
+
+    macro = whale_slim.get("macro", {})
+    prices = whale_slim.get("prices", {})
+
+    def _fv(v, suffix="", na="N/A"):
+        return f"{v}{suffix}" if v is not None else na
+
+    us_10y_raw  = macro.get("us_10y")
+    us_30y_raw  = macro.get("us_30y")
+    j_10y_raw   = macro.get("japan_10y")
+    j_30y_raw   = macro.get("japan_30y")
+
+    us_spread_v = (
+        f"{(us_30y_raw - us_10y_raw):.2f}%"
+        if us_10y_raw is not None and us_30y_raw is not None else "N/A"
+    )
+    j_spread_v  = _fv(macro.get("japan_curve_spread"), "%")
+
+    us_10y_v    = _fv(us_10y_raw, "%")
+    us_30y_v    = _fv(us_30y_raw, "%")
+    j_10y_v     = _fv(j_10y_raw,  "%")
+    j_30y_v     = _fv(j_30y_raw,  "%")
+    us_status_v = macro.get("us_curve_status")   or "N/A"
+    j_stress_v  = macro.get("japan_stress")      or "N/A"
+    spx_v       = _fv(macro.get("spx"))
+    oi_v        = _fv(macro.get("btc_oi_usd_bn"),        "B")
+    fr_v        = _fv(macro.get("btc_funding_rate_pct"),  "%")
+    lev_v       = macro.get("btc_leverage_signal") or "N/A"
+    usdjpy_v    = _fv(macro.get("usdjpy"))
+    usdjpy_chg  = _fv(macro.get("usdjpy_weekly_chg_pct"), "%/wk")
+    carry_v     = macro.get("carry_regime") or "N/A"
+    arch_alert  = macro.get("carry_architecture_alert", False)
+    arch_line   = "\nArch  : ⚠️ lower-highs (arch alert)" if arch_alert else ""
+
+    btc_price_v = _fv(prices.get("BTC") or state.get("btc_price"))
+    btc_dom_v   = _fv(state.get("btc_dominance"))
+    fg_v        = _fv(state.get("fear_greed"))
+
+    # Prefill ends just before SHORT bias so Claude writes the bias values
+    # and all remaining analysis sections.
+    prefill = (
+        f"[EMAIL]\n"
+        f"CRYPTO DAILY BRIEF\n"
+        f"{today_str} | "
+        # Claude fills in MACRO_BIAS after the pipe, then BTC line, then dashes
+        # — but MACRO REGIME and YEN CARRY below are already hard-coded.
+        # We stop the prefill after the first dashes so Claude writes the
+        # macro bias and BTC header, then encounters the pre-filled cards.
+    )
+
+    # Full pre-filled block injected into the assistant turn AFTER Claude
+    # writes the header. We use a two-message trick: start with an
+    # incomplete header and let Claude finish it, but force everything after
+    # the first separator by including the full card text in the prefill.
     prefill = (
         f"[EMAIL]\n"
         f"CRYPTO DAILY BRIEF\n"
         f"{today_str} | "
     )
+
+    # The macro card suffix is appended to whatever macro_bias Claude writes.
+    # Because it's in the prefill it cannot be omitted.
+    macro_card_suffix = (
+        f"\n"
+        f"BTC ${btc_price_v} | Dom {btc_dom_v}% | F&G {fg_v}\n"
+        f"------------------------------\n"
+        f"\n"
+        f"MACRO REGIME\n"
+        f"------------------------------\n"
+        f"US 10Y: {us_10y_v}   30Y: {us_30y_v}\n"
+        f"Curve : {us_spread_v} ({us_status_v})\n"
+        f"JGB10Y: {j_10y_v}  30Y: {j_30y_v}\n"
+        f"JGB   : {j_stress_v}\n"
+        f"SPX   : {spx_v}\n"
+        f"BTC OI: ${oi_v}  FR: {fr_v}\n"
+        f"Lev   : {lev_v}\n"
+        f"------------------------------\n"
+        f"YEN CARRY\n"
+        f"USDJPY: {usdjpy_v}  ({usdjpy_chg})\n"
+        f"Regime: {carry_v}{arch_line}\n"
+        f"------------------------------\n"
+        f"SHORT bias: "
+    )
+    prefill = prefill + macro_card_suffix
 
     user_prompt = f"""Today is {today_str}.
 
@@ -428,30 +511,14 @@ VIOLATION OF ANY RULE BELOW = WRONG OUTPUT.
 7. Max ~35 characters per line (mobile screen). No wide lines.
 
 
-[EMAIL]
-CRYPTO DAILY BRIEF
-<DATE> | <MACRO_BIAS>
-BTC $<price> | Dom <btc_dom>% | F&G <fear_greed>
-------------------------------
+[NOTE: The email has already been started for you.
+ The MACRO REGIME and YEN CARRY cards are pre-filled.
+ Your response will be appended after "SHORT bias: "
+ Continue from there. Write ONLY what comes after
+ the prefill — do not repeat sections already written.]
 
-MACRO REGIME
-------------------------------
-US 10Y: <us_10y>%   30Y: <us_30y>%
-Curve : <curve_spread>% (<curve_status>)
-JGB10Y: <japan_10y>%  30Y: <japan_30y>%
-JGB   : <japan_stress>
-SPX   : <spx>
-BTC OI: $<btc_oi>B  FR: <btc_fr>%
-Lev   : <btc_lev_signal>
-------------------------------
-YEN CARRY
-USDJPY: <usdjpy>  (<usdjpy_weekly_chg>%/wk)
-Regime: <carry_regime>
-<If carry_architecture_alert is true, add one
- line here, e.g.:
- "Arch: lower-highs 3 runs — range compress">
-------------------------------
-SHORT bias: <bias_short>  (weeks)
+Your output must continue as:
+<BIAS>  (weeks)
 LONG  bias: <bias_long>   (months+)
 ------------------------------
 
