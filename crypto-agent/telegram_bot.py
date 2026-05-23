@@ -390,10 +390,36 @@ def parse_position_image(image_bytes: bytes, api_key: str):
     b64 = base64.standard_b64encode(image_bytes).decode()
 
     client = anthropic.Anthropic(api_key=api_key)
+    prompt = """This is a trading exchange screenshot (could be: position view, order details, trade history, order confirmation, or any other exchange screen showing a trade).
+
+Extract whatever trade information is visible and return ONLY this JSON:
+{"symbol":"BTC","direction":"long","entry_price":96.51,"filled_price":96.51,"current_price":null,"stop_loss":null,"size_qty":17.06,"size_usd":null,"leverage":"5x","market_type":"perpetual","pnl_pct":null,"pnl_usd":null,"exchange":"Bybit","screen_type":"order_details"}
+
+Field rules:
+- symbol: base asset ticker only. Strip USDT/USD/BTC suffix and any parentheses.
+  Examples: "OIL(WTI)USDT" → "OIL", "BTCUSDT" → "BTC", "ETH-PERP" → "ETH"
+- direction: "long" if Buy/Long/Buy Long/Green badge; "short" if Sell/Short/Sell Short/Red badge
+- entry_price: use "Order Price", "Avg Entry", "Entry Price", or "Filled Price" — whichever is present
+- filled_price: "Filled Price" if different from entry_price, else null
+- current_price: "Mark Price", "Last Price", "Current Price" if visible, else null
+- stop_loss: "Stop Loss", "SL", "Stop" if visible, else null
+- size_qty: numeric amount of base asset (e.g. 17.06 for OIL)
+- size_usd: position value in USD/USDT if shown, else null
+- leverage: "5x", "10x", "Isolated.5X" → "5x", etc. null if not shown
+- market_type: "perpetual" if Perpetual/Perp/PERP, "futures" if dated, "spot" otherwise
+- pnl_pct / pnl_usd: P&L values if shown (PNL of Closing, Unrealized PNL, etc.)
+- exchange: best guess from UI style (Bybit, Binance, OKX, Bitget, etc.) or null
+- screen_type: "order_details", "position", "trade_history", or "other"
+
+If you truly cannot find any trade information (e.g. it's a chart, news, or unrelated screen):
+{"error":"no trade data found"}
+
+Return ONLY the JSON, no explanation, no markdown fences."""
+
     try:
         resp = client.messages.create(
             model="claude-haiku-4-5-20251001",
-            max_tokens=300,
+            max_tokens=400,
             messages=[{
                 "role": "user",
                 "content": [
@@ -401,24 +427,7 @@ def parse_position_image(image_bytes: bytes, api_key: str):
                         "type": "image",
                         "source": {"type": "base64", "media_type": media_type, "data": b64},
                     },
-                    {
-                        "type": "text",
-                        "text": (
-                            "This is a trading exchange position screenshot. "
-                            "Extract the position and return ONLY a JSON object:\n"
-                            '{"symbol":"BTC","direction":"short","entry_price":103250.0,'
-                            '"current_price":103000.0,"stop_loss":null,"size_usd":null,'
-                            '"market_type":"perpetual","pnl_pct":0.24,"exchange":"Binance"}\n'
-                            "Rules:\n"
-                            "- symbol: coin ticker only (no USDT suffix)\n"
-                            "- direction: 'long' or 'short'\n"
-                            "- null for any field not visible\n"
-                            "- market_type: 'spot', 'futures', or 'perpetual'\n"
-                            "If this is not a position screenshot return: "
-                            '{"error":"not a position"}\n'
-                            "Return ONLY the JSON, no other text."
-                        ),
-                    },
+                    {"type": "text", "text": prompt},
                 ],
             }],
         )
@@ -442,18 +451,39 @@ def parse_position_image(image_bytes: bytes, api_key: str):
         return None
 
 
+def _clean_symbol(raw):
+    """Normalise exchange symbol strings to a bare ticker.
+    'OIL(WTI)USDT' → 'OIL', 'BTCUSDT' → 'BTC', 'ETH-PERP' → 'ETH'
+    """
+    import re
+    s = str(raw).upper().strip()
+    # Remove parenthesised suffixes: OIL(WTI) → OIL
+    s = re.sub(r'\([^)]*\)', '', s)
+    # Remove common quote/contract suffixes
+    for suffix in ['USDT', 'USDC', 'USD', 'BTC', 'ETH', 'BUSD',
+                   '-PERP', '-SWAP', 'PERP', 'SWAP', '.P']:
+        if s.endswith(suffix) and len(s) > len(suffix):
+            s = s[:-len(suffix)]
+    return s.strip('-_. ')
+
+
 def _position_from_vision(parsed: dict):
     """Convert Claude vision output to a pending-update dict (ENTER action)."""
     if not parsed or "error" in parsed:
         return None
-    sym = parsed.get("symbol", "").upper()
+    raw_sym = parsed.get("symbol", "")
+    sym = _clean_symbol(raw_sym) if raw_sym else ""
     if not sym:
         return None
-    direction  = (parsed.get("direction") or "long").upper()
-    price      = parsed.get("entry_price") or parsed.get("current_price")
-    stop       = parsed.get("stop_loss")
-    size_usd   = parsed.get("size_usd")
-    mtype      = parsed.get("market_type", "perpetual")
+
+    direction = (parsed.get("direction") or "long").upper()
+    # Use filled_price as most accurate entry, fall back to entry_price or current
+    price = (parsed.get("filled_price")
+             or parsed.get("entry_price")
+             or parsed.get("current_price"))
+    stop     = parsed.get("stop_loss")
+    size_usd = parsed.get("size_usd")
+    mtype    = parsed.get("market_type", "perpetual")
 
     update = {
         "action":      "ENTER",
@@ -558,18 +588,31 @@ def run():
                     continue
                 pending.append(update)
                 save_pending(pending)
-                sym   = update["symbol"]
-                dirn  = update["direction"]
-                price = update.get("price")
-                stop  = update.get("stop_loss")
-                exch  = vision_result.get("exchange") or "exchange"
-                pnl   = vision_result.get("pnl_pct")
-                lines = [f"✅ Position detected from {exch} screenshot:",
-                         f"*{dirn} {sym}*"
-                         + (f" @ {_fmt_price(price)}" if price else ""),
-                         f"Stop: {_fmt_price(stop)}" if stop else "Stop: not found",
-                         f"P&L: {pnl:+.2f}%" if pnl is not None else ""]
-                lines.append("\n_If wrong, use /enter or /close to correct._")
+                sym      = update["symbol"]
+                dirn     = update["direction"]
+                price    = update.get("price")
+                stop     = update.get("stop_loss")
+                exch     = vision_result.get("exchange") or "exchange"
+                lev      = vision_result.get("leverage")
+                qty      = vision_result.get("size_qty")
+                pnl_pct  = vision_result.get("pnl_pct")
+                pnl_usd  = vision_result.get("pnl_usd")
+                raw_sym  = vision_result.get("symbol", sym)
+                lev_str  = f" {lev}" if lev else ""
+                lines = [
+                    f"✅ *{exch}* order parsed:",
+                    f"*{dirn} {sym}*{lev_str}"
+                    + (f" @ {_fmt_price(price)}" if price else ""),
+                ]
+                if raw_sym.upper() != sym:
+                    lines.append(f"Instrument: {raw_sym}")
+                if qty is not None:
+                    lines.append(f"Qty: {qty} {sym}")
+                lines.append(f"Stop: {_fmt_price(stop)}" if stop else "Stop: not found in image")
+                if pnl_pct is not None:
+                    lines.append(f"P&L: {pnl_pct:+.2f}%"
+                                 + (f" (${pnl_usd:+.2f})" if pnl_usd else ""))
+                lines.append("\n_Queued. If wrong: /enter or /close to correct._")
                 send(token, chat_id, "\n".join(l for l in lines if l))
                 continue
 
