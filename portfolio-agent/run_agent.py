@@ -185,6 +185,13 @@ def build_prices_section(prices):
     spread = prices.get("wti_brent_spread")
     if spread is not None:
         lines.append(f"WTI/Brent spread: {_fmt(spread)}")
+    # Context indicators
+    vix    = prices.get("_vix")
+    eurusd = prices.get("_eurusd")
+    dxy    = prices.get("_dxy")
+    if vix    is not None: lines.append(f"VIX: {_fmt(vix, 1)}")
+    if eurusd is not None: lines.append(f"EUR/USD: {_fmt(eurusd, 4)}")
+    if dxy    is not None: lines.append(f"DXY: {_fmt(dxy, 2)}")
     return "\n".join(lines)
 
 
@@ -361,18 +368,36 @@ Analysis instructions:
 
 ═══ EMAIL FORMAT ═══
 No markdown. Max ~35 chars/line. Plain text.
-Sections IN THIS EXACT ORDER:
+Each asset gets its OWN named section — do NOT group assets together.
+Sections IN THIS EXACT ORDER (use EXACT names as written):
   1. Header (already written)
   2. MACRO REGIME (already written)
   3. SHORT bias / LONG bias (continue from prefill)
-  4. MACRO COMMENTARY (3-5 lines: what macro means for these assets)
-  5. COMMODITIES (WTI + Brent analysis, setups)
-  6. EQUITIES (SPX + VWCE/VWRL analysis)
-  7. GOLD (4GLD analysis)
-  8. BITCOIN ETP (8PSB — use BTC cycle context)
-  9. OPEN POSITIONS (every position must appear)
-  10. SETUPS (SHORT-TERM and LONG-TERM)
-  11. CHANGES TODAY
+  4. MACRO COMMENTARY
+     2-3 lines: what macro means for these assets collectively.
+     Mention yield curve, carry regime, USD direction only.
+  5. WTI
+     Price, MA20/50, trend (above/below), MEXC funding rate + OI if available.
+     WTI/Brent spread. Brief supply/demand note. Setup if any.
+     Do NOT include BTC data, on-chain data, or unrelated indicators.
+  6. BRENT
+     Price, MA20/50, trend. Brent premium vs WTI. Setup if any.
+  7. SPX
+     Price, MA20/50, trend. VIX level if available.
+     Yield curve context (1 line). MEXC funding + OI if available. Setup if any.
+  8. VWCE / VWRL
+     Price, MA20/50, trend. EUR/USD impact (these are EUR-denominated).
+     Long-term macro regime. Action: HOLD / ADD / TRIM only.
+     Do NOT generate short-term trade signals.
+  9. GOLD
+     Price, MA20/50, trend. DXY/USD direction. Real yield proxy (US 10Y context).
+     Action: HOLD_CORE / ADD / TRIM.
+  10. BITCOIN ETP
+      Price (tracks BTC 1:1), MA20/50. BTC cycle: Y3/4 = bear year.
+      No on-chain data available — use BTC cycle context only. Action.
+  11. OPEN POSITIONS (every position — no exceptions)
+  12. SETUPS (SHORT-TERM then LONG-TERM; write "None." if empty)
+  13. CHANGES TODAY
 [/EMAIL]
 
 [STATE_DELTA]

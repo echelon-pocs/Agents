@@ -666,8 +666,8 @@ The [EMAIL] block MUST contain ALL of these sections IN THIS EXACT ORDER:
   2.  MACRO REGIME card  ← REQUIRED even if all values are N/A
   3.  YEN CARRY card     ← REQUIRED even if USDJPY is N/A
   4.  SHORT bias / LONG bias lines
-  5.  CYCLE VIEW (BTC 4-yr halving cycle position) ← REQUIRED
-  6.  LIQUIDITY ANALYSIS (4-6 bullets) ← REQUIRED, never skip
+  5.  CYCLE VIEW (BTC 4-yr halving cycle — 2 lines max)
+  6.  LIQUIDITY ANALYSIS (3-4 bullets, 1 line each) ← REQUIRED
   7.  OPEN POSITIONS (each card MUST show TF: SHORT/MED/LONG_TERM)
   8.  SHORT-TERM SETUPS (days–2wk)  ← always present, "None." if empty
   9.  LONG-TERM SETUPS  (weeks–months+) ← always present, "None." if empty
@@ -677,6 +677,7 @@ NEVER rename, merge, reorder, or skip any section.
 If a value is unavailable write N/A — do NOT remove the section or its header.
 No markdown: no **, no ##, no _underscores_. Plain text only.
 Max ~35 chars per line (mobile).
+Keep the email body tight — one idea per line, no padding sentences.
 
 ═══ REAL ON-CHAIN WHALE DATA (fetched this run) ═══
 {json.dumps(whale_slim, separators=(',', ':'), default=str)}
@@ -734,11 +735,11 @@ VIOLATION OF ANY RULE BELOW = WRONG OUTPUT.
 4. MACRO REGIME card: fill every field with real values from macro data.
    If a fetch failed, write "N/A (fetch failed)". Never skip the card.
 
-5. LIQUIDITY ANALYSIS: always write 4-6 bullets in the EMAIL BODY.
-   Each bullet must include: signal value, what it means NOW, crypto impact.
-   Example: "US 10Y 4.52%: near multi-yr high → raises opportunity cost vs BTC"
-   NOT optional. If macro data is N/A, use prior state + BTC price action context.
-   The full attached report can add detail; the body bullets must be self-contained.
+5. LIQUIDITY ANALYSIS: write 3-4 bullets. Keep each to ONE line.
+   Format: "INDICATOR VALUE → brief impact on crypto"
+   Example: "US10Y 4.52% → high opp cost, mild BTC headwind"
+   If macro data is N/A, use prior state + BTC context.
+   Body bullets must be self-contained — no multi-line explanations.
 
 6. OPEN POSITIONS: every entry in open_positions MUST appear as a card.
    No exceptions. If none: write exactly "None confirmed."

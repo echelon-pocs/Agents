@@ -133,8 +133,15 @@ Produce [EMAIL] and [STATE_DELTA] blocks exactly as specified in the user prompt
 
 - No markdown (no **, ##, _underscores_). Plain text only.
 - Max ~35 chars per line (mobile).
-- For IBKR holdings: always give a LONG_TERM view. These are not day-trades.
+- Each asset MUST be its own named section. Never group multiple tickers in one section.
+  Section names: WTI | BRENT | SPX | VWCE / VWRL | GOLD | BITCOIN ETP
+- WTI/BRENT: show price, MA20/50, trend, MEXC funding + OI if available, WTI/Brent spread.
+- SPX: show price, MA20/50, trend, VIX level, MEXC funding + OI if available.
+- VWCE / VWRL: show price, MA20/50, EUR/USD impact (EUR-denominated), macro regime. HOLD/ADD/TRIM only.
+- GOLD: show price, MA20/50, DXY direction, US 10Y real yield context. HOLD_CORE/ADD/TRIM.
+- BITCOIN ETP: show price (tracks BTC 1:1), MA20/50, BTC cycle year/phase. No on-chain data.
 - For WTI/Brent/SPX perpetuals: give SHORT_TERM and LONG_TERM setups separately.
+- For IBKR holdings (VWCE/VWRL/4GLD/8PSB): always give a LONG_TERM view only.
 - Always show P&L for every open position.
 - CHANGES TODAY: one bullet per change, tags: NEW / ENTER / REVISED / HOLD / ADD / TRIM / ADOPTED
 

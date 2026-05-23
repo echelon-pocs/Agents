@@ -19,6 +19,7 @@ from typing import Optional
 # ── HTML palette ─────────────────────────────────────────────────────────────
 
 _SECTION_COLORS = {
+    # Crypto agent sections
     "MACRO REGIME":          "#1a1a2e",
     "YEN CARRY":             "#1a1a2e",
     "CYCLE VIEW":            "#2d1b69",
@@ -28,6 +29,16 @@ _SECTION_COLORS = {
     "LONG-TERM SETUPS":      "#2d1b69",
     "WAITING":               "#2d2d2d",
     "CHANGES TODAY":         "#1a3a1a",
+    # Portfolio agent sections
+    "MACRO COMMENTARY":      "#1a1a2e",
+    "WTI":                   "#3d2000",
+    "BRENT":                 "#3d2800",
+    "SPX":                   "#003d2d",
+    "EQUITIES":              "#003d2d",
+    "VWCE / VWRL":           "#003d2d",
+    "GOLD":                  "#3d3000",
+    "BITCOIN ETP":           "#2d1b69",
+    "SETUPS":                "#3d1c02",
 }
 
 # keyword → (emoji, text-color, background-color)
@@ -111,9 +122,13 @@ _HTML_CSS = """
 """
 
 _KNOWN_SECTIONS = [
+    # Crypto agent
     "MACRO REGIME", "YEN CARRY", "CYCLE VIEW", "LIQUIDITY ANALYSIS",
     "OPEN POSITIONS", "SHORT-TERM SETUPS", "LONG-TERM SETUPS",
     "WAITING", "CHANGES TODAY",
+    # Portfolio agent
+    "MACRO COMMENTARY", "WTI", "BRENT", "SPX", "EQUITIES",
+    "VWCE / VWRL", "GOLD", "BITCOIN ETP", "SETUPS",
 ]
 
 
@@ -273,11 +288,14 @@ def render_html_email(plain_body: str) -> str:
             in_section = True
             continue
 
-        # ── Email header block (first 3 lines: CRYPTO DAILY BRIEF, date, BTC pill row) ──
-        if not header_done and "CRYPTO DAILY BRIEF" in line:
-            out.append('<div class="hdr">'
-                       '<div class="hdr-label">Crypto Market Intelligence</div>'
-                       '<div class="hdr-title">Daily Brief</div>')
+        # ── Email header block ──
+        if not header_done and ("CRYPTO DAILY BRIEF" in line or "PORTFOLIO BRIEF" in line):
+            is_portfolio = "PORTFOLIO BRIEF" in line
+            label = "Portfolio Intelligence" if is_portfolio else "Crypto Market Intelligence"
+            title = "Portfolio Brief" if is_portfolio else "Daily Brief"
+            out.append(f'<div class="hdr">'
+                       f'<div class="hdr-label">{label}</div>'
+                       f'<div class="hdr-title">{title}</div>')
             # consume following header lines until first divider or section
             sub_lines = []
             while i < len(lines):

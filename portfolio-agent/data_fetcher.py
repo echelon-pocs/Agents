@@ -1,6 +1,6 @@
 """
 Price and macro data fetcher for the Portfolio Agent.
-Sources: Yahoo Finance (no key), Bybit public API (no key).
+Sources: Yahoo Finance (no key), MEXC public API (no key).
 """
 import sys
 from pathlib import Path
@@ -63,41 +63,64 @@ def _ma(closes, n):
     return round(sum(closes[-n:]) / n, 4)
 
 
-# ── Bybit perpetuals ──────────────────────────────────────────────────────────
+# ── MEXC perpetuals ───────────────────────────────────────────────────────────
 
-def _bybit_ticker(symbol):
-    """Return dict with price, funding_rate, oi_usd or None."""
+_MEXC_CACHE = {}  # module-level cache: {symbol: ticker_dict}
+
+
+def _mexc_fetch_all():
+    """Fetch all MEXC contract tickers and cache by symbol (upper-case)."""
+    global _MEXC_CACHE
+    if _MEXC_CACHE:
+        return _MEXC_CACHE
     try:
         r = requests.get(
-            "https://api.bybit.com/v5/market/tickers",
-            params={"category": "linear", "symbol": symbol},
-            timeout=10,
+            "https://contract.mexc.com/api/v1/contract/ticker",
+            timeout=15, headers=CHROME_HDR,
         )
         if r.status_code != 200:
-            return None
-        items = r.json().get("result", {}).get("list", [])
-        if not items:
-            return None
-        t = items[0]
-        price = float(t.get("lastPrice", 0) or 0) or None
-        fr    = t.get("fundingRate")
-        oi    = t.get("openInterestValue")
-        return {
-            "price":        price,
-            "funding_rate": round(float(fr) * 100, 4) if fr else None,
-            "oi_usd_bn":    round(float(oi) / 1e9, 2) if oi else None,
+            return {}
+        data = r.json()
+        if not data.get("success"):
+            return {}
+        _MEXC_CACHE = {
+            t["symbol"].upper(): t
+            for t in data.get("data", [])
+            if isinstance(t, dict) and t.get("symbol")
         }
-    except Exception:
-        return None
+        return _MEXC_CACHE
+    except Exception as e:
+        print(f"[Portfolio] MEXC fetch error: {e}")
+        return {}
 
 
-def _bybit_first(symbols):
-    """Try a list of Bybit symbols, return first successful result."""
-    for sym in symbols:
-        data = _bybit_ticker(sym)
-        if data and data.get("price"):
-            data["symbol"] = sym
-            return data
+def _mexc_first(candidates):
+    """Try candidate MEXC symbols (case-insensitive), return first match."""
+    tickers = _mexc_fetch_all()
+    for sym in candidates:
+        t = tickers.get(sym.upper())
+        if not t:
+            continue
+        try:
+            price = float(t.get("lastPrice") or 0) or None
+            if not price:
+                continue
+            fr  = t.get("fundingRate")
+            oi  = t.get("openInterest")        # contracts (base asset)
+            oiv = t.get("openInterestValue")   # USDT value (preferred)
+            oi_bn = None
+            if oiv:
+                oi_bn = round(float(oiv) / 1e9, 2)
+            elif oi:
+                oi_bn = round(float(oi) * price / 1e9, 2)
+            return {
+                "symbol":       sym.upper(),
+                "price":        price,
+                "funding_rate": round(float(fr) * 100, 4) if fr else None,
+                "oi_usd_bn":    oi_bn,
+            }
+        except Exception:
+            continue
     return None
 
 
@@ -147,11 +170,11 @@ YF_SYMBOLS = {
     "8PSB":  "8PSB.F",     # ETC Group Physical Bitcoin - Frankfurt
 }
 
-# Bybit perpetual candidates (first working symbol used)
-BYBIT_SYMBOLS = {
-    "WTI":   ["OILUSDT", "USOILUSDT"],
-    "BRENT": ["UKOILUSDT", "BRNTUSDT", "CRUDEOILUSDT"],
-    "SPX":   ["SPX500USD", "SPXUSDT", "US500USD"],
+# MEXC perpetual candidates (first working symbol used)
+MEXC_SYMBOLS = {
+    "WTI":   ["WTI_USDT", "CRUDE_USDT", "OIL_USDT", "USOIL_USDT"],
+    "BRENT": ["BRENT_USDT", "UKOIL_USDT", "BRNT_USDT"],
+    "SPX":   ["SPX_USDT", "SP500_USDT", "US500_USDT", "SPX500_USDT"],
 }
 
 
@@ -178,17 +201,25 @@ def get_all_portfolio_data():
             entry["above_ma50"] = price > entry["ma_50"]
         result[asset] = entry
 
-    # Overlay Bybit perpetual data for tradable assets
-    for asset, candidates in BYBIT_SYMBOLS.items():
-        bybit = _bybit_first(candidates)
-        if bybit:
-            result[asset]["bybit_price"]   = bybit.get("price")
-            result[asset]["bybit_symbol"]  = bybit.get("symbol")
-            result[asset]["funding_rate"]  = bybit.get("funding_rate")
-            result[asset]["oi_usd_bn"]     = bybit.get("oi_usd_bn")
-            # Use Bybit price as primary if YF unavailable
+    # Overlay MEXC perpetual data for tradable assets
+    for asset, candidates in MEXC_SYMBOLS.items():
+        mexc = _mexc_first(candidates)
+        if mexc:
+            result[asset]["mexc_price"]    = mexc.get("price")
+            result[asset]["mexc_symbol"]   = mexc.get("symbol")
+            result[asset]["funding_rate"]  = mexc.get("funding_rate")
+            result[asset]["oi_usd_bn"]     = mexc.get("oi_usd_bn")
+            # Use MEXC price as primary if YF unavailable
             if result[asset]["price"] is None:
-                result[asset]["price"] = bybit.get("price")
+                result[asset]["price"] = mexc.get("price")
+
+    # Extra context indicators
+    vix, _    = _yf_fetch("^VIX",    history=5)
+    eurusd, _ = _yf_fetch("EURUSD=X", history=5)
+    dxy, _    = _yf_fetch("DX-Y.NYB", history=5)
+    result["_vix"]    = vix
+    result["_eurusd"] = eurusd
+    result["_dxy"]    = dxy
 
     # Derived: WTI/Brent spread
     wti_p   = result.get("WTI", {}).get("price")

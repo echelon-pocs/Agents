@@ -794,15 +794,106 @@ def get_macro_data() -> Dict:
                 continue
         return (None, None)
 
+    def _jgb_nasdaq():
+        """Nasdaq Data Link MOFJ public dataset — Japan JGB rates, no auth needed."""
+        try:
+            r = requests.get(
+                "https://data.nasdaq.com/api/v3/datasets/MOFJ/INTEREST_RATE_JAPAN.json?rows=3",
+                timeout=15, headers=CHROME_HDR,
+            )
+            if r.status_code != 200:
+                return (None, None)
+            ds   = r.json().get("dataset", {})
+            cols = [c.lower() for c in ds.get("column_names", [])]
+            rows = ds.get("data", [])
+            if not rows:
+                return (None, None)
+            row = rows[0]
+            def _col(*keywords):
+                for kw in keywords:
+                    for i, c in enumerate(cols):
+                        if kw in c:
+                            try:
+                                v = row[i]
+                                return round(float(v), 4) if v else None
+                            except (TypeError, ValueError):
+                                pass
+                return None
+            return (_col("10 year", "10-year", "10y", "10yr"),
+                    _col("30 year", "30-year", "30y", "30yr"))
+        except Exception:
+            return (None, None)
+
+    def _jgb_fred():
+        """FRED API for Japan 10Y yield (IRLTLT01JPM156N). Optional FRED_API_KEY in .env."""
+        try:
+            import os as _os
+            import os.path as _osp
+            fred_key = _os.environ.get("FRED_API_KEY", "")
+            if not fred_key:
+                env_path = _osp.join(_osp.dirname(_osp.abspath(__file__)), ".env")
+                if _osp.exists(env_path):
+                    with open(env_path) as _ef:
+                        for _ln in _ef:
+                            _ln = _ln.strip()
+                            if _ln.startswith("FRED_API_KEY="):
+                                fred_key = _ln.split("=", 1)[1].strip()
+            if not fred_key:
+                return (None, None)
+            r = requests.get(
+                "https://api.stlouisfed.org/fred/series/observations"
+                "?series_id=IRLTLT01JPM156N&sort_order=desc&limit=3"
+                "&api_key=" + fred_key + "&file_type=json",
+                timeout=15,
+            )
+            if r.status_code == 200:
+                obs = r.json().get("observations", [])
+                if obs and obs[0].get("value", ".") != ".":
+                    return (round(float(obs[0]["value"]), 4), None)
+        except Exception:
+            pass
+        return (None, None)
+
+    def _jgb_yfinance_try():
+        """Yahoo Finance fallback — try known JGB yield tickers."""
+        j10, j30 = None, None
+        for sym in ("^JGBS10", "GJGB10.TYO", "^TNX2"):
+            v, _ = _yfinance(sym, history=3)
+            if v is not None:
+                j10 = v
+                break
+        for sym in ("^JGBS30", "GJGB30.TYO"):
+            v, _ = _yfinance(sym, history=3)
+            if v is not None:
+                j30 = v
+                break
+        return (j10, j30)
+
     result["us_10y"],  _    = _yield_multi("10ustb.b", "^TNX",  "10 YR")
     result["us_30y"],  _    = _yield_multi("30ustb.b", "^TYX",  "30 YR")
     result["spx"],     _    = _yield_multi("^spx", "^GSPC")
 
-    # JGB: stooq primary → MOF CSV fallback
+    # JGB: stooq → MOF CSV → Nasdaq Data Link → FRED → Yahoo Finance
     result["japan_10y"], _ = _stooq("10ygjb.b")
     result["japan_30y"], _ = _stooq("30ygjb.b")
     if result["japan_10y"] is None or result["japan_30y"] is None:
         j10, j30 = _mof_jgb()
+        if result["japan_10y"] is None:
+            result["japan_10y"] = j10
+        if result["japan_30y"] is None:
+            result["japan_30y"] = j30
+    if result["japan_10y"] is None or result["japan_30y"] is None:
+        j10, j30 = _jgb_nasdaq()
+        if result["japan_10y"] is None:
+            result["japan_10y"] = j10
+        if result["japan_30y"] is None:
+            result["japan_30y"] = j30
+    if result["japan_10y"] is None:
+        j10, _ = _jgb_fred()
+        if j10 is not None:
+            result["japan_10y"] = j10
+    if result["japan_10y"] is None or result["japan_30y"] is None:
+        j10, j30 = _jgb_yfinance_try()
         if result["japan_10y"] is None:
             result["japan_10y"] = j10
         if result["japan_30y"] is None:
