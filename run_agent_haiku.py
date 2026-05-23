@@ -338,7 +338,34 @@ def run():
         if tg_log else ""
     )
 
-    user_prompt = f"""Today is {datetime.utcnow().strftime('%Y-%m-%d')}.
+    today_str = datetime.utcnow().strftime('%Y-%m-%d')
+
+    # The prefill forces Claude to begin its response with the [EMAIL] block
+    # and the fixed header — it cannot skip sections because it's already past them.
+    prefill = (
+        f"[EMAIL]\n"
+        f"CRYPTO DAILY BRIEF\n"
+        f"{today_str} | "
+    )
+
+    user_prompt = f"""Today is {today_str}.
+
+═══ OUTPUT FORMAT — READ THIS FIRST ═══
+Your response MUST contain two blocks: [EMAIL]...[/EMAIL] then [STATE_JSON]...[/STATE_JSON].
+The [EMAIL] block MUST contain ALL of these sections IN THIS EXACT ORDER:
+  1. Header line  (date | bias | BTC price | dom | F&G)
+  2. MACRO REGIME card  ← REQUIRED even if all values are N/A
+  3. YEN CARRY card     ← REQUIRED even if USDJPY is N/A
+  4. SHORT bias / LONG bias lines
+  5. LIQUIDITY ANALYSIS (4-6 bullets) ← REQUIRED, never skip
+  6. OPEN POSITIONS
+  7. ACTIONABLE SETUPS
+  8. WAITING (monitor only)
+  9. CHANGES TODAY
+NEVER rename, merge, reorder, or skip any section.
+If a value is unavailable write N/A — do NOT remove the section or its header.
+No markdown: no **, no ##, no _underscores_. Plain text only.
+Max ~35 chars per line (mobile).
 
 ═══ REAL ON-CHAIN WHALE DATA (fetched this run) ═══
 {json.dumps(whale_slim, separators=(',', ':'), default=str)}
@@ -490,10 +517,14 @@ CHANGES TODAY
         model="claude-haiku-4-5-20251001",
         max_tokens=6000,
         system=system_prompt,
-        messages=[{"role": "user", "content": user_prompt}],
+        messages=[
+            {"role": "user",      "content": user_prompt},
+            {"role": "assistant", "content": prefill},
+        ],
     )
 
-    response   = message.content[0].text
+    # Prepend the prefilled text — the API does not echo it back in the response.
+    response   = prefill + message.content[0].text
     tokens_in  = message.usage.input_tokens
     tokens_out = message.usage.output_tokens
     cost_usd   = (tokens_in * 0.80 + tokens_out * 4.00) / 1_000_000
