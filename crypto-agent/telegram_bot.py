@@ -45,6 +45,21 @@ PENDING_FILE = BASE_DIR / "pending_updates.json"
 OFFSET_FILE  = BASE_DIR / ".tg_offset"
 ENV_FILE     = BASE_DIR / ".env"
 
+# Symbols that belong to the portfolio agent (traditional finance)
+_PORTFOLIO_SYMBOLS = {
+    "VWCE", "VWRL", "4GLD", "8PSB",
+    "WTI", "BRENT", "OIL", "CRUDE",
+    "SPX", "SPX500", "SP500", "ES",
+}
+
+def _pending_file_for(symbol):
+    """Route to portfolio-agent pending file for traditional finance symbols."""
+    if symbol.upper() in _PORTFOLIO_SYMBOLS:
+        portfolio_dir = BASE_DIR.parent / "portfolio-agent"
+        if portfolio_dir.exists():
+            return portfolio_dir / "pending_updates.json"
+    return PENDING_FILE
+
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -107,17 +122,20 @@ def send(token, chat_id, text):
 
 # ─── Pending updates file ─────────────────────────────────────────────────────
 
-def load_pending():
-    if PENDING_FILE.exists():
+def load_pending(path=None):
+    p = path or PENDING_FILE
+    if p.exists():
         try:
-            return json.loads(PENDING_FILE.read_text())
+            return json.loads(p.read_text())
         except Exception:
             pass
     return []
 
 
-def save_pending(updates):
-    PENDING_FILE.write_text(json.dumps(updates, indent=2))
+def save_pending(updates, path=None):
+    p = path or PENDING_FILE
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(updates, indent=2))
 
 
 def load_state():
@@ -528,7 +546,6 @@ def run():
         print(f"[TG] No new messages (offset={offset})")
         return
 
-    pending = load_pending()
     new_offset = offset
 
     api_key = env.get("ANTHROPIC_API_KEY", "")
@@ -586,9 +603,12 @@ def run():
                          "❓ Parsed image but could not extract symbol/price.\n"
                          "Send manually: `/enter BTC short 103000`")
                     continue
-                pending.append(update)
-                save_pending(pending)
-                sym      = update["symbol"]
+                img_sym   = update["symbol"]
+                img_pfile = _pending_file_for(img_sym)
+                img_pending = load_pending(img_pfile)
+                img_pending.append(update)
+                save_pending(img_pending, img_pfile)
+                sym      = img_sym
                 dirn     = update["direction"]
                 price    = update.get("price")
                 stop     = update.get("stop_loss")
@@ -640,9 +660,13 @@ def run():
                 send(token, chat_id, format_status(state))
                 continue
 
-            # Queue the update
-            pending.append(parsed)
-            save_pending(pending)
+            # Route to correct agent based on symbol
+            sym = parsed.get("symbol", "")
+            pfile = _pending_file_for(sym)
+            routed_pending = load_pending(pfile)
+            routed_pending.append(parsed)
+            save_pending(routed_pending, pfile)
+            agent_note = " (→ portfolio agent)" if pfile != PENDING_FILE else ""
 
             if action == "ENTER":
                 size_usd    = parsed.get("size_usd")
@@ -650,7 +674,7 @@ def run():
                 direction   = parsed.get("direction", "LONG")
                 market_type = parsed.get("market_type", "spot")
                 send(token, chat_id,
-                     f"✅ Queued: *{direction} {parsed['symbol']}* ({market_type}) @ "
+                     f"✅ Queued{agent_note}: *{direction} {parsed['symbol']}* ({market_type}) @ "
                      f"{_fmt_price(parsed.get('price'))}{size_note}\n"
                      f"_Will be applied on next daily run._")
 
@@ -658,12 +682,12 @@ def run():
                 kind = "PARTIAL CLOSE" if parsed.get("partial") else "CLOSE"
                 dir_note = f" {parsed['direction']}" if parsed.get("direction") else ""
                 send(token, chat_id,
-                     f"✅ Queued: *{kind} {parsed['symbol']}{dir_note}*\n"
+                     f"✅ Queued{agent_note}: *{kind} {parsed['symbol']}{dir_note}*\n"
                      f"_Will be applied on next daily run._")
 
             elif action == "NOTE":
                 send(token, chat_id,
-                     f"✅ Queued note for *{parsed['symbol']}*: _{parsed.get('note', '')}_")
+                     f"✅ Queued note{agent_note} for *{parsed['symbol']}*: _{parsed.get('note', '')}_")
 
         except Exception as e:
             print(f"[TG] ERROR processing update {upd.get('update_id', '?')}: {e}")
@@ -674,8 +698,10 @@ def run():
                 pass
 
     OFFSET_FILE.write_text(str(new_offset))
+    crypto_q    = len(load_pending(PENDING_FILE))
+    portfolio_q = len(load_pending(BASE_DIR.parent / "portfolio-agent" / "pending_updates.json"))
     print(f"[TG] Processed {len(updates)} update(s), new offset={new_offset}, "
-          f"pending queue={len(pending)}")
+          f"crypto queue={crypto_q} portfolio queue={portfolio_q}")
 
 
 if __name__ == "__main__":
