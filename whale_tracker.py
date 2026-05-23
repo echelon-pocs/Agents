@@ -11,6 +11,8 @@ import requests
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
+HALVING_DATE = datetime(2024, 4, 20)
+
 # ─── Known institutional / named whale wallets ────────────────────────────────
 
 KNOWN_WALLETS = {
@@ -81,6 +83,98 @@ def get_prices() -> Dict[str, float]:
         return {}
     return {sym: data.get(cg_id, {}).get("usd", 0)
             for sym, cg_id in COINGECKO_IDS.items()}
+
+def get_market_globals() -> Dict:
+    """Fear & Greed, BTC dominance, total market cap — free, no key."""
+    result = {
+        "fear_greed": None, "fear_greed_label": None,
+        "btc_dominance": None, "total_market_cap_bn": None,
+        "altcoin_season_index": None,
+    }
+    # Fear & Greed
+    fg = _get("https://api.alternative.me/fng/", params={"limit": 1})
+    if fg and fg.get("data"):
+        d = fg["data"][0]
+        result["fear_greed"]       = int(d.get("value", 0))
+        result["fear_greed_label"] = d.get("value_classification", "")
+    # BTC Dominance + total cap (CoinGecko global, free tier)
+    gd = (_get("https://api.coingecko.com/api/v3/global") or {}).get("data", {})
+    if gd:
+        btc_d = round(gd.get("market_cap_percentage", {}).get("btc", 0), 1)
+        result["btc_dominance"] = btc_d
+        result["total_market_cap_bn"] = round(
+            gd.get("total_market_cap", {}).get("usd", 0) / 1e9, 0)
+        # Altcoin season proxy from BTC dominance
+        result["altcoin_season_index"] = (
+            80 if btc_d < 40 else
+            60 if btc_d < 50 else
+            35 if btc_d < 60 else 20
+        )
+    return result
+
+
+def get_btc_cycle_metrics() -> Dict:
+    """
+    Compute BTC cycle position and proxy on-chain metrics via free APIs.
+    Uses Binance klines for price history (no key, reliable).
+    """
+    today = datetime.utcnow()
+    days_since_halving = (today - HALVING_DATE).days
+    cycle_year = min(4, days_since_halving // 365 + 1)
+
+    result = {
+        "days_since_halving":        days_since_halving,
+        "cycle_year":                cycle_year,
+        "btc_200w_ma":               None,
+        "btc_200w_ma_premium_pct":   None,
+        "btc_realized_price_approx": None,
+        "btc_mvrv_approx":           None,
+        "btc_volume_ratio_24h_30d":  None,
+    }
+
+    # Fetch 1000 daily candles from Binance (free, no key)
+    try:
+        r = requests.get("https://api.binance.com/api/v3/klines",
+                         params={"symbol": "BTCUSDT", "interval": "1d", "limit": 1000},
+                         timeout=20)
+        if r.status_code == 200:
+            klines = r.json()
+            closes  = [float(k[4]) for k in klines]  # close price
+            volumes = [float(k[5]) for k in klines]  # volume in BTC
+
+            if len(closes) >= 365:
+                result["btc_realized_price_approx"] = round(
+                    sum(closes[-365:]) / 365, 0)
+
+            if len(closes) >= 200:
+                ma_window = min(len(closes), 1000)
+                result["btc_200w_ma"] = round(
+                    sum(closes[-ma_window:]) / ma_window, 0)
+
+            if closes and result["btc_200w_ma"]:
+                current = closes[-1]
+                result["btc_200w_ma_premium_pct"] = round(
+                    (current - result["btc_200w_ma"]) / result["btc_200w_ma"] * 100, 1)
+
+            if closes and result["btc_realized_price_approx"]:
+                result["btc_mvrv_approx"] = round(
+                    closes[-1] / result["btc_realized_price_approx"], 2)
+
+            if len(volumes) >= 30:
+                avg_30d = sum(volumes[-31:-1]) / 30
+                result["btc_volume_ratio_24h_30d"] = round(
+                    volumes[-2] / avg_30d if avg_30d else 1.0, 2)
+
+    except Exception as e:
+        print(f"[CycleMetrics] fetch failed: {e}")
+
+    print(f"[CycleMetrics] Y{cycle_year}/4 ({days_since_halving}d since halving) "
+          f"| MA1000d: ${result['btc_200w_ma']:,.0f} "
+          f"({result['btc_200w_ma_premium_pct']:+.1f}%) "
+          f"| MVRV≈{result['btc_mvrv_approx']} "
+          f"| Vol ratio: {result['btc_volume_ratio_24h_30d']}")
+    return result
+
 
 def get_historical_price(symbol: str, date_str: str) -> float:
     """Get USD price on a specific date (YYYY-MM-DD) from CoinGecko."""
@@ -702,6 +796,18 @@ def get_all_whale_data(etherscan_key: str = "",
         print(f"[WhaleTracker] Macro data fetch failed: {e}")
         macro_data = {}
 
+    try:
+        market_globals = get_market_globals()
+    except Exception as e:
+        print(f"[WhaleTracker] Market globals fetch failed: {e}")
+        market_globals = {}
+
+    try:
+        cycle_metrics = get_btc_cycle_metrics()
+    except Exception as e:
+        print(f"[WhaleTracker] Cycle metrics fetch failed: {e}")
+        cycle_metrics = {}
+
     prices = get_prices()
 
     # 1. Large transfers across chains
@@ -765,12 +871,14 @@ def get_all_whale_data(etherscan_key: str = "",
         "macro": macro_data,
         "prices": prices,
         "large_transfers": {
-            "BTC": btc_txs[:10],
-            "ETH": eth_txs[:10],
-            "ONDO": ondo_txs[:10],
-            "XRP": xrp_txs[:10],
-            "SOL": sol_activity[:10],
+            "BTC": btc_txs[:5],
+            "ETH": eth_txs[:5],
+            "ONDO": ondo_txs[:5],
+            "XRP": xrp_txs[:5],
+            "SOL": sol_activity[:5],
         },
+        "market_globals":  market_globals,
+        "cycle_metrics":   cycle_metrics,
         "known_wallets": KNOWN_WALLETS,
         "profitable_wallets_discovered": tracked_wallets,
         "profitable_wallet_signals": profitable_signals,

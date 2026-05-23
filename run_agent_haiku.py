@@ -54,15 +54,12 @@ def _slim_transfer(tx):
 
 def slim_whale_data(data):
     transfers = {
-        chain: [_slim_transfer(tx) for tx in txs]
+        chain: [_slim_transfer(tx) for tx in txs[:5]]   # top 5 not 10
         for chain, txs in data.get("large_transfers", {}).items()
     }
-    known = {
-        chain: list(wallets.keys())
-        for chain, wallets in data.get("known_wallets", {}).items()
-    }
+    # Drop known_wallet_labels entirely — Claude doesn't use them
     profitable = []
-    for w in data.get("profitable_wallets_discovered", [])[:8]:
+    for w in data.get("profitable_wallets_discovered", [])[:3]:   # top 3 not 8
         if not isinstance(w, dict):
             continue
         addr = w.get("address", "")
@@ -84,9 +81,10 @@ def slim_whale_data(data):
     ]
     return {
         "macro":              data.get("macro", {}),
+        "market_globals":     data.get("market_globals", {}),
+        "cycle_metrics":      data.get("cycle_metrics", {}),
         "prices":             data.get("prices", {}),
         "transfers":          transfers,
-        "known_wallet_labels": known,
         "profitable_wallets": profitable,
         "profitable_signals": signals,
         "summary":            data.get("summary", {}),
@@ -279,6 +277,209 @@ def extract_macro_bias(text):
     return "NEUTRAL"
 
 
+def compute_position_analytics(positions, prices):
+    """Pre-compute P&L, flags, and stop distances. Python is authoritative."""
+    analytics = {}
+    for pos in positions:
+        sym       = pos.get("symbol", "")
+        direction = pos.get("direction", "LONG")
+        entry     = pos.get("entry_price")
+        stop      = pos.get("stop_loss")
+        t1        = pos.get("target_1")
+        key       = f"{sym}_{direction}"
+        current   = prices.get(sym)
+
+        pnl = None
+        if entry and current:
+            pnl = (entry - current if direction == "SHORT" else current - entry) / entry * 100
+
+        flags = []
+        if pnl is not None:
+            if pnl < -15:    flags.append("DANGER_LOSS")
+            elif pnl < -10:  flags.append("HIGH_RISK_LOSS")
+            elif pnl < -5:   flags.append("DRAWDOWN")
+            if pnl > 20:     flags.append("TRAIL_10PCT")
+            elif pnl > 10:   flags.append("TRAIL_5PCT")
+            elif pnl > 5:    flags.append("TRAIL_BREAKEVEN")
+        if stop is None:
+            flags.append("NO_STOP_SET")
+        elif current and stop:
+            stop_dist_pct = abs(current - stop) / current * 100
+            if stop_dist_pct < 2:
+                flags.append("STOP_CLOSE")
+        if t1 and current:
+            if (direction == "LONG"  and current >= t1 * 0.97) or \
+               (direction == "SHORT" and current <= t1 * 1.03):
+                flags.append("T1_APPROACHING")
+
+        analytics[key] = {
+            "current_price": current,
+            "pnl_pct":       round(pnl, 2) if pnl is not None else None,
+            "flags":         flags,
+        }
+    return analytics
+
+
+def compute_setup_statuses(setups, prices):
+    """Pre-compute ENTER/APPROACHING/WAITING/INVALIDATED for each setup."""
+    statuses = {}
+    for setup in setups:
+        sym       = setup.get("symbol", "")
+        direction = setup.get("direction", "LONG")
+        zone      = setup.get("entry_zone", [])
+        stop      = setup.get("stop_loss")
+        current   = prices.get(sym)
+
+        if not current or not zone or len(zone) < 2:
+            statuses[sym] = "WAITING"
+            continue
+
+        z_low, z_high = zone[0], zone[1]
+
+        # Stop breach → invalidated
+        if stop:
+            if direction == "LONG"  and current < stop: statuses[sym] = "INVALIDATED"; continue
+            if direction == "SHORT" and current > stop: statuses[sym] = "INVALIDATED"; continue
+
+        if z_low <= current <= z_high:
+            statuses[sym] = "ENTER"
+        elif direction == "LONG":
+            statuses[sym] = "APPROACHING" if current >= z_low * 0.97 else "WAITING"
+        else:
+            statuses[sym] = "APPROACHING" if current <= z_high * 1.03 else "WAITING"
+
+    return statuses
+
+
+def _update_usdjpy_history(history, current_usdjpy):
+    """Keep last 4 weekly closes for carry architecture trend detection."""
+    if not isinstance(history, list):
+        history = []
+    if current_usdjpy is not None:
+        history = (history + [current_usdjpy])[-4:]
+    return history
+
+
+def merge_state_delta(prior_state, delta, macro_data, prices, profitable_wallets):
+    """
+    Claude outputs only analysis fields (delta). Python owns:
+      last_run, btc_price, macro_snapshot, profitable_wallets_discovered, usdjpy_history.
+    """
+    if not isinstance(delta, dict):
+        return prior_state
+
+    new_state = dict(prior_state)
+
+    # Python-managed
+    new_state["last_run"]  = datetime.utcnow().isoformat()
+    new_state["btc_price"] = prices.get("BTC") or prior_state.get("btc_price")
+    new_state["profitable_wallets_discovered"] = profitable_wallets
+    new_state["macro_snapshot"] = {
+        "us_10y":                 macro_data.get("us_10y"),
+        "us_30y":                 macro_data.get("us_30y"),
+        "japan_10y":              macro_data.get("japan_10y"),
+        "japan_30y":              macro_data.get("japan_30y"),
+        "japan_curve_spread":     macro_data.get("japan_curve_spread"),
+        "spx":                    macro_data.get("spx"),
+        "btc_oi_usd_bn":          macro_data.get("btc_oi_usd_bn"),
+        "btc_funding_rate_pct":   macro_data.get("btc_funding_rate_pct"),
+        "us_curve_status":        macro_data.get("us_curve_status"),
+        "japan_stress":           macro_data.get("japan_stress"),
+        "usdjpy":                 macro_data.get("usdjpy"),
+        "usdjpy_weekly_chg_pct":  macro_data.get("usdjpy_weekly_chg_pct"),
+        "carry_regime":           macro_data.get("carry_regime"),
+        "carry_architecture_alert": macro_data.get("carry_architecture_alert"),
+        "usdjpy_history": _update_usdjpy_history(
+            prior_state.get("macro_snapshot", {}).get("usdjpy_history", []),
+            macro_data.get("usdjpy"),
+        ),
+    }
+
+    # Claude-managed fields
+    for field in (
+        "macro_bias", "bias_short", "bias_long",
+        "cycle_phase", "cycle_year", "cycle_thesis", "cycle_bias_impact",
+        "btc_dominance", "altcoin_season_index", "fear_greed",
+        "active_setups", "open_positions", "alerted",
+        "whale_signals_today", "last_analysis",
+    ):
+        if field in delta:
+            new_state[field] = delta[field]
+
+    return sanitize_state(new_state)
+
+
+def extract_state_delta(text):
+    """Extract JSON from [STATE_DELTA]...[/STATE_DELTA] block."""
+    start = text.find("[STATE_DELTA]")
+    end   = text.find("[/STATE_DELTA]")
+    if start == -1 or end == -1:
+        return {}
+    delta_text = text[start + 13:end]
+    depth, json_start = 0, None
+    for i, ch in enumerate(delta_text):
+        if ch == "{":
+            if depth == 0: json_start = i
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0 and json_start is not None:
+                try:
+                    return json.loads(delta_text[json_start:i + 1])
+                except json.JSONDecodeError:
+                    json_start = None
+    return {}
+
+
+def log_setup_snapshot(state: dict, run_date: str) -> None:
+    """Append each active setup to setups_history.jsonl for monthly hit-rate analysis."""
+    path = BASE_DIR / "setups_history.jsonl"
+    btc_price = state.get("btc_price")
+    for setup in state.get("active_setups", []):
+        record = {
+            "date":            run_date,
+            "symbol":          setup.get("symbol"),
+            "direction":       setup.get("direction"),
+            "status":          setup.get("status"),
+            "conviction":      setup.get("conviction"),
+            "composite_score": setup.get("composite_score"),
+            "entry_zone":      setup.get("entry_zone"),
+            "stop_loss":       setup.get("stop_loss"),
+            "target_1":        setup.get("target_1"),
+            "target_2":        setup.get("target_2"),
+            "r_r_ratio":       setup.get("r_r_ratio"),
+            "timeframe":       setup.get("timeframe"),
+            "btc_price_at_log": btc_price,
+        }
+        with open(path, "a") as f:
+            f.write(json.dumps(record) + "\n")
+
+
+_FOMC_DATES = [
+    # 2026
+    datetime(2026, 1, 28), datetime(2026, 3, 18), datetime(2026, 4, 29),
+    datetime(2026, 6, 10), datetime(2026, 7, 29), datetime(2026, 9, 16),
+    datetime(2026, 10, 28), datetime(2026, 12, 9),
+    # 2027
+    datetime(2027, 1, 27), datetime(2027, 3, 17), datetime(2027, 4, 28),
+    datetime(2027, 6, 9),  datetime(2027, 7, 28), datetime(2027, 9, 15),
+    datetime(2027, 10, 27), datetime(2027, 12, 8),
+]
+
+def get_fomc_context() -> dict:
+    now = datetime.utcnow()
+    future = [d for d in _FOMC_DATES if d >= now]
+    if not future:
+        return {"days_to_fomc": None, "next_fomc": None, "pre_fomc_window": False}
+    nxt = future[0]
+    days = (nxt - now).days
+    return {
+        "days_to_fomc":    days,
+        "next_fomc":       nxt.strftime("%Y-%m-%d"),
+        "pre_fomc_window": days <= 3,
+    }
+
+
 def count_enter_setups(state):
     return sum(
         1 for s in state.get("active_setups", [])
@@ -333,6 +534,22 @@ def run():
     system_prompt = load_instructions()
     whale_slim    = slim_whale_data(whale_data)
 
+    # Pre-compute authoritative analytics before building the prompt
+    fomc = get_fomc_context()
+    pre_computed = {
+        "position_analytics": compute_position_analytics(
+            state.get("open_positions", []),
+            whale_slim.get("prices", {}),
+        ),
+        "setup_statuses": compute_setup_statuses(
+            state.get("active_setups", []),
+            whale_slim.get("prices", {}),
+        ),
+        "cycle_metrics":    whale_slim.get("cycle_metrics", {}),
+        "market_globals":   whale_slim.get("market_globals", {}),
+        "fomc":             fomc,
+    }
+
     tg_section = (
         f"\n═══ POSITION UPDATES (received via Telegram before this run) ═══\n"
         + "\n".join(f"- {l}" for l in tg_log)
@@ -381,26 +598,31 @@ def run():
     arch_alert  = macro.get("carry_architecture_alert", False)
     arch_line   = "\nArch  : ⚠️ lower-highs (arch alert)" if arch_alert else ""
 
+    mg          = whale_slim.get("market_globals", {})
+    cm          = whale_slim.get("cycle_metrics", {})
+
     btc_price_v = _fv(prices.get("BTC") or state.get("btc_price"))
-    btc_dom_v   = _fv(state.get("btc_dominance"))
-    fg_v        = _fv(state.get("fear_greed"))
+    btc_dom_v   = _fv(mg.get("btc_dominance") or state.get("btc_dominance"))
+    fg_v        = _fv(mg.get("fear_greed") or state.get("fear_greed"))
 
-    # Prefill ends just before SHORT bias so Claude writes the bias values
-    # and all remaining analysis sections.
-    prefill = (
-        f"[EMAIL]\n"
-        f"CRYPTO DAILY BRIEF\n"
-        f"{today_str} | "
-        # Claude fills in MACRO_BIAS after the pipe, then BTC line, then dashes
-        # — but MACRO REGIME and YEN CARRY below are already hard-coded.
-        # We stop the prefill after the first dashes so Claude writes the
-        # macro bias and BTC header, then encounters the pre-filled cards.
-    )
+    # Cycle metrics for prefill
+    cy_year     = cm.get("cycle_year") or state.get("cycle_year") or "?"
+    cy_ma       = cm.get("btc_200w_ma")
+    cy_ma_prem  = cm.get("btc_200w_ma_premium_pct")
+    cy_mvrv     = cm.get("btc_mvrv_approx")
+    cy_ma_v     = f"${cy_ma:,.0f}" if cy_ma is not None else "N/A"
+    cy_prem_v   = f"({cy_ma_prem:+.1f}%)" if cy_ma_prem is not None else ""
+    cy_mvrv_v   = f"{cy_mvrv}" if cy_mvrv is not None else "N/A"
 
-    # Full pre-filled block injected into the assistant turn AFTER Claude
-    # writes the header. We use a two-message trick: start with an
-    # incomplete header and let Claude finish it, but force everything after
-    # the first separator by including the full card text in the prefill.
+    # FOMC for prefill
+    fomc_days   = fomc.get("days_to_fomc")
+    next_fomc   = fomc.get("next_fomc") or "N/A"
+    pre_fomc_w  = fomc.get("pre_fomc_window", False)
+    fomc_v      = f"{fomc_days}d to {next_fomc}" if fomc_days is not None else f"next {next_fomc}"
+    fomc_flag   = " ⚠️ PRE-FOMC" if pre_fomc_w else ""
+
+    # Prefill: MACRO REGIME and YEN CARRY are pre-filled from Python so
+    # Claude cannot skip them. Claude continues from SHORT bias onwards.
     prefill = (
         f"[EMAIL]\n"
         f"CRYPTO DAILY BRIEF\n"
@@ -428,6 +650,9 @@ def run():
         f"USDJPY: {usdjpy_v}  ({usdjpy_chg})\n"
         f"Regime: {carry_v}{arch_line}\n"
         f"------------------------------\n"
+        f"FOMC  : {fomc_v}{fomc_flag}\n"
+        f"Cycle : Y{cy_year}/4 | MA1000d: {cy_ma_v} {cy_prem_v} | MVRV≈{cy_mvrv_v}\n"
+        f"------------------------------\n"
         f"SHORT bias: "
     )
     prefill = prefill + macro_card_suffix
@@ -435,7 +660,7 @@ def run():
     user_prompt = f"""Today is {today_str}.
 
 ═══ OUTPUT FORMAT — READ THIS FIRST ═══
-Your response MUST contain two blocks: [EMAIL]...[/EMAIL] then [STATE_JSON]...[/STATE_JSON].
+Your response MUST contain two blocks: [EMAIL]...[/EMAIL] then [STATE_DELTA]...[/STATE_DELTA].
 The [EMAIL] block MUST contain ALL of these sections IN THIS EXACT ORDER:
   1.  Header line  (date | bias | BTC price | dom | F&G)
   2.  MACRO REGIME card  ← REQUIRED even if all values are N/A
@@ -456,6 +681,9 @@ Max ~35 chars per line (mobile).
 ═══ REAL ON-CHAIN WHALE DATA (fetched this run) ═══
 {json.dumps(whale_slim, separators=(',', ':'), default=str)}
 
+═══ PRE-COMPUTED ANALYTICS (Python-verified — use these, do NOT recalculate) ═══
+{json.dumps(pre_computed, separators=(',', ':'), default=str)}
+
 ═══ CURRENT STATE (from last run) ═══
 {json.dumps(state, separators=(',', ':'), default=str)}
 {tg_section}
@@ -467,6 +695,11 @@ Analysis instructions:
 - No positions are open unless listed in current state open_positions.
 - ALL open positions must appear in the email with P&L, stop status, and a specific action.
 - Positions with status=OPEN and conviction=UNKNOWN were opened outside analysis — run full whale+TA on them and adopt them into active_setups with real levels.
+- pre_computed.position_analytics contains Python-verified P&L and flags for each position. Use these values exactly — do NOT recalculate P&L. Keys are "SYMBOL_DIRECTION" (e.g. "BTC_LONG").
+- pre_computed.setup_statuses contains Python-verified ENTER/APPROACHING/WAITING/INVALIDATED for each setup. Use these, do NOT re-derive from price.
+- pre_computed.cycle_metrics contains btc_mvrv_approx: MVRV>3.0 = historically expensive (cycle top risk), MVRV<1.0 = historically cheap (bottom zone). Use this for cycle analysis.
+- pre_computed.market_globals contains fresh fear_greed and btc_dominance — use these values, not stale state values.
+- pre_computed.fomc: if pre_fomc_window=true, a Fed decision is within 3 days — suppress new SHORT_TERM setups and flag elevated volatility risk. If days_to_fomc < 7, note in CHANGES TODAY as catalyst risk.
 - Flag any position with P&L < -10% or no stop_loss as high risk. Flag P&L < -15% as DANGER.
 - macro.japan_stress HIGH/CRITICAL = liquidity tightening risk, increase bearish weight on risk assets.
 - macro.us_curve_status INVERTED = recession signal, favour defensive bias_long = BEARISH.
@@ -601,9 +834,14 @@ CHANGES TODAY
  INVALIDATED / REVISED / ADOPTED / COMPLETED>
 [/EMAIL]
 
-[STATE_JSON]
-{{updated state.json as valid JSON}}
-[/STATE_JSON]
+[STATE_DELTA]
+{{JSON with ONLY these fields — Python manages the rest:
+  macro_bias, bias_short, bias_long,
+  cycle_phase, cycle_year, cycle_thesis, cycle_bias_impact,
+  btc_dominance, altcoin_season_index, fear_greed,
+  active_setups, open_positions, alerted,
+  whale_signals_today, last_analysis}}
+[/STATE_DELTA]
 """
 
     # ── Step 4: Call Claude Haiku ───────────────────────────────────
@@ -613,7 +851,11 @@ CHANGES TODAY
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=6000,
-        system=system_prompt,
+        system=[{
+            "type": "text",
+            "text": system_prompt,
+            "cache_control": {"type": "ephemeral"},
+        }],
         messages=[
             {"role": "user",      "content": user_prompt},
             {"role": "assistant", "content": prefill},
@@ -621,34 +863,54 @@ CHANGES TODAY
     )
 
     # Prepend the prefilled text — the API does not echo it back in the response.
-    response   = prefill + message.content[0].text
-    tokens_in  = message.usage.input_tokens
-    tokens_out = message.usage.output_tokens
-    cost_usd   = (tokens_in * 0.80 + tokens_out * 4.00) / 1_000_000
+    response          = prefill + message.content[0].text
+    tokens_in         = message.usage.input_tokens
+    tokens_cache_read  = getattr(message.usage, "cache_read_input_tokens", 0)
+    tokens_cache_write = getattr(message.usage, "cache_creation_input_tokens", 0)
+    tokens_out        = message.usage.output_tokens
+    cost_usd = (
+        (tokens_in         * 0.80) +
+        (tokens_cache_read  * 0.08) +
+        (tokens_cache_write * 1.00) +
+        (tokens_out        * 4.00)
+    ) / 1_000_000
 
     print(f"[{datetime.utcnow().isoformat()}] Response received — "
-          f"in:{tokens_in} out:{tokens_out} cost:${cost_usd:.4f}")
+          f"in:{tokens_in} cache_read:{tokens_cache_read} "
+          f"cache_write:{tokens_cache_write} out:{tokens_out} cost:${cost_usd:.4f}")
 
-    # ── Step 5: Extract and save updated state ────────────────────────────
-    state_text = response
-    sj_start = response.find("[STATE_JSON]")
-    sj_end   = response.find("[/STATE_JSON]")
-    if sj_start != -1 and sj_end != -1:
-        state_text = response[sj_start + 12:sj_end]
+    # ── Step 5: Extract state delta and merge ──────────────────────────────
+    date_str = datetime.utcnow().strftime("%Y-%m-%d")
 
-    updated_state = extract_state_from_response(state_text)
-    if updated_state:
-        updated_state["profitable_wallets_discovered"] = \
-            whale_data.get("profitable_wallets_discovered", [])
+    delta = extract_state_delta(response)
+    if delta:
+        updated_state = merge_state_delta(
+            prior_state=state,
+            delta=delta,
+            macro_data=whale_data.get("macro", {}),
+            prices=whale_data.get("prices", {}),
+            profitable_wallets=whale_data.get("profitable_wallets_discovered", []),
+        )
         save_state(updated_state)
-        updated_state = sanitize_state(updated_state)
-        print(f"[{datetime.utcnow().isoformat()}] state.json updated")
+        log_setup_snapshot(updated_state, date_str)
+        print(f"[{datetime.utcnow().isoformat()}] state.json updated via delta merge")
     else:
-        print(f"[{datetime.utcnow().isoformat()}] WARNING: Could not extract state JSON")
-        updated_state = state
+        # Fallback: try old-style full STATE_JSON extraction
+        sj_start = response.find("[STATE_JSON]")
+        sj_end   = response.find("[/STATE_JSON]")
+        state_text = response[sj_start + 12:sj_end] if sj_start != -1 and sj_end != -1 else response
+        fallback = extract_state_from_response(state_text)
+        if fallback:
+            fallback["profitable_wallets_discovered"] = whale_data.get("profitable_wallets_discovered", [])
+            updated_state = sanitize_state(fallback)
+            save_state(updated_state)
+            log_setup_snapshot(updated_state, date_str)
+            print(f"[{datetime.utcnow().isoformat()}] state.json updated via fallback full-JSON")
+        else:
+            print(f"[{datetime.utcnow().isoformat()}] WARNING: Could not extract state — state unchanged")
+            updated_state = state
 
     # ── Step 6: Save full response to file ────────────────────────────────
-    date_str    = datetime.utcnow().strftime("%Y-%m-%d")
     report_path = BASE_DIR / f"daily_report_{date_str}.txt"
     with open(report_path, "w") as f:
         f.write(response)
