@@ -20,8 +20,18 @@ import anthropic
 BASE_DIR = Path(__file__).parent
 
 # Re-use email_sender from crypto-agent (same repo)
-sys.path.insert(0, str(BASE_DIR.parent / "crypto-agent"))
-from email_sender import send_report, build_subject, render_html_email  # noqa: E402
+_CRYPTO_AGENT = str(BASE_DIR.parent / "crypto-agent")
+if _CRYPTO_AGENT not in sys.path:
+    sys.path.insert(0, _CRYPTO_AGENT)
+
+try:
+    from email_sender import send_report, build_subject, render_html_email  # noqa: E402
+except ImportError as _e:
+    raise SystemExit(
+        f"Cannot import email_sender from {_CRYPTO_AGENT}.\n"
+        f"Make sure you ran 'git pull origin main' on the NAS.\n"
+        f"Original error: {_e}"
+    )
 
 from data_fetcher import get_all_portfolio_data, get_macro_data  # noqa: E402
 
