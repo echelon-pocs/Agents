@@ -157,6 +157,7 @@ def apply_pending_updates(state):
                 "target_1":    setup.get("target_1"),
                 "target_2":    setup.get("target_2"),
                 "size_usd":    size_usd,
+                "tf":          u.get("tf") or setup.get("timeframe") or "UNKNOWN",
                 "pnl_pct":     None,
                 "notes":       "User confirmed via Telegram.",
             }
@@ -353,15 +354,17 @@ def run():
 ═══ OUTPUT FORMAT — READ THIS FIRST ═══
 Your response MUST contain two blocks: [EMAIL]...[/EMAIL] then [STATE_JSON]...[/STATE_JSON].
 The [EMAIL] block MUST contain ALL of these sections IN THIS EXACT ORDER:
-  1. Header line  (date | bias | BTC price | dom | F&G)
-  2. MACRO REGIME card  ← REQUIRED even if all values are N/A
-  3. YEN CARRY card     ← REQUIRED even if USDJPY is N/A
-  4. SHORT bias / LONG bias lines
-  5. LIQUIDITY ANALYSIS (4-6 bullets) ← REQUIRED, never skip
-  6. OPEN POSITIONS
-  7. ACTIONABLE SETUPS
-  8. WAITING (monitor only)
-  9. CHANGES TODAY
+  1.  Header line  (date | bias | BTC price | dom | F&G)
+  2.  MACRO REGIME card  ← REQUIRED even if all values are N/A
+  3.  YEN CARRY card     ← REQUIRED even if USDJPY is N/A
+  4.  SHORT bias / LONG bias lines
+  5.  CYCLE VIEW (BTC 4-yr halving cycle position) ← REQUIRED
+  6.  LIQUIDITY ANALYSIS (4-6 bullets) ← REQUIRED, never skip
+  7.  OPEN POSITIONS (each card MUST show TF: SHORT/MED/LONG_TERM)
+  8.  SHORT-TERM SETUPS (days–2wk)  ← always present, "None." if empty
+  9.  LONG-TERM SETUPS  (weeks–months+) ← always present, "None." if empty
+  10. WAITING (monitor only)
+  11. CHANGES TODAY
 NEVER rename, merge, reorder, or skip any section.
 If a value is unavailable write N/A — do NOT remove the section or its header.
 No markdown: no **, no ##, no _underscores_. Plain text only.
@@ -393,6 +396,12 @@ Analysis instructions:
 - macro.japan_curve_spread narrowing run-over-run = BOJ losing long-end control; amplifies japan_stress signal.
 - Track macro.usdjpy across runs in macro_snapshot.usdjpy_history (list of last 4 weekly closes); flag if making lower-highs.
 - If carry_regime is CARRY_UNWIND or COLLAPSE and user holds a long position → always flag ⚠️ CARRY RISK regardless of P&L.
+- BTC CYCLE: today is in the 2024-04 halving cycle. Y1=2024, Y2=2025, Y3=2026 (now, bear/bottom year), Y4=2027 (pre-halving accumulation). Historical Y3 drawdown is 70–85% from cycle peak — multi-month longs in Y3 have been wrong every prior cycle. Always state `cycle_phase`, `cycle_year`, `cycle_thesis`, `cycle_bias_impact` in state and in the CYCLE VIEW email section.
+- TIMEFRAME-RESPECTING ACTION RULE: every open position has a `tf` field (SHORT_TERM, MEDIUM_TERM, LONG_TERM). Evaluate each position ONLY against the bias of its own timeframe:
+    • SHORT_TERM position → vs bias_short
+    • MEDIUM_TERM / LONG_TERM position → vs bias_long + cycle_phase
+  NEVER recommend closing a MEDIUM/LONG_TERM position because of opposing SHORT_TERM whale flow or TA. Note such conflicts as "ST noise — hold thesis", but the action must respect the long-term thesis unless stop breached or cycle/bias_long has actually flipped.
+- SETUP TIMEFRAMES: every setup MUST have a `timeframe` field. Place SHORT_TERM setups under "SHORT-TERM SETUPS" section, MEDIUM_TERM/LONG_TERM under "LONG-TERM SETUPS". If a section has no setups write "None.".
 
 ═══ EMAIL FORMAT — MANDATORY RULES ═══
 VIOLATION OF ANY RULE BELOW = WRONG OUTPUT.
@@ -446,6 +455,14 @@ SHORT bias: <bias_short>  (weeks)
 LONG  bias: <bias_long>   (months+)
 ------------------------------
 
+CYCLE VIEW
+------------------------------
+Phase  : <cycle_phase> (Y<cycle_year>/4)
+Halving: 2024-04 → next ~2028-04
+Thesis : <cycle_thesis>
+Impact : <cycle_bias_impact>
+------------------------------
+
 LIQUIDITY ANALYSIS
 ------------------------------
 <REQUIRED — write exactly 4 to 6 bullet points.
@@ -470,27 +487,40 @@ OPEN POSITIONS
 ------------------------------
 <If open_positions is empty: write "None confirmed.">
 <One card per position — NO EXCEPTIONS.
- Normal:>
+ TF MUST appear and drives the bias check:>
 <SYM> <DIRECTION> (<market_type>)
+  TF    : <SHORT_TERM|MEDIUM_TERM|LONG_TERM>
   Entry : $<entry_price>
   Now   : $<current>  P&L: <pnl>%
   Stop  : $<stop_loss>
-  Action: <action>
+  Bias  : <Aligned with bias_<tf>|CONFLICT>
+  Action: <action respects TF — see rules>
 ------------------------------
 <P&L < -10% or stop missing — prefix with ⚠️>
 <P&L < -15% or stop breached — prefix with 🚨>
 
-ACTIONABLE SETUPS
+SHORT-TERM SETUPS (days–2wk)
 ------------------------------
-<ENTER and APPROACHING setups only.
- If none: write "No setups actionable today."
- One card per setup:>
+<Setups with timeframe=SHORT_TERM only.
+ If none: write "None.">
 🔴 <SYM> <DIR> — <CONVICTION>
-  Status: ENTER
+  Status: <ENTER|APPROACHING|WAITING>
   Zone  : $<low>–$<high>
   Stop  : $<stop>
   T1    : $<t1>  T2: $<t2>
   R/R   : <ratio>x | Whale: <whale_signal>
+------------------------------
+
+LONG-TERM SETUPS (weeks–months+)
+------------------------------
+<Setups with timeframe=MEDIUM_TERM or LONG_TERM.
+ If none: write "None.">
+🟣 <SYM> <DIR> — <CONVICTION>
+  Status: <ENTER|APPROACHING|WAITING>
+  Zone  : $<low>–$<high>
+  Stop  : $<stop>
+  T1    : $<t1>  T2: $<t2>
+  R/R   : <ratio>x | Cycle: <aligned|against>
 ------------------------------
 
 WAITING (monitor only)

@@ -114,6 +114,31 @@ bias_long (months+): BULLISH | BEARISH | NEUTRAL
 - If both biases oppose a position the user holds → flag `⚠️ DOUBLE MACRO RISK`
 - If carry_regime = CARRY_UNWIND or COLLAPSE AND position is long crypto → flag `⚠️ CARRY RISK` regardless of P&L
 
+### STEP 2c — BTC Cycle Position (always assess)
+
+BTC has run on a ~4-year cycle anchored to halvings (2012-11, 2016-07, 2020-05, 2024-04; next ~2028-04). Every run, place the market on the cycle clock — this is the dominant driver of `bias_long` and overrides short-term whale noise for multi-month positions.
+
+**Cycle phases (post-halving years):**
+- **Year 1** (halving year): early markup, slow accumulation, breakout above prior ATH late in year
+- **Year 2**: parabolic markup → blow-off top typically Q3–Q4
+- **Year 3**: bear / distribution, drawdown −70% to −85% from cycle peak, bottom typically mid-to-late Y3
+- **Year 4** (pre-halving): basing, slow accumulation, sideways → recovery into next halving
+
+**Current cycle (2024-04 halving):** Y1=2024, Y2=2025, Y3=2026, Y4=2027.
+2026 sits in the bear/bottom year. Historical drawdown range from cycle peak suggests a bottom zone, not a top — sustained multi-month longs into this window have lost money in every prior cycle.
+
+**Required output fields (in state + email CYCLE VIEW section):**
+- `cycle_phase`: EARLY_BULL | LATE_BULL | DISTRIBUTION | BEAR | ACCUMULATION | PRE_HALVING
+- `cycle_year`: 1 | 2 | 3 | 4 (years since last halving)
+- `cycle_thesis`: one-line plain-English thesis — e.g. "Y3 bear; expect $40–50k bottom Q3–Q4 2026 before Y4 accumulation"
+- `cycle_bias_impact`: how the cycle phase shifts `bias_long` (e.g. "BEARISH override for next 3–6 months")
+
+**Cycle vs. short-term conflict rule (critical):**
+Short-term whale flow and TA can run opposite to the cycle thesis for weeks at a time. When they do:
+- SHORT_TERM setups → follow short-term signals (whale + TA + bias_short)
+- MEDIUM_TERM / LONG_TERM setups and positions → follow cycle + bias_long; ignore conflicting short-term whale flow as noise
+- NEVER recommend closing a MEDIUM_TERM or LONG_TERM position because of opposing SHORT_TERM whale or TA signals. Only recommend closing if (a) stop is breached, (b) cycle thesis itself has shifted, or (c) bias_long has flipped
+
 ### STEP 3 — Whale Signal Scoring (70% weight)
 Use `large_transfers`, `profitable_wallets_discovered`, and `profitable_wallet_signals` from the provided data.
 
@@ -198,14 +223,20 @@ For each position in `open_positions`, calculate and update:
    - Whale signal opposes direction → flag "⚠️ WHALE REVERSAL — consider exit"
    - Macro bias opposes direction AND P&L negative → flag "⚠️ DOUBLE RISK — macro + loss"
    - Stop_loss is None (unplanned position) → flag "⚠️ NO STOP SET — define risk immediately"
-5. **Action column in email** — always give a specific action: "Hold", "Trail stop to $X", "Take partial profit at $Y", "Cut loss — exit now", "Reduce size — whale reversal", "Set stop at $X immediately"
+5. **Position timeframe (`tf` field)** — every position has a timeframe: SHORT_TERM (days–2wk), MEDIUM_TERM (weeks–months), LONG_TERM (months+). If missing, infer from setup or stop distance (>15% from entry → MEDIUM/LONG). Always show in the email card.
+6. **Bias check against MATCHING timeframe (do not mix):**
+   - SHORT_TERM position → evaluate vs `bias_short` only
+   - MEDIUM_TERM / LONG_TERM position → evaluate vs `bias_long` + `cycle_phase` only
+   - A short-term whale flow opposing a long-term position is NOT a reason to close. Note as "ST whale flow against position — noise, hold thesis" but do not recommend exit.
+   - Only flag `⚠️ CONFLICT` when the matching-timeframe bias opposes the position.
+7. **Action column in email** — always give a specific action aligned to the position's timeframe: "Hold", "Trail stop to $X", "Take partial profit at $Y", "Cut loss — exit now", "Reduce size — bias flip", "Set stop at $X immediately". For a LONG_TERM short during BTC Y3 bear, the default action is "Hold — cycle thesis intact" unless stop or thesis broken.
 
 Never close a position in state without user confirmation. Only recommend actions; the user decides.
 
 ### STEP 7 — Output
 Produce output in EXACTLY the format specified in the user prompt ([EMAIL] and [STATE_JSON] blocks). No other output.
 
-State JSON fields: last_run, macro_bias, bias_short, bias_long, btc_price, btc_dominance, altcoin_season_index, fear_greed, macro_snapshot (us_10y, us_30y, japan_10y, japan_30y, japan_curve_spread, spx, btc_oi_usd_bn, btc_funding_rate_pct, us_curve_status, japan_stress, usdjpy, usdjpy_weekly_chg_pct, carry_regime, carry_architecture_alert, usdjpy_history[4 weekly closes newest-first]), open_positions, whale_wallets, whale_signals_today, active_setups, alerted, profitable_wallets_discovered, last_analysis.
+State JSON fields: last_run, macro_bias, bias_short, bias_long, cycle_phase, cycle_year, cycle_thesis, cycle_bias_impact, btc_price, btc_dominance, altcoin_season_index, fear_greed, macro_snapshot (us_10y, us_30y, japan_10y, japan_30y, japan_curve_spread, spx, btc_oi_usd_bn, btc_funding_rate_pct, us_curve_status, japan_stress, usdjpy, usdjpy_weekly_chg_pct, carry_regime, carry_architecture_alert, usdjpy_history[4 weekly closes newest-first]), open_positions (each with tf), whale_wallets, whale_signals_today, active_setups, alerted, profitable_wallets_discovered, last_analysis.
 
 Log line format: `YYYY-MM-DD HH:MM UTC | {BIAS} | BTC ${price} | {N} setups | {N} ENTER | Email sent`
 
