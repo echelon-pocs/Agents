@@ -384,8 +384,7 @@ def send_report(subject: str, body: str, is_alert: bool = False,
     smtp_pass = cfg.get("SMTP_PASS", "")
 
     primary    = cfg.get("ALERT_EMAIL", smtp_user)
-    extra      = "pcmarkes@gmail.com"
-    recipients = list({primary, extra})
+    recipients = [primary]
 
     if not smtp_user or not smtp_pass:
         print("[Email] ERROR: SMTP_USER or SMTP_PASS not found in .env")

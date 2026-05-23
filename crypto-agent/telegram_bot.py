@@ -34,6 +34,7 @@ Setup:
 
 import base64
 import json
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -449,24 +450,33 @@ Return ONLY the JSON, no explanation, no markdown fences."""
                 ],
             }],
         )
-        text = resp.content[0].text.strip()
-        # Strip markdown code fences if present
-        text = text.strip('`').strip()
-        if text.startswith('json'):
+        raw = resp.content[0].text.strip()
+        print(f"[TG] Vision raw response: {raw[:300]}")
+
+        # Strip markdown code fences
+        text = raw.strip('`').strip()
+        if text.lower().startswith('json'):
             text = text[4:].strip()
-        return json.loads(text)
-    except json.JSONDecodeError:
-        import re
-        m = re.search(r'\{.*\}', resp.content[0].text, re.DOTALL)
+
+        try:
+            return json.loads(text)
+        except ValueError:
+            pass
+
+        # Try to find JSON object anywhere in the response
+        m = re.search(r'\{[^{}]*\}', raw, re.DOTALL)
         if m:
             try:
                 return json.loads(m.group(0))
             except Exception:
                 pass
-        return None
+
+        # Could not parse — return the raw text so the caller can show it
+        return {"_raw": raw, "error": "json_parse_failed"}
+
     except Exception as e:
-        print(f"[TG] Vision parse error: {e}")
-        return None
+        print(f"[TG] Vision error: {e}")
+        return {"error": str(e)}
 
 
 def _clean_symbol(raw):
@@ -592,16 +602,25 @@ def run():
                     send(token, chat_id, "⚠️ Could not download image.")
                     continue
                 vision_result = parse_position_image(image_bytes, api_key)
-                if not vision_result or "error" in vision_result:
+                err = (vision_result or {}).get("error", "")
+                if not vision_result or (err and err != "json_parse_failed"):
                     send(token, chat_id,
-                         "❓ Could not find a position in that screenshot.\n"
-                         "Send a text command instead: `/enter BTC short 103000`")
+                         "❓ No trade data found in screenshot.\n"
+                         "Send a text command: `/enter OIL long 96.51`")
+                    continue
+                if err == "json_parse_failed":
+                    raw = (vision_result or {}).get("_raw", "")
+                    send(token, chat_id,
+                         f"⚠️ Claude saw the image but returned unexpected format:\n"
+                         f"`{raw[:200]}`\n"
+                         "Use `/enter SYMBOL direction price` to log manually.")
                     continue
                 update = _position_from_vision(vision_result)
                 if not update:
+                    sym_raw = vision_result.get("symbol", "?")
                     send(token, chat_id,
-                         "❓ Parsed image but could not extract symbol/price.\n"
-                         "Send manually: `/enter BTC short 103000`")
+                         f"⚠️ Detected `{sym_raw}` but missing price. "
+                         "Add manually: `/enter OIL long 96.51`")
                     continue
                 img_sym   = update["symbol"]
                 img_pfile = _pending_file_for(img_sym)
