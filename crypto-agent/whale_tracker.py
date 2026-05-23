@@ -764,11 +764,49 @@ def get_macro_data() -> Dict:
             hist = [val] if val else []
         return (val, hist)
 
+    # MOF (Japan Ministry of Finance) publishes daily JGB yield CSV — no auth
+    def _mof_jgb():
+        """Return (10y, 30y) from MOF CSV, or (None, None) on failure."""
+        urls = [
+            "https://www.mof.go.jp/english/policy/jgbs/reference/interest_rate/jgbcme.csv",
+            "https://www.mof.go.jp/english/policy/jgbs/reference/interest_rate/historical/jgbcme_all.csv",
+        ]
+        for url in urls:
+            try:
+                r = requests.get(url, timeout=15, headers=CHROME_HDR)
+                if r.status_code != 200:
+                    continue
+                lines = [l for l in r.text.strip().splitlines()
+                         if l and not l.startswith("Date") and not l.startswith('"Date')]
+                if not lines:
+                    continue
+                # Last data row; MOF CSV: Date,1Y,2Y,3Y,4Y,5Y,6Y,7Y,8Y,9Y,10Y,15Y,20Y,25Y,30Y,40Y
+                parts = lines[-1].split(",")
+                parts = [p.strip().strip('"') for p in parts]
+                def _f(idx):
+                    try:
+                        v = parts[idx]
+                        return round(float(v), 4) if v else None
+                    except (IndexError, ValueError):
+                        return None
+                return (_f(10), _f(14))  # col 10 = 10Y, col 14 = 30Y
+            except Exception:
+                continue
+        return (None, None)
+
     result["us_10y"],  _    = _yield_multi("10ustb.b", "^TNX",  "10 YR")
     result["us_30y"],  _    = _yield_multi("30ustb.b", "^TYX",  "30 YR")
-    result["japan_10y"], _  = _stooq("10ygjb.b")
-    result["japan_30y"], _  = _stooq("30ygjb.b")
     result["spx"],     _    = _yield_multi("^spx", "^GSPC")
+
+    # JGB: stooq primary → MOF CSV fallback
+    result["japan_10y"], _ = _stooq("10ygjb.b")
+    result["japan_30y"], _ = _stooq("30ygjb.b")
+    if result["japan_10y"] is None or result["japan_30y"] is None:
+        j10, j30 = _mof_jgb()
+        if result["japan_10y"] is None:
+            result["japan_10y"] = j10
+        if result["japan_30y"] is None:
+            result["japan_30y"] = j30
 
     # USDJPY — stooq → Yahoo → Bitfinex → AwesomeAPI, 8-day history
     usdjpy_now, usdjpy_hist = _stooq("usdjpy", history=8)

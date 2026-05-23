@@ -19,6 +19,9 @@ Commands (send to your bot on Telegram):
   /status                        — bot replies with current open positions
   /help                          — show command list
 
+  Send a photo/screenshot        — Claude vision parses the exchange position
+                                   automatically (symbol, direction, entry, stop)
+
 Setup:
   1. Message @BotFather on Telegram → /newbot → copy the token
   2. Start your bot (message it once so Telegram knows your chat_id)
@@ -29,6 +32,7 @@ Setup:
        */5 * * * * python3 /volume1/homes/admin/Agents/telegram_bot.py >> /volume1/homes/admin/Agents/telegram.log 2>&1
 """
 
+import base64
 import json
 import sys
 from datetime import datetime, timezone
@@ -347,6 +351,127 @@ HELP_TEXT = """*Crypto Agent — Commands*
 Updates are queued and applied on the next daily run."""
 
 
+# ─── Vision: parse exchange position screenshots ─────────────────────────────
+
+def _detect_media_type(data: bytes) -> str:
+    if data[:4] == b'\x89PNG':
+        return "image/png"
+    if data[:2] == b'\xff\xd8':
+        return "image/jpeg"
+    if data[:4] == b'RIFF' and data[8:12] == b'WEBP':
+        return "image/webp"
+    return "image/jpeg"  # safe default for Telegram photos
+
+
+def download_tg_file(token: str, file_id: str) -> bytes | None:
+    """Download a Telegram file by file_id, return raw bytes or None."""
+    try:
+        meta = tg(token, "getFile", file_id=file_id)
+        file_path = meta.get("result", {}).get("file_path")
+        if not file_path:
+            return None
+        url = f"https://api.telegram.org/file/bot{token}/{file_path}"
+        r = requests.get(url, timeout=20)
+        return r.content if r.status_code == 200 else None
+    except Exception as e:
+        print(f"[TG] File download error: {e}")
+        return None
+
+
+def parse_position_image(image_bytes: bytes, api_key: str) -> dict | None:
+    """Use Claude Haiku vision to extract position data from an exchange screenshot."""
+    try:
+        import anthropic
+    except ImportError:
+        print("[TG] anthropic package not available — cannot parse image")
+        return None
+
+    media_type = _detect_media_type(image_bytes)
+    b64 = base64.standard_b64encode(image_bytes).decode()
+
+    client = anthropic.Anthropic(api_key=api_key)
+    try:
+        resp = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=300,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {"type": "base64", "media_type": media_type, "data": b64},
+                    },
+                    {
+                        "type": "text",
+                        "text": (
+                            "This is a trading exchange position screenshot. "
+                            "Extract the position and return ONLY a JSON object:\n"
+                            '{"symbol":"BTC","direction":"short","entry_price":103250.0,'
+                            '"current_price":103000.0,"stop_loss":null,"size_usd":null,'
+                            '"market_type":"perpetual","pnl_pct":0.24,"exchange":"Binance"}\n'
+                            "Rules:\n"
+                            "- symbol: coin ticker only (no USDT suffix)\n"
+                            "- direction: 'long' or 'short'\n"
+                            "- null for any field not visible\n"
+                            "- market_type: 'spot', 'futures', or 'perpetual'\n"
+                            "If this is not a position screenshot return: "
+                            '{"error":"not a position"}\n'
+                            "Return ONLY the JSON, no other text."
+                        ),
+                    },
+                ],
+            }],
+        )
+        text = resp.content[0].text.strip()
+        # Strip markdown code fences if present
+        text = text.strip('`').strip()
+        if text.startswith('json'):
+            text = text[4:].strip()
+        return json.loads(text)
+    except json.JSONDecodeError:
+        import re
+        m = re.search(r'\{.*\}', resp.content[0].text, re.DOTALL)
+        if m:
+            try:
+                return json.loads(m.group(0))
+            except Exception:
+                pass
+        return None
+    except Exception as e:
+        print(f"[TG] Vision parse error: {e}")
+        return None
+
+
+def _position_from_vision(parsed: dict) -> dict | None:
+    """Convert Claude vision output to a pending-update dict (ENTER action)."""
+    if not parsed or "error" in parsed:
+        return None
+    sym = parsed.get("symbol", "").upper()
+    if not sym:
+        return None
+    direction  = (parsed.get("direction") or "long").upper()
+    price      = parsed.get("entry_price") or parsed.get("current_price")
+    stop       = parsed.get("stop_loss")
+    size_usd   = parsed.get("size_usd")
+    mtype      = parsed.get("market_type", "perpetual")
+
+    update = {
+        "action":      "ENTER",
+        "symbol":      sym,
+        "direction":   direction,
+        "market_type": mtype,
+        "source":      "image",
+        "timestamp":   datetime.now(timezone.utc).isoformat(),
+    }
+    if price is not None:
+        update["price"] = float(price)
+    if stop is not None:
+        update["stop_loss"] = float(stop)
+    if size_usd is not None:
+        update["size_usd"] = float(size_usd)
+    return update
+
+
 # ─── Main polling loop ────────────────────────────────────────────────────────
 
 def run():
@@ -376,16 +501,23 @@ def run():
     pending = load_pending()
     new_offset = offset
 
+    api_key = env.get("ANTHROPIC_API_KEY", "")
+
     for upd in updates:
         try:
             new_offset = max(new_offset, upd.get("update_id", new_offset - 1) + 1)
             msg = upd.get("message", {})
             if not isinstance(msg, dict):
                 continue
-            text = msg.get("text", "")
-            from_id = str(msg.get("chat", {}).get("id", ""))
 
-            if not text or not from_id:
+            text    = msg.get("text", "") or msg.get("caption", "")
+            from_id = str(msg.get("chat", {}).get("id", ""))
+            photos  = msg.get("photo", [])
+            doc     = msg.get("document", {})
+
+            has_image = bool(photos) or bool(doc and (doc.get("mime_type", "").startswith("image/")))
+
+            if not from_id or (not text and not has_image):
                 continue
 
             # Auto-register chat_id on first message
@@ -399,6 +531,49 @@ def run():
                 send(token, from_id, "⛔ Unauthorised.")
                 continue
 
+            # ── Image message: parse position screenshot with Claude vision ──
+            if has_image and not text:
+                if not api_key:
+                    send(token, chat_id,
+                         "⚠️ ANTHROPIC_API_KEY missing — cannot parse image.")
+                    continue
+                file_id = (photos[-1].get("file_id") if photos
+                           else doc.get("file_id"))
+                send(token, chat_id, "🔍 Analysing screenshot...")
+                image_bytes = download_tg_file(token, file_id)
+                if not image_bytes:
+                    send(token, chat_id, "⚠️ Could not download image.")
+                    continue
+                vision_result = parse_position_image(image_bytes, api_key)
+                if not vision_result or "error" in vision_result:
+                    send(token, chat_id,
+                         "❓ Could not find a position in that screenshot.\n"
+                         "Send a text command instead: `/enter BTC short 103000`")
+                    continue
+                update = _position_from_vision(vision_result)
+                if not update:
+                    send(token, chat_id,
+                         "❓ Parsed image but could not extract symbol/price.\n"
+                         "Send manually: `/enter BTC short 103000`")
+                    continue
+                pending.append(update)
+                save_pending(pending)
+                sym   = update["symbol"]
+                dirn  = update["direction"]
+                price = update.get("price")
+                stop  = update.get("stop_loss")
+                exch  = vision_result.get("exchange") or "exchange"
+                pnl   = vision_result.get("pnl_pct")
+                lines = [f"✅ Position detected from {exch} screenshot:",
+                         f"*{dirn} {sym}*"
+                         + (f" @ {_fmt_price(price)}" if price else ""),
+                         f"Stop: {_fmt_price(stop)}" if stop else "Stop: not found",
+                         f"P&L: {pnl:+.2f}%" if pnl is not None else ""]
+                lines.append("\n_If wrong, use /enter or /close to correct._")
+                send(token, chat_id, "\n".join(l for l in lines if l))
+                continue
+
+            # ── Text command ──
             print(f"[TG] Message: {text!r}")
             parsed = parse_command(text)
 
