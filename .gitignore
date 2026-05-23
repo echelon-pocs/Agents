@@ -1,4 +1,5 @@
 claude/run-application-DMtBI
+.claude/
 .env
 report.log
 cron.log
