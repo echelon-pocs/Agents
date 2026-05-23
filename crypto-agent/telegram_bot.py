@@ -363,7 +363,7 @@ def _detect_media_type(data: bytes) -> str:
     return "image/jpeg"  # safe default for Telegram photos
 
 
-def download_tg_file(token: str, file_id: str) -> bytes | None:
+def download_tg_file(token: str, file_id: str):
     """Download a Telegram file by file_id, return raw bytes or None."""
     try:
         meta = tg(token, "getFile", file_id=file_id)
@@ -378,7 +378,7 @@ def download_tg_file(token: str, file_id: str) -> bytes | None:
         return None
 
 
-def parse_position_image(image_bytes: bytes, api_key: str) -> dict | None:
+def parse_position_image(image_bytes: bytes, api_key: str):
     """Use Claude Haiku vision to extract position data from an exchange screenshot."""
     try:
         import anthropic
@@ -442,7 +442,7 @@ def parse_position_image(image_bytes: bytes, api_key: str) -> dict | None:
         return None
 
 
-def _position_from_vision(parsed: dict) -> dict | None:
+def _position_from_vision(parsed: dict):
     """Convert Claude vision output to a pending-update dict (ENTER action)."""
     if not parsed or "error" in parsed:
         return None
