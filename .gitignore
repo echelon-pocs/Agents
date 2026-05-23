@@ -1,13 +1,16 @@
 claude/run-application-DMtBI
 .claude/
-.env
-report.log
-cron.log
 __pycache__/
 *.pyc
 *.pyo
-state.json
-daily_report_*.txt
-pending_updates.json
-.tg_offset
-telegram.log
+
+# Per-agent runtime files (gitignored in root and any subdirectory)
+**/.env
+**/report.log
+**/cron.log
+**/state.json
+**/daily_report_*.txt
+**/pending_updates.json
+**/.tg_offset
+**/telegram.log
+**/setups_history.jsonl
