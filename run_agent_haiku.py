@@ -653,9 +653,9 @@ def run():
         f"FOMC  : {fomc_v}{fomc_flag}\n"
         f"Cycle : Y{cy_year}/4 | MA1000d: {cy_ma_v} {cy_prem_v} | MVRV≈{cy_mvrv_v}\n"
         f"------------------------------\n"
-        f"SHORT bias: "
+        f"SHORT bias:"
     )
-    prefill = prefill + macro_card_suffix
+    prefill = (prefill + macro_card_suffix).rstrip()
 
     user_prompt = f"""Today is {today_str}.
 

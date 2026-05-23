@@ -657,11 +657,21 @@ def get_macro_data() -> Dict:
         "spx": None, "btc_funding_rate_pct": None, "btc_oi_usd_bn": None,
     }
 
+    CHROME_HDR = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+
     # stooq CSV helper: returns (latest_close, [last_n_closes])
     def _stooq(symbol: str, history: int = 1):
         try:
             r = requests.get(f"https://stooq.com/q/d/l/?s={symbol}&i=d",
-                             timeout=12, headers={"User-Agent": "Mozilla/5.0"})
+                             timeout=12, headers=CHROME_HDR)
             if r.status_code != 200:
                 return (None, [])
             lines = [l for l in r.text.strip().splitlines()
@@ -680,14 +690,96 @@ def get_macro_data() -> Dict:
         except Exception:
             return (None, [])
 
-    result["us_10y"],  _    = _stooq("10ustb.b")
-    result["us_30y"],  _    = _stooq("30ustb.b")
+    # Yahoo Finance JSON helper: returns (latest_close, [last_n_closes])
+    def _yfinance(symbol: str, history: int = 1):
+        try:
+            days = max(history * 2, 20)
+            url = (f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+                   f"?interval=1d&range={days}d")
+            r = requests.get(url, timeout=12, headers=CHROME_HDR)
+            if r.status_code != 200:
+                return (None, [])
+            data = r.json()
+            closes_raw = (data.get("chart", {}).get("result", [{}])[0]
+                          .get("indicators", {}).get("quote", [{}])[0]
+                          .get("close", []))
+            closes = [round(c, 4) for c in closes_raw if c is not None]
+            return (closes[-1] if closes else None, closes)
+        except Exception:
+            return (None, [])
+
+    # Nasdaq Data Link (free public datasets — no key for USTREASURY/YIELD)
+    def _nasdaq_yield(row_field: str):
+        try:
+            url = "https://data.nasdaq.com/api/v3/datasets/USTREASURY/YIELD.json?rows=2"
+            r = requests.get(url, timeout=12, headers=CHROME_HDR)
+            if r.status_code != 200:
+                return None
+            data = r.json()
+            cols = data["dataset"]["column_names"]
+            rows = data["dataset"]["data"]
+            if not rows or row_field not in cols:
+                return None
+            idx = cols.index(row_field)
+            val = rows[0][idx]
+            return round(float(val), 4) if val is not None else None
+        except Exception:
+            return None
+
+    # Bitfinex public ticker — no auth, gives USDJPY mid-price
+    def _bitfinex_usdjpy():
+        try:
+            r = requests.get("https://api-pub.bitfinex.com/v2/ticker/tUSDJPY",
+                             timeout=10)
+            if r.status_code != 200:
+                return None
+            data = r.json()
+            # [bid, bid_size, ask, ask_size, ..., last_price, ...]
+            if isinstance(data, list) and len(data) >= 7:
+                return round(float(data[6]), 4)
+            return None
+        except Exception:
+            return None
+
+    # AwesomeAPI — free FOREX rates, no key
+    def _awesomeapi_usdjpy():
+        try:
+            r = requests.get("https://economia.awesomeapi.com.br/json/last/USD-JPY",
+                             timeout=10)
+            if r.status_code != 200:
+                return None
+            data = r.json()
+            val = data.get("USDJPY", {}).get("bid") or data.get("USDJPY", {}).get("ask")
+            return round(float(val), 4) if val else None
+        except Exception:
+            return None
+
+    # Fetch with stooq primary, then Yahoo Finance, then Nasdaq Data Link
+    def _yield_multi(stooq_sym: str, yf_sym: str, nasdaq_field: str = "", history: int = 1):
+        val, hist = _stooq(stooq_sym, history)
+        if val is None:
+            val, hist = _yfinance(yf_sym, history)
+        if val is None and nasdaq_field:
+            val = _nasdaq_yield(nasdaq_field)
+            hist = [val] if val else []
+        return (val, hist)
+
+    result["us_10y"],  _    = _yield_multi("10ustb.b", "^TNX",  "10 YR")
+    result["us_30y"],  _    = _yield_multi("30ustb.b", "^TYX",  "30 YR")
     result["japan_10y"], _  = _stooq("10ygjb.b")
     result["japan_30y"], _  = _stooq("30ygjb.b")
-    result["spx"],     _    = _stooq("^spx")
+    result["spx"],     _    = _yield_multi("^spx", "^GSPC")
 
-    # USDJPY — current rate + 5-day-ago close for weekly change calculation
+    # USDJPY — stooq → Yahoo → Bitfinex → AwesomeAPI, 8-day history
     usdjpy_now, usdjpy_hist = _stooq("usdjpy", history=8)
+    if usdjpy_now is None:
+        usdjpy_now, usdjpy_hist = _yfinance("USDJPY=X", history=8)
+    if usdjpy_now is None:
+        usdjpy_now = _bitfinex_usdjpy()
+        usdjpy_hist = [usdjpy_now] if usdjpy_now else []
+    if usdjpy_now is None:
+        usdjpy_now = _awesomeapi_usdjpy()
+        usdjpy_hist = [usdjpy_now] if usdjpy_now else []
     result["usdjpy"] = usdjpy_now
     if len(usdjpy_hist) >= 6:
         result["usdjpy_5d_ago"] = usdjpy_hist[-6]  # 5 trading days back
