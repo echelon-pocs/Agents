@@ -3,6 +3,7 @@ Price and macro data fetcher for the Portfolio Agent.
 Sources: Yahoo Finance (no key), MEXC public API (no key).
 """
 import sys
+import time
 from pathlib import Path
 from datetime import datetime
 from typing import Dict
@@ -61,13 +62,16 @@ def _ma(closes, n):
 
 # ── MEXC perpetuals ───────────────────────────────────────────────────────────
 
-_MEXC_CACHE = {}  # module-level cache: {symbol: ticker_dict}
+_MEXC_CACHE = {}      # module-level cache: {symbol: ticker_dict}
+_MEXC_CACHE_TS = 0.0  # timestamp of last successful fetch
+_MEXC_TTL = 300       # seconds before cache is considered stale (5 min)
 
 
 def _mexc_fetch_all():
-    """Fetch all MEXC contract tickers and cache by symbol (upper-case)."""
-    global _MEXC_CACHE
-    if _MEXC_CACHE:
+    """Fetch all MEXC contract tickers and cache by symbol (upper-case).
+    Cache expires after _MEXC_TTL seconds to prevent stale data in long-lived processes."""
+    global _MEXC_CACHE, _MEXC_CACHE_TS
+    if _MEXC_CACHE and (time.time() - _MEXC_CACHE_TS) < _MEXC_TTL:
         return _MEXC_CACHE
     try:
         r = requests.get(
@@ -75,19 +79,20 @@ def _mexc_fetch_all():
             timeout=15, headers=CHROME_HDR,
         )
         if r.status_code != 200:
-            return {}
+            return _MEXC_CACHE or {}
         data = r.json()
         if not data.get("success"):
-            return {}
+            return _MEXC_CACHE or {}
         _MEXC_CACHE = {
             t["symbol"].upper(): t
             for t in data.get("data", [])
             if isinstance(t, dict) and t.get("symbol")
         }
+        _MEXC_CACHE_TS = time.time()
         return _MEXC_CACHE
     except Exception as e:
         print(f"[Portfolio] MEXC fetch error: {e}")
-        return {}
+        return _MEXC_CACHE or {}
 
 
 def _mexc_first(candidates):

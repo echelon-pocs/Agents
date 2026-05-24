@@ -246,20 +246,23 @@ def merge_delta(prior, delta, prices):
         if field in delta:
             updated[field] = delta[field]
 
-    # Merge positions: Claude updates P&L/action fields; Python owns entry/qty/stop
+    # Merge positions: Claude updates P&L/action fields; Python owns entry/qty/stop.
+    # Key is (symbol, direction) so BTC LONG and BTC SHORT can coexist.
     if "open_positions" in delta:
-        prior_map = {p["symbol"]: p for p in prior.get("open_positions", [])}
+        prior_map = {(p["symbol"], p.get("direction", "LONG")): p
+                     for p in prior.get("open_positions", [])}
         merged = []
         for pos in delta["open_positions"]:
-            sym = pos.get("symbol", "")
-            base = dict(prior_map.get(sym, {}))
+            key = (pos.get("symbol", ""), pos.get("direction", "LONG"))
+            base = dict(prior_map.get(key, {}))
             base.update({k: v for k, v in pos.items()
                          if k not in ("entry_price", "qty")})
             merged.append(base)
         # Keep any positions Claude omitted
-        delta_syms = {p.get("symbol") for p in delta["open_positions"]}
-        for sym, pos in prior_map.items():
-            if sym not in delta_syms:
+        delta_keys = {(p.get("symbol"), p.get("direction", "LONG"))
+                      for p in delta["open_positions"]}
+        for key, pos in prior_map.items():
+            if key not in delta_keys:
                 merged.append(pos)
         updated["open_positions"] = merged
 

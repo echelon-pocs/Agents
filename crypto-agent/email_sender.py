@@ -6,11 +6,24 @@ Sends multipart/alternative (HTML + plain text) with full-report attachment.
 
 import re
 import smtplib
-# Matches position/setup card titles:
-#   "BTC LONG"  "SUI SHORT"  (bare)
-#   "⚠️ BTC LONG"  "🚨 ETH SHORT"  (danger-flagged position)
-_CARD_TITLE_RE = re.compile(r'^[A-Z][A-Z0-9]{1,7}\s+(LONG|SHORT)\b')
 import ssl
+
+# Bare card title: 2–8 uppercase alphanums (allows digit-start: 4GLD, 8PSB, SP500)
+_CARD_TITLE_RE = re.compile(r'^[A-Z0-9]{2,8}\s+(LONG|SHORT)\b')
+
+
+def _is_card_title(line: str) -> bool:
+    """
+    True if line is a position/setup card title, with or without emoji prefix.
+    Handles bare ("BTC LONG") and emoji-prefixed ("🔴 BTC LONG").
+    ⚠️/🚨 lines are pre-filtered before this is called and handled separately.
+    """
+    if _CARD_TITLE_RE.match(line):
+        return True
+    # Strip a single leading non-ASCII char (emoji) + space, then retry
+    if len(line) >= 3 and ord(line[0]) > 127 and line[1] == ' ':
+        return bool(_CARD_TITLE_RE.match(line[2:]))
+    return False
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
@@ -298,7 +311,7 @@ def render_html_email(plain_body: str) -> str:
         if line.startswith('⚠️') or line.startswith('🚨'):
             close_bullet()
             rest = line[2:].strip()   # strip emoji + space
-            if _CARD_TITLE_RE.match(rest):
+            if _is_card_title(rest):
                 # danger-flagged position card — same card style as plain positions,
                 # emoji in the title provides the visual cue
                 close_card()
@@ -370,9 +383,8 @@ def render_html_email(plain_body: str) -> str:
             out.append(f'<div class="change-item">▸ {_colorize(line)}</div>')
             continue
 
-        # ── Setup / position card titles (emoji-prefixed or "SYM LONG/SHORT" pattern) ──
-        if in_section and (line[0] in ('🔴', '🟣', '🟡', '🟠', '⚪', '🟢') or
-                           bool(_CARD_TITLE_RE.match(line))):
+        # ── Setup / position card titles ──
+        if in_section and _is_card_title(line):
             close_card()
             out.append(f'<div class="card"><div class="card-title">{_colorize(line)}</div>')
             in_card = True
