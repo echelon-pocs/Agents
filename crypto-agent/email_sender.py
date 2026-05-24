@@ -6,6 +6,7 @@ Sends multipart/alternative (HTML + plain text) with full-report attachment.
 
 import re
 import smtplib
+_CARD_TITLE_RE = re.compile(r'^[A-Z]{2,8}\s+(LONG|SHORT)\b')
 import ssl
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -181,7 +182,7 @@ def _is_divider(s: str) -> bool:
 
 def _section_header(s: str) -> Optional[str]:
     for sec in _KNOWN_SECTIONS:
-        if s == sec or s.startswith(sec + " ") or s.startswith(sec + "("):
+        if s == sec:
             return sec
     return None
 
@@ -233,18 +234,27 @@ def render_html_email(plain_body: str) -> str:
            _HTML_CSS,
            '</head><body><div class="wrap">']
 
-    in_section = False
-    in_card    = False    # inside a position/setup card block
+    in_section  = False
+    in_card     = False    # inside a position/setup card block
+    in_bullet   = False    # last rendered line was a bullet; accumulate continuations
     header_done = False
+
+    def close_bullet():
+        nonlocal in_bullet
+        if in_bullet:
+            out.append('</div>')   # close open .bullet div
+            in_bullet = False
 
     def close_card():
         nonlocal in_card
+        close_bullet()
         if in_card:
             out.append('</div>')  # close .card
             in_card = False
 
     def close_section():
         nonlocal in_section
+        close_bullet()
         close_card()
         if in_section:
             out.append(_close_section())
@@ -256,26 +266,29 @@ def render_html_email(plain_body: str) -> str:
         line = raw.strip()
         i   += 1
 
-        # ── Skip empty lines in cards; light spacer elsewhere ──
+        # ── Skip empty lines in cards/bullets; light spacer elsewhere ──
         if not line:
-            if in_card:
-                pass  # don't close on blank inside card
+            if in_card or in_bullet:
+                pass
             else:
                 out.append('<div style="height:4px"></div>')
             continue
 
         # ── Dividers ──
         if _is_divider(line):
+            close_bullet()
             if in_card:
-                close_card()  # end of one card block
+                close_card()
             continue
 
         # ── ⚠️ / 🚨 alert lines ──
         if line.startswith('⚠️'):
+            close_bullet()
             close_card()
             out.append(f'<div class="warn-box">{_colorize(line)}</div>')
             continue
         if line.startswith('🚨'):
+            close_bullet()
             close_card()
             out.append(f'<div class="danger-box">{_colorize(line)}</div>')
             continue
@@ -317,26 +330,31 @@ def render_html_email(plain_body: str) -> str:
             header_done = True
             continue
 
+        # ── Bullet continuation line (indented, follows a bullet, not in a card) ──
+        if in_bullet and not in_card and (raw.startswith('  ') or raw.startswith('\t')):
+            out.append(f' {_colorize(line)}')
+            continue
+
         # ── Bullet points ──
         if line.startswith(('•', '·')):
+            close_bullet()
             close_card()
-            out.append(_render_bullet(line))
+            content = line.lstrip('•· ').strip()
+            out.append(f'<div class="bullet info">{_colorize(content)}')
+            in_bullet = True
             continue
 
         # ── Change-log items (lines starting with •, NEW, ENTER, ADOPTED, etc.) ──
         if in_section and line.startswith(('NEW', 'ENTER', 'ADOPTED', 'REVISED',
                                            'INVALIDATED', 'COMPLETED', 'HOLD')):
+            close_bullet()
             close_card()
             out.append(f'<div class="change-item">▸ {_colorize(line)}</div>')
             continue
 
-        # ── Setup / position card titles (lines with emoji prefix 🔴 🟣 or SYM DIR) ──
-        if in_section and (line[:2] in ('🔴', '🟣', '🟡') or
-                           (len(line) <= 40 and
-                            not line.startswith(' ') and
-                            not ':' in line[:20] and
-                            line.isupper() is False and
-                            any(c.isupper() for c in line[:8]))):
+        # ── Setup / position card titles (emoji-prefixed or "SYM LONG/SHORT" pattern) ──
+        if in_section and (line[:2] in ('🔴', '🟣', '🟡', '🟠', '⚪', '🟢') or
+                           bool(_CARD_TITLE_RE.match(line))):
             close_card()
             out.append(f'<div class="card"><div class="card-title">{_colorize(line)}</div>')
             in_card = True
@@ -349,16 +367,19 @@ def render_html_email(plain_body: str) -> str:
 
         # ── Key:value line at section level (macro cards, cycle, etc.) ──
         if in_section and ':' in line and not line.startswith('http'):
+            close_bullet()
             out.append(_render_kv_line(line))
             continue
 
         # ── SHORT bias / LONG bias lines ──
         if in_section and (line.startswith('SHORT bias') or line.startswith('LONG  bias') or
                            line.startswith('LONG bias')):
+            close_bullet()
             out.append(_render_kv_line(line))
             continue
 
         # ── Plain text line (cycle thesis, narrative) ──
+        close_bullet()
         out.append(f'<div style="font-size:13px;padding:3px 0;line-height:1.55;'
                    f'color:#374151">{_colorize(line)}</div>')
 
