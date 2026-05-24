@@ -669,15 +669,19 @@ def get_macro_data() -> Dict:
     }
 
     # stooq CSV helper: returns (latest_close, [last_n_closes])
-    def _stooq(symbol: str, history: int = 1):
+    def _stooq(symbol: str, history: int = 1, _verbose: bool = False):
         try:
             r = requests.get(f"https://stooq.com/q/d/l/?s={symbol}&i=d",
                              timeout=12, headers=CHROME_HDR)
             if r.status_code != 200:
+                if _verbose:
+                    print(f"[stooq] {symbol}: HTTP {r.status_code}")
                 return (None, [])
             lines = [l for l in r.text.strip().splitlines()
                      if l and not l.lower().startswith("date")]
             if not lines:
+                if _verbose:
+                    print(f"[stooq] {symbol}: no data rows (body={r.text[:80]!r})")
                 return (None, [])
             closes = []
             for row in lines[-(history + 1):]:
@@ -687,8 +691,12 @@ def get_macro_data() -> Dict:
                         closes.append(float(parts[4]))
                     except ValueError:
                         pass
+            if _verbose and not closes:
+                print(f"[stooq] {symbol}: rows found but no close prices; last row={lines[-1]!r}")
             return (closes[-1] if closes else None, closes)
-        except Exception:
+        except Exception as _e:
+            if _verbose:
+                print(f"[stooq] {symbol}: exception {_e}")
             return (None, [])
 
     # Yahoo Finance JSON helper: returns (latest_close, [last_n_closes])
@@ -776,22 +784,43 @@ def get_macro_data() -> Dict:
             try:
                 r = requests.get(url, timeout=15, headers=CHROME_HDR)
                 if r.status_code != 200:
+                    print(f"[JGB] MOF CSV HTTP {r.status_code}: {url}")
                     continue
-                lines = [l for l in r.text.strip().splitlines()
-                         if l and not l.startswith("Date") and not l.startswith('"Date')]
-                if not lines:
+                all_lines = [l.strip() for l in r.text.strip().splitlines() if l.strip()]
+                if not all_lines:
                     continue
-                # Last data row; MOF CSV: Date,1Y,2Y,3Y,4Y,5Y,6Y,7Y,8Y,9Y,10Y,15Y,20Y,25Y,30Y,40Y
-                parts = lines[-1].split(",")
-                parts = [p.strip().strip('"') for p in parts]
+                # Find header row to locate columns dynamically
+                header_idx = None
+                for idx, ln in enumerate(all_lines):
+                    if re.search(r'(?i)date.*\b10', ln):
+                        header_idx = idx
+                        break
+                if header_idx is not None:
+                    hdr = [h.strip().strip('"').lower() for h in all_lines[header_idx].split(",")]
+                    data_rows = [ln for ln in all_lines[header_idx + 1:] if ln and not ln.lower().startswith("date")]
+                    col10 = next((i for i, h in enumerate(hdr) if h in ("10", "10y", "10yr", "10 yr")), None)
+                    col30 = next((i for i, h in enumerate(hdr) if h in ("30", "30y", "30yr", "30 yr")), None)
+                else:
+                    # No header found — fall back to hardcoded positions
+                    # MOF CSV: Date,1Y,2Y,3Y,4Y,5Y,6Y,7Y,8Y,9Y,10Y,15Y,20Y,25Y,30Y,40Y
+                    data_rows = [ln for ln in all_lines if not ln.lower().startswith("date") and not ln.lower().startswith('"date')]
+                    col10, col30 = 10, 14
+                if not data_rows:
+                    continue
+                parts = [p.strip().strip('"') for p in data_rows[-1].split(",")]
                 def _f(idx):
+                    if idx is None:
+                        return None
                     try:
                         v = parts[idx]
                         return round(float(v), 4) if v else None
                     except (IndexError, ValueError):
                         return None
-                return (_f(10), _f(14))  # col 10 = 10Y, col 14 = 30Y
-            except Exception:
+                j10, j30 = _f(col10), _f(col30)
+                if j10 is not None or j30 is not None:
+                    return (j10, j30)
+            except Exception as _e:
+                print(f"[JGB] MOF CSV exception: {_e}")
                 continue
         return (None, None)
 
@@ -918,43 +947,63 @@ def get_macro_data() -> Dict:
     result["us_30y"],  _    = _yield_multi("30ustb.b", "^TYX",  "30 YR")
     result["spx"],     _    = _yield_multi("^spx", "^GSPC")
 
-    # JGB: stooq → MOF CSV → Nasdaq Data Link → FRED → Yahoo Finance
-    result["japan_10y"], _ = _stooq("10jgbs.b")
-    result["japan_30y"], _ = _stooq("30jgbs.b")
+    # JGB: try multiple stooq symbols → MOF CSV → Nasdaq Data Link → FRED → Yahoo Finance → worldgov → BOJ
+    # Stooq uses `.b` suffix for bonds; Japan symbol candidates differ by source
+    _jgb10_candidates = ["10jgbs.b", "10jgb.b", "jgbs10.b", "10jpb.b"]
+    _jgb30_candidates = ["30jgbs.b", "30jgb.b", "jgbs30.b", "30jpb.b"]
+    for _sym in _jgb10_candidates:
+        _v, _ = _stooq(_sym, _verbose=True)
+        if _v is not None:
+            result["japan_10y"] = _v
+            print(f"[JGB] stooq 10Y OK: {_sym} = {_v}")
+            break
+    for _sym in _jgb30_candidates:
+        _v, _ = _stooq(_sym, _verbose=True)
+        if _v is not None:
+            result["japan_30y"] = _v
+            print(f"[JGB] stooq 30Y OK: {_sym} = {_v}")
+            break
     if result["japan_10y"] is None or result["japan_30y"] is None:
         j10, j30 = _mof_jgb()
+        print(f"[JGB] MOF CSV: 10Y={j10} 30Y={j30}")
         if result["japan_10y"] is None:
             result["japan_10y"] = j10
         if result["japan_30y"] is None:
             result["japan_30y"] = j30
     if result["japan_10y"] is None or result["japan_30y"] is None:
         j10, j30 = _jgb_nasdaq()
+        print(f"[JGB] Nasdaq MOFJ: 10Y={j10} 30Y={j30}")
         if result["japan_10y"] is None:
             result["japan_10y"] = j10
         if result["japan_30y"] is None:
             result["japan_30y"] = j30
     if result["japan_10y"] is None:
         j10, _ = _jgb_fred()
+        print(f"[JGB] FRED: 10Y={j10}")
         if j10 is not None:
             result["japan_10y"] = j10
     if result["japan_10y"] is None or result["japan_30y"] is None:
         j10, j30 = _jgb_yfinance_try()
+        print(f"[JGB] Yahoo Finance: 10Y={j10} 30Y={j30}")
         if result["japan_10y"] is None:
             result["japan_10y"] = j10
         if result["japan_30y"] is None:
             result["japan_30y"] = j30
     if result["japan_10y"] is None or result["japan_30y"] is None:
         j10, j30 = _jgb_worldgov()
+        print(f"[JGB] worldgovernmentbonds.com: 10Y={j10} 30Y={j30}")
         if result["japan_10y"] is None:
             result["japan_10y"] = j10
         if result["japan_30y"] is None:
             result["japan_30y"] = j30
     if result["japan_10y"] is None or result["japan_30y"] is None:
         j10, j30 = _jgb_boj()
+        print(f"[JGB] BOJ stats: 10Y={j10} 30Y={j30}")
         if result["japan_10y"] is None:
             result["japan_10y"] = j10
         if result["japan_30y"] is None:
             result["japan_30y"] = j30
+    print(f"[JGB] Final: 10Y={result['japan_10y']} 30Y={result['japan_30y']}")
 
     # USDJPY — stooq → Yahoo → Bitfinex → AwesomeAPI, 8-day history
     usdjpy_now, usdjpy_hist = _stooq("usdjpy", history=8)
