@@ -694,9 +694,14 @@ Analysis instructions:
 - profitable_wallets_discovered are real wallets with >20% avg profit — treat as high-weight signals.
 - Execute all steps internally (macro, whale scoring, TA, composite scoring, setup updates).
 - No positions are open unless listed in current state open_positions.
-- ALL open positions must appear in the email with P&L, stop status, and a specific action.
+- ALL open positions must appear in the email with P&L, stop status, and a specific action —
+  EXCEPT SPX / SP500 / US500 / S&P 500 (see rule below).
 - Positions with status=OPEN and conviction=UNKNOWN were opened outside analysis — run full whale+TA on them and adopt them into active_setups with real levels.
-- SPX / SP500 / US500 / S&P 500 is a PORTFOLIO AGENT asset. In the crypto email it appears only as a number in the pre-filled MACRO REGIME card. Do NOT write SPX setups, SPX position cards, or any SPX analysis section. If SPX appears in open_positions, flag it as a routing error in CHANGES TODAY only.
+- SPX / SP500 / US500 / S&P 500 HARD EXCLUSION: these are PORTFOLIO AGENT assets.
+  Do NOT write a position card for them in OPEN POSITIONS. Do NOT write any SPX analysis.
+  In the crypto email SPX appears ONLY as a number in the pre-filled MACRO REGIME card.
+  If SP500/SPX/US500 appears in open_positions, write ONE line in CHANGES TODAY:
+  "• SP500 SHORT out-of-scope — manage via portfolio agent" — nothing else.
 - All crypto perpetual positions are labeled as "perp" (not "spot") unless market_type is explicitly "spot" AND the user confirmed a spot purchase. When in doubt, use "perp".
 - pre_computed.position_analytics contains Python-verified P&L and flags for each position. Use these values exactly — do NOT recalculate P&L. Keys are "SYMBOL_DIRECTION" (e.g. "BTC_LONG").
 - pre_computed.setup_statuses contains Python-verified ENTER/APPROACHING/WAITING/INVALIDATED for each setup. Use these, do NOT re-derive from price.
@@ -743,10 +748,12 @@ VIOLATION OF ANY RULE BELOW = WRONG OUTPUT.
    If macro data is N/A, use prior state + BTC context.
    Body bullets must be self-contained — no multi-line explanations.
 
-6. OPEN POSITIONS: every entry in open_positions MUST appear as a card.
-   No exceptions. If none: write exactly "None confirmed."
-   The OPEN POSITIONS section contains ONLY confirmed open positions.
+6. OPEN POSITIONS: every entry in open_positions MUST appear as a card,
+   EXCEPT SPX/SP500/US500 which are excluded entirely (see analysis rules).
+   If none (or all excluded): write exactly "None confirmed."
+   The OPEN POSITIONS section contains ONLY confirmed crypto positions.
    Setup cards (🔴 🟣) NEVER appear inside OPEN POSITIONS.
+   No analysis bullets between position cards — each card is self-contained.
 
    SECTION BOUNDARY RULE — CRITICAL:
    If a symbol is in open_positions, it MUST appear in OPEN POSITIONS

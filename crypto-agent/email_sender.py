@@ -378,8 +378,10 @@ def render_html_email(plain_body: str) -> str:
             in_card = True
             continue
 
-        # ── Indented key:value inside a card ──
-        if in_card and (raw.startswith('  ') or raw.startswith('\t')):
+        # ── All lines inside a card stay inside — indented or not.
+        #    Bullets, dividers, section headers, and new card titles already
+        #    call close_card() before reaching here, so they still escape. ──
+        if in_card:
             out.append(_render_card_line(line))
             continue
 

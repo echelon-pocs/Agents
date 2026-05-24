@@ -430,6 +430,10 @@ Section order and EXACT header names to write:
  Your response will be appended after "SHORT bias: "
  Write ONLY what comes after — do NOT repeat MACRO REGIME.]
 
+CRITICAL FORMAT RULE: Use key: value rows for ALL analysis content.
+No prose paragraphs. Every line must be "Key : Value" or a single
+short sentence. Max ~35 chars per line. No line wraps.
+
 Your output must continue as:
 <bias_short>  (days–weeks)
 LONG  bias: <bias_long>   (months+)
@@ -437,22 +441,54 @@ LONG  bias: <bias_long>   (months+)
 
 MACRO COMMENTARY
 ------------------------------
-<3-4 lines on yield curve, carry, USD, net signal>
+Curve : <shape> — <signal>
+Carry : <carry_regime> — <impact>
+USD   : <DXY trend> — <effect>
+Signal: <net risk-on/off verdict>
 ------------------------------
 
 WTI
 ------------------------------
-<position block if open, then 8-12 lines of deep analysis>
+<If open position:>
+Dir   : LONG/SHORT | Entry:X.XX
+Now   : X.XX | P&L: ±X.X%
+Stop  : X.XX | Action: <action>
+<Analysis — use kv rows:>
+Price : $XX.XX | MA20:$XX MA50:$XX
+Trend : <above/below MAs>
+Geo   : LOW/MED/HIGH — <reason>
+OPEC+ : RESTRICTIVE/NEUTRAL/LOOSENING
+Demand: <China+US+seasonal, 1 line>
+FR    : X.XX% | OI: <rising/falling>
+Spread: WTI/Brent $X.XX (<normal/wide>)
+1-wk  : <dominant driver — key level>
 ------------------------------
 
 BRENT
 ------------------------------
-<position block if open, then 3-5 lines>
+<If open position: same Dir/Now/Stop/Action block>
+Spread: $X.XX vs WTI (<normal/wide>)
+Regime: <follow WTI / macro signal>
+Action: HOLD/ADD/TRIM
 ------------------------------
 
 SPX
 ------------------------------
-<position block if open, then 8-12 lines of deep analysis>
+<If open position:>
+Dir   : LONG/SHORT | Entry:X,XXX
+Now   : X,XXX | P&L: ±X.X%
+Stop  : X,XXX | Action: <action>
+<Analysis — use kv rows:>
+Price : X,XXX | MA20:X,XXX MA50:X,XXX
+Trend : <above/below MAs — ATH dist>
+10Y   : X.XX% <rising/falling> — <effect>
+30Y   : X.XX% — <funding pressure?>
+Carry : USDJPY X.XX CARRY_<REGIME>
+Liquid: INJECTING/NEUTRAL/DRAINING
+Earn  : <season status / beat rate>
+VIX   : XX.X → <complacent/normal/fear>
+FR    : X.XX% | OI: <rising/falling>
+1-wk  : <dominant driver — key events>
 ------------------------------
 
 VWCE / VWRL
