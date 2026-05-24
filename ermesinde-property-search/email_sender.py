@@ -11,7 +11,7 @@ from scoring import score_label, score_color
 
 logger = logging.getLogger(__name__)
 
-RECIPIENT = "Sofia.nuns@gmail.com"
+RECIPIENTS = ["Sofia.nuns@gmail.com", "pedromiguelralves@gmail.com"]
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 587
 
@@ -313,7 +313,7 @@ def send_email(
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"] = sender
-    msg["To"] = RECIPIENT
+    msg["To"] = ", ".join(RECIPIENTS)
 
     text_body = f"{'='*50}\nImóveis em Ermesinde — {datetime.now().strftime('%d/%m/%Y')}\n{'='*50}\n\n"
     for label, group in [("NOVO", new_properties), ("DESCIDA DE PREÇO", price_drops)]:
@@ -337,7 +337,7 @@ def send_email(
             server.ehlo()
             server.starttls()
             server.login(sender, password)
-            server.sendmail(sender, RECIPIENT, msg.as_string())
+            server.sendmail(sender, RECIPIENTS, msg.as_string())
         logger.info(f"Email sent — {n_new} new, {n_drops} price drops")
         return True
     except Exception as e:
