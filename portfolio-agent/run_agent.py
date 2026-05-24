@@ -24,6 +24,10 @@ _CRYPTO_AGENT = str(BASE_DIR.parent / "crypto-agent")
 if _CRYPTO_AGENT not in sys.path:
     sys.path.insert(0, _CRYPTO_AGENT)
 
+_SHARED = str(BASE_DIR.parent / "shared")
+if _SHARED not in sys.path:
+    sys.path.insert(0, _SHARED)
+
 try:
     from email_sender import send_report, build_subject, render_html_email  # noqa: E402
 except ImportError as _e:
@@ -33,22 +37,9 @@ except ImportError as _e:
         f"Original error: {_e}"
     )
 
+from utils import load_env as _load_env, _fmt  # noqa: E402
+from assets import PORTFOLIO_ASSETS  # noqa: E402
 from data_fetcher import get_all_portfolio_data, get_macro_data  # noqa: E402
-
-
-# ── .env loader ───────────────────────────────────────────────────────────────
-
-def load_env():
-    paths = [BASE_DIR / ".env", BASE_DIR.parent / "crypto-agent" / ".env"]
-    cfg = {}
-    for p in paths:
-        if p.exists():
-            for line in p.read_text().splitlines():
-                line = line.strip()
-                if line and not line.startswith("#") and "=" in line:
-                    k, v = line.split("=", 1)
-                    cfg.setdefault(k.strip(), v.strip())
-    return cfg
 
 
 # ── State helpers ─────────────────────────────────────────────────────────────
@@ -152,12 +143,6 @@ def price_of(asset, prices):
 
 # ── Prompt helpers ────────────────────────────────────────────────────────────
 
-def _fmt(v, decimals=2):
-    if v is None:
-        return "N/A"
-    return f"{v:.{decimals}f}"
-
-
 def _fmt_chg(v):
     if v is None:
         return "N/A"
@@ -167,7 +152,7 @@ def _fmt_chg(v):
 
 def build_prices_section(prices):
     lines = []
-    for asset in ["WTI", "BRENT", "SPX", "VWCE", "VWRL", "4GLD", "8PSB"]:
+    for asset in PORTFOLIO_ASSETS:
         d = prices.get(asset, {})
         p = _fmt(d.get("price"))
         c1 = _fmt_chg(d.get("chg_1d"))
@@ -286,7 +271,7 @@ def merge_delta(prior, delta, prices):
 def run():
     print(f"[{datetime.utcnow().isoformat()}] ═══ Portfolio Intelligence Agent ═══")
 
-    env = load_env()
+    env = _load_env(BASE_DIR / ".env", BASE_DIR.parent / "crypto-agent" / ".env")
     api_key = (os.environ.get("ANTHROPIC_API_KEY")
                or env.get("ANTHROPIC_API_KEY", ""))
     if not api_key:

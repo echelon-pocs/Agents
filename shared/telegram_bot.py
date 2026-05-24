@@ -52,12 +52,15 @@ PENDING_FILE = _CRYPTO_DIR / "pending_updates.json"
 OFFSET_FILE  = _SHARED_DIR / ".tg_offset"
 ENV_FILE     = _CRYPTO_DIR / ".env"
 
-# Symbols that belong to the portfolio agent (traditional finance)
-_PORTFOLIO_SYMBOLS = {
-    "VWCE", "VWRL", "4GLD", "8PSB",
-    "WTI", "BRENT", "OIL", "CRUDE",
-    "SPX", "SPX500", "SP500", "ES", "US500",
-}
+# shared/ is in the same directory as this file — importable directly
+if str(_SHARED_DIR) not in sys.path:
+    sys.path.insert(0, str(_SHARED_DIR))
+if str(_PORTFOLIO_DIR) not in sys.path:
+    sys.path.insert(0, str(_PORTFOLIO_DIR))
+
+from utils import load_env as _load_env_util, sanitize_state  # noqa: E402
+from assets import PORTFOLIO_ROUTING_SYMBOLS as _PORTFOLIO_SYMBOLS  # noqa: E402
+
 
 def _pending_file_for(symbol):
     """Route to portfolio-agent pending file for traditional finance symbols."""
@@ -70,14 +73,7 @@ def _pending_file_for(symbol):
 # ─── Config ──────────────────────────────────────────────────────────────────
 
 def load_env():
-    cfg = {}
-    if ENV_FILE.exists():
-        for line in ENV_FILE.read_text().splitlines():
-            line = line.strip()
-            if line and not line.startswith("#") and "=" in line:
-                k, v = line.split("=", 1)
-                cfg[k.strip()] = v.strip()
-    return cfg
+    return _load_env_util(ENV_FILE)
 
 
 def save_env_value(key, value):
@@ -86,22 +82,6 @@ def save_env_value(key, value):
     new_lines = [l for l in lines if not l.startswith(f"{key}=")]
     new_lines.append(f"{key}={value}")
     ENV_FILE.write_text("\n".join(new_lines) + "\n")
-
-
-# ─── State sanitization ───────────────────────────────────────────────────────
-
-def sanitize_state(state):
-    if not isinstance(state, dict):
-        state = {}
-    for key in ("open_positions", "active_setups"):
-        raw = state.get(key, [])
-        if not isinstance(raw, list):
-            raw = []
-        state[key] = [e for e in raw if isinstance(e, dict) and e.get("symbol")]
-    for key in ("alerted", "profitable_wallets_discovered"):
-        if not isinstance(state.get(key), list):
-            state[key] = []
-    return state
 
 
 # ─── Telegram API helpers ─────────────────────────────────────────────────────
