@@ -56,7 +56,7 @@ ENV_FILE     = _CRYPTO_DIR / ".env"
 _PORTFOLIO_SYMBOLS = {
     "VWCE", "VWRL", "4GLD", "8PSB",
     "WTI", "BRENT", "OIL", "CRUDE",
-    "SPX", "SPX500", "SP500", "ES",
+    "SPX", "SPX500", "SP500", "ES", "US500",
 }
 
 def _pending_file_for(symbol):
