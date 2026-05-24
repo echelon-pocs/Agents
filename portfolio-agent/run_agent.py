@@ -167,7 +167,7 @@ def _fmt_chg(v):
 
 def build_prices_section(prices):
     lines = []
-    for asset in ["WTI", "BRENT", "SPX", "VWCE", "VWRL", "4GLD", "8PSB"]:
+    for asset in ["WTI", "BRENT", "SPX", "VWCE", "VWRL", "4GLD"]:
         d = prices.get(asset, {})
         p = _fmt(d.get("price"))
         c1 = _fmt_chg(d.get("chg_1d"))
@@ -305,7 +305,6 @@ def run():
 
     today_str  = datetime.utcnow().strftime("%Y-%m-%d")
     prices_txt = build_prices_section(prices)
-    pos_txt    = build_positions_section(state, prices)
 
     # ── Step 3: Build prompts ──
     with open(BASE_DIR / "CLAUDE.md") as f:
@@ -358,65 +357,69 @@ def run():
 Pending updates applied this run: {pending_log}
 
 Analysis instructions:
-- Use the pre-computed prices above — do NOT recalculate P&L from scratch.
+- Use the pre-computed prices above. Do NOT recalculate P&L from scratch.
 - WTI and SPX are Tier 1 (active trading). Run full deep 1-week analysis per CLAUDE.md.
-- All other assets are Tier 2 (25-year long-term holdings). Condensed check only: 3-5 lines,
-  macro regime alignment, P&L on open positions, HOLD/ADD/TRIM action. No short-term setups.
+- All other assets are Tier 2 (25-year long-term holdings). 3-5 lines max:
+  macro regime check + position status + HOLD/ADD/TRIM. No short-term setups.
+- POSITIONS ARE EMBEDDED in each ticker section — not in a separate block.
+  In every section where an open position exists, start the section body with:
+    Line 1: LONG/SHORT | Entry:X.XX | Now:X.XX | P&L:±X.X%
+    Line 2: Stop:X.XX (or N/A) | Action: <action>
+  Then continue with the analysis below that.
+  If no position exists for that ticker, skip these lines.
 - Bias check: SHORT_TERM positions vs bias_short; LONG_TERM vs bias_long.
 
 ═══ EMAIL FORMAT ═══
 No markdown. Max ~35 chars/line. Plain text.
-Each asset gets its OWN named section. Sections IN THIS EXACT ORDER (exact names):
+Sections IN THIS EXACT ORDER (exact names):
 
   1. Header (already written)
   2. MACRO REGIME (already written — continue from prefill)
   3. SHORT bias / LONG bias (continue from prefill)
   4. MACRO COMMENTARY
-     3-4 lines: macro environment impact on this portfolio.
-     Cover: yield curve direction, carry regime, USD direction, risk-on/off signal.
+     3-4 lines covering: yield curve direction, carry regime,
+     USD direction, net risk-on/off signal for this portfolio.
 
-  5. WTI  [TIER 1 — DEEP ANALYSIS, 8-12 lines]
-     Cover in order:
-     - Price, MA20/50, trend (above/below, % distance)
-     - Geopolitical premium: which active risk(s) + LOW/MED/HIGH
-     - OPEC+ stance: RESTRICTIVE/NEUTRAL/LOOSENING + next meeting signal
-     - USD/DXY: direction + oil correlation impact
-     - Demand: China + US + seasonal factor in one line
-     - MEXC funding rate + OI (if available)
-     - WTI/Brent spread
-     - 1-week base case: dominant driver + key level + setup (LONG/SHORT/FLAT)
-     Do NOT include BTC, on-chain, or unrelated data.
+  5. WTI  [TIER 1 — DEEP ANALYSIS]
+     — Position block first (if open position exists)
+     — Then cover in order:
+       Price, MA20/50, trend + % distance
+       Geopolitical premium: active risks + LOW/MED/HIGH
+       OPEC+ stance: RESTRICTIVE/NEUTRAL/LOOSENING
+       USD/DXY direction + oil correlation
+       Demand: China + US + seasonal (one line)
+       MEXC funding rate + OI if available
+       WTI/Brent spread
+       1-week base case: dominant driver, key level to watch
 
   6. BRENT  [TIER 2 — 3-5 lines]
-     Brent/WTI spread. P&L if position open. Macro regime. Action.
+     — Position block first (if open position exists)
+     — Brent/WTI spread. Macro regime. Action.
 
-  7. SPX  [TIER 1 — DEEP ANALYSIS, 8-12 lines]
-     Cover in order:
-     - Price, MA20/50, trend, distance from ATH
-     - US 10Y/30Y: level + direction + real yield assessment
-     - Curve: NORMAL/FLAT/INVERTED → recession signal?
-     - JPY carry: USDJPY trend + carry regime + transmission risk to equities
-     - Liquidity: net assessment INJECTING/NEUTRAL/DRAINING (TGA/RRP/QT if known)
-     - Earnings pulse: season status + mega-cap tech momentum (AAPL/MSFT/NVDA/META/GOOGL/AMZN)
-     - Inflation/employment: CPI/PCE trend + NFP → Fed reaction function
-     - VIX: level + signal (complacency / normal / fear)
-     - MEXC funding rate + OI (if available)
-     - 1-week base case: dominant driver + scheduled events this week + setup (LONG/SHORT/FLAT)
+  7. SPX  [TIER 1 — DEEP ANALYSIS]
+     — Position block first (if open position exists)
+     — Then cover in order:
+       Price, MA20/50, trend, distance from ATH
+       US 10Y/30Y level + direction + real yield signal
+       Curve shape + recession flag if inverted
+       JPY carry: USDJPY trend + carry regime risk
+       Liquidity: INJECTING/NEUTRAL/DRAINING
+       Earnings: season status + mega-cap tech pulse
+       Inflation/employment → Fed reaction in one line
+       VIX: level + complacency/normal/fear signal
+       MEXC funding rate + OI if available
+       1-week base case: dominant driver, key events this week
 
   8. VWCE / VWRL  [TIER 2 — 3-5 lines]
-     Price, MA20/50. EUR/USD impact. Macro regime. Any structural flag (⚠️ only if present).
-     Action: HOLD / ADD / TRIM. No short-term signals.
+     — Position block first (if open position exists)
+     — EUR/USD impact. Macro regime. Structural flag if present. Action.
 
   9. GOLD  [TIER 2 — 3-5 lines]
-     Price, MA20/50. DXY direction. Real yield proxy. Action: HOLD_CORE / ADD / TRIM.
+     — Position block first (if open position exists)
+     — DXY direction. Real yield proxy. Action: HOLD_CORE/ADD/TRIM.
 
-  10. BITCOIN ETP  [TIER 2 — 3-5 lines]
-      Price (tracks BTC 1:1), MA20/50. BTC cycle: Y3 2026 = bear year.
-      P&L. Action (default: HOLD — 25yr horizon).
-
-  11. OPEN POSITIONS (every position — no exceptions, P&L for each)
-  12. SETUPS (Tier 1 only — WTI and SPX; write "None." if empty)
-  13. CHANGES TODAY
+  10. SETUPS (Tier 1 only — WTI and SPX; write "None." if empty)
+  11. CHANGES TODAY
 
 [/EMAIL]
 
