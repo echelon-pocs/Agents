@@ -358,46 +358,66 @@ def run():
 Pending updates applied this run: {pending_log}
 
 Analysis instructions:
-- Use the pre-computed P&L and prices above — do NOT recalculate from scratch.
-- For 8PSB: it tracks BTC. Use BTC cycle context (Y3/4 = bear year) as primary signal.
-- For VWCE/VWRL: these are long-term global equity ETFs. Only flag structural macro concerns.
-  Do NOT generate short-term trade signals for these. Action = HOLD / ADD / TRIM only.
-- For 4GLD: gold dynamics (USD, inflation, carry). HOLD_CORE unless systemic stress or strong USD.
-- For WTI/Brent/SPX: generate SHORT_TERM and LONG_TERM setups.
+- Use the pre-computed prices above — do NOT recalculate P&L from scratch.
+- WTI and SPX are Tier 1 (active trading). Run full deep 1-week analysis per CLAUDE.md.
+- All other assets are Tier 2 (25-year long-term holdings). Condensed check only: 3-5 lines,
+  macro regime alignment, P&L on open positions, HOLD/ADD/TRIM action. No short-term setups.
 - Bias check: SHORT_TERM positions vs bias_short; LONG_TERM vs bias_long.
 
 ═══ EMAIL FORMAT ═══
 No markdown. Max ~35 chars/line. Plain text.
-Each asset gets its OWN named section — do NOT group assets together.
-Sections IN THIS EXACT ORDER (use EXACT names as written):
+Each asset gets its OWN named section. Sections IN THIS EXACT ORDER (exact names):
+
   1. Header (already written)
-  2. MACRO REGIME (already written)
+  2. MACRO REGIME (already written — continue from prefill)
   3. SHORT bias / LONG bias (continue from prefill)
   4. MACRO COMMENTARY
-     2-3 lines: what macro means for these assets collectively.
-     Mention yield curve, carry regime, USD direction only.
-  5. WTI
-     Price, MA20/50, trend (above/below), MEXC funding rate + OI if available.
-     WTI/Brent spread. Brief supply/demand note. Setup if any.
-     Do NOT include BTC data, on-chain data, or unrelated indicators.
-  6. BRENT
-     Price, MA20/50, trend. Brent premium vs WTI. Setup if any.
-  7. SPX
-     Price, MA20/50, trend. VIX level if available.
-     Yield curve context (1 line). MEXC funding + OI if available. Setup if any.
-  8. VWCE / VWRL
-     Price, MA20/50, trend. EUR/USD impact (these are EUR-denominated).
-     Long-term macro regime. Action: HOLD / ADD / TRIM only.
-     Do NOT generate short-term trade signals.
-  9. GOLD
-     Price, MA20/50, trend. DXY/USD direction. Real yield proxy (US 10Y context).
-     Action: HOLD_CORE / ADD / TRIM.
-  10. BITCOIN ETP
-      Price (tracks BTC 1:1), MA20/50. BTC cycle: Y3/4 = bear year.
-      No on-chain data available — use BTC cycle context only. Action.
-  11. OPEN POSITIONS (every position — no exceptions)
-  12. SETUPS (SHORT-TERM then LONG-TERM; write "None." if empty)
+     3-4 lines: macro environment impact on this portfolio.
+     Cover: yield curve direction, carry regime, USD direction, risk-on/off signal.
+
+  5. WTI  [TIER 1 — DEEP ANALYSIS, 8-12 lines]
+     Cover in order:
+     - Price, MA20/50, trend (above/below, % distance)
+     - Geopolitical premium: which active risk(s) + LOW/MED/HIGH
+     - OPEC+ stance: RESTRICTIVE/NEUTRAL/LOOSENING + next meeting signal
+     - USD/DXY: direction + oil correlation impact
+     - Demand: China + US + seasonal factor in one line
+     - MEXC funding rate + OI (if available)
+     - WTI/Brent spread
+     - 1-week base case: dominant driver + key level + setup (LONG/SHORT/FLAT)
+     Do NOT include BTC, on-chain, or unrelated data.
+
+  6. BRENT  [TIER 2 — 3-5 lines]
+     Brent/WTI spread. P&L if position open. Macro regime. Action.
+
+  7. SPX  [TIER 1 — DEEP ANALYSIS, 8-12 lines]
+     Cover in order:
+     - Price, MA20/50, trend, distance from ATH
+     - US 10Y/30Y: level + direction + real yield assessment
+     - Curve: NORMAL/FLAT/INVERTED → recession signal?
+     - JPY carry: USDJPY trend + carry regime + transmission risk to equities
+     - Liquidity: net assessment INJECTING/NEUTRAL/DRAINING (TGA/RRP/QT if known)
+     - Earnings pulse: season status + mega-cap tech momentum (AAPL/MSFT/NVDA/META/GOOGL/AMZN)
+     - Inflation/employment: CPI/PCE trend + NFP → Fed reaction function
+     - VIX: level + signal (complacency / normal / fear)
+     - MEXC funding rate + OI (if available)
+     - 1-week base case: dominant driver + scheduled events this week + setup (LONG/SHORT/FLAT)
+
+  8. VWCE / VWRL  [TIER 2 — 3-5 lines]
+     Price, MA20/50. EUR/USD impact. Macro regime. Any structural flag (⚠️ only if present).
+     Action: HOLD / ADD / TRIM. No short-term signals.
+
+  9. GOLD  [TIER 2 — 3-5 lines]
+     Price, MA20/50. DXY direction. Real yield proxy. Action: HOLD_CORE / ADD / TRIM.
+
+  10. BITCOIN ETP  [TIER 2 — 3-5 lines]
+      Price (tracks BTC 1:1), MA20/50. BTC cycle: Y3 2026 = bear year.
+      P&L. Action (default: HOLD — 25yr horizon).
+
+  11. OPEN POSITIONS (every position — no exceptions, P&L for each)
+  12. SETUPS (Tier 1 only — WTI and SPX; write "None." if empty)
   13. CHANGES TODAY
+
 [/EMAIL]
 
 [STATE_DELTA]
@@ -413,7 +433,7 @@ Sections IN THIS EXACT ORDER (use EXACT names as written):
 
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",
-        max_tokens=4000,
+        max_tokens=6000,
         system=[{
             "type": "text",
             "text": system_prompt,
