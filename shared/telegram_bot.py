@@ -230,7 +230,7 @@ def parse_command(text):
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
-    if cmd in ("status", "help"):
+    if cmd in ("status", "help", "summary", "hitrate"):
         return {"action": cmd.upper()}
 
     return {"error": f"Unknown command: /{cmd}"}
@@ -309,6 +309,122 @@ def format_status(state):
         return f"⚠️ Could not render status: {e}"
 
 
+def format_summary():
+    """P&L summary for all open positions across both agents (no API call needed)."""
+    try:
+        lines = ["📊 *P&L Summary*\n"]
+
+        # Crypto positions
+        crypto_state = load_state()
+        crypto_pos = crypto_state.get("open_positions", [])
+
+        # Portfolio positions
+        portfolio_state = {}
+        pf_path = _PORTFOLIO_DIR / "state.json"
+        if pf_path.exists():
+            try:
+                portfolio_state = json.loads(pf_path.read_text())
+            except Exception:
+                pass
+        portfolio_pos = portfolio_state.get("open_positions", [])
+
+        if not crypto_pos and not portfolio_pos:
+            return "No open positions across either agent."
+
+        def _pnl_line(pos):
+            sym  = pos.get("symbol", "?")
+            dirn = pos.get("direction", "LONG")
+            entry = pos.get("entry_price")
+            pnl   = pos.get("pnl_pct")
+            entry_s = _fmt_price(entry) if entry else "?"
+            if pnl is not None:
+                icon = "🟢" if pnl > 0 else "🔴" if pnl < 0 else "⚪"
+                pnl_s = f"{pnl:+.1f}%"
+            else:
+                icon, pnl_s = "⚪", "N/A"
+            return f"{icon} *{dirn} {sym}* @ {entry_s} → {pnl_s}"
+
+        if crypto_pos:
+            lines.append("*🔐 Crypto*")
+            for p in crypto_pos:
+                if isinstance(p, dict):
+                    lines.append("  " + _pnl_line(p))
+
+        if portfolio_pos:
+            lines.append("\n*📈 Portfolio*")
+            for p in portfolio_pos:
+                if isinstance(p, dict):
+                    lines.append("  " + _pnl_line(p))
+
+        cr = crypto_state.get("last_run") or "never"
+        pr = portfolio_state.get("last_run") or "never"
+        lines.append(f"\n_Crypto last run: {str(cr)[:10]}_")
+        lines.append(f"_Portfolio last run: {str(pr)[:10]}_")
+        return "\n".join(lines)
+    except Exception as e:
+        return f"⚠️ Could not render summary: {e}"
+
+
+def format_hitrate():
+    """Read setups_history.jsonl and return a short hit-rate summary string."""
+    history_path = _CRYPTO_DIR / "setups_history.jsonl"
+    if not history_path.exists():
+        return "⚠️ No setups_history.jsonl yet — run the crypto agent at least once."
+    try:
+        from collections import defaultdict
+        from datetime import timedelta
+        cutoff = (datetime.now(timezone.utc).replace(tzinfo=None)
+                  - timedelta(days=90)).strftime("%Y-%m-%d")
+
+        groups = defaultdict(list)
+        with open(history_path) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    r = json.loads(line)
+                    if r.get("date", "") >= cutoff:
+                        key = (r.get("symbol", "?"), r.get("direction", "?"))
+                        groups[key].append(r)
+                except Exception:
+                    continue
+
+        hits = misses = pending = 0
+        details = []
+        for (sym, dirn), recs in sorted(groups.items()):
+            recs.sort(key=lambda x: x.get("date", ""))
+            statuses = [r.get("status") for r in recs]
+            if "ENTER" not in statuses:
+                continue
+            final = recs[-1].get("status")
+            if final == "COMPLETED":
+                hits += 1
+                icon = "✅"
+            elif final == "INVALIDATED":
+                misses += 1
+                icon = "❌"
+            else:
+                pending += 1
+                icon = "⏳"
+            details.append(f"{icon} {dirn} {sym} ({final})")
+
+        closed = hits + misses
+        rate = f"{hits/closed*100:.0f}%" if closed else "N/A"
+        lines = [
+            f"📈 *Hit-Rate (last 90d)*\n",
+            f"Entered: {hits+misses+pending} | Hit: {hits} | Miss: {misses} | Pending: {pending}",
+            f"Hit rate: *{rate}* ({hits}/{closed} closed)\n",
+        ]
+        lines += details[:15]  # cap at 15 lines
+        if len(details) > 15:
+            lines.append(f"… and {len(details)-15} more")
+        lines.append(f"\n_Run `python3 hitrate.py` for full report_")
+        return "\n".join(lines)
+    except Exception as e:
+        return f"⚠️ Could not compute hit rate: {e}"
+
+
 HELP_TEXT = """*Agents — Commands*
 
 *Enter a position:*
@@ -326,7 +442,9 @@ HELP_TEXT = """*Agents — Commands*
 
 *Other:*
 `/note ETH trailing stop to $2300` — add note
-`/status` — show open positions & active setups
+`/status` — open positions & active setups (crypto)
+`/summary` — P&L across all open positions (both agents)
+`/hitrate` — signal hit-rate from last 90 days
 `/help` — this message
 
 Updates are queued and applied on the next daily run.
@@ -511,6 +629,7 @@ def run():
 
     new_offset = offset
     api_key = env.get("ANTHROPIC_API_KEY", "")
+    _images_parsed = 0  # rate-limit: max 1 image per polling cycle
 
     for upd in updates:
         try:
@@ -540,10 +659,15 @@ def run():
 
             # ── Image message ──
             if has_image and not text:
+                if _images_parsed >= 1:
+                    send(token, chat_id,
+                         "⏳ One screenshot per poll cycle — re-send in 1 minute.")
+                    continue
                 if not api_key:
                     send(token, chat_id,
                          "⚠️ ANTHROPIC_API_KEY missing — cannot parse image.")
                     continue
+                _images_parsed += 1
                 file_id = (photos[-1].get("file_id") if photos
                            else doc.get("file_id"))
                 send(token, chat_id, "🔍 Analysing screenshot...")
@@ -628,6 +752,14 @@ def run():
             if action == "STATUS":
                 state = load_state()
                 send(token, chat_id, format_status(state))
+                continue
+
+            if action == "SUMMARY":
+                send(token, chat_id, format_summary())
+                continue
+
+            if action == "HITRATE":
+                send(token, chat_id, format_hitrate())
                 continue
 
             sym = parsed.get("symbol", "")

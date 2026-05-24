@@ -244,7 +244,7 @@ def parse_command(text):
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
-    if cmd in ("status", "help"):
+    if cmd in ("status", "help", "summary", "hitrate"):
         return {"action": cmd.upper()}
 
     return {"error": f"Unknown command: /{cmd}"}
@@ -325,6 +325,32 @@ def format_status(state):
         return f"⚠️ Could not render status: {e}"
 
 
+def _format_summary():
+    """P&L summary across both agents — delegates to shared bot logic if available."""
+    try:
+        import importlib.util
+        shared_path = BASE_DIR.parent / "shared" / "telegram_bot.py"
+        spec = importlib.util.spec_from_file_location("shared_tb", shared_path)
+        m = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(m)
+        return m.format_summary()
+    except Exception as e:
+        return f"⚠️ Could not load summary: {e}"
+
+
+def _format_hitrate():
+    """Hit-rate summary — delegates to shared bot logic if available."""
+    try:
+        import importlib.util
+        shared_path = BASE_DIR.parent / "shared" / "telegram_bot.py"
+        spec = importlib.util.spec_from_file_location("shared_tb", shared_path)
+        m = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(m)
+        return m.format_hitrate()
+    except Exception as e:
+        return f"⚠️ Could not load hitrate: {e}"
+
+
 HELP_TEXT = """*Crypto Agent — Commands*
 
 *Enter a position:*
@@ -341,7 +367,9 @@ HELP_TEXT = """*Crypto Agent — Commands*
 
 *Other:*
 `/note ETH trailing stop to $2300` — add note to position
-`/status` — show open positions & active setups
+`/status` — open positions & active setups
+`/summary` — P&L across all open positions (both agents)
+`/hitrate` — signal hit-rate from last 90 days
 `/help` — this message
 
 Updates are queued and applied on the next daily run."""
@@ -534,8 +562,8 @@ def run():
         return
 
     new_offset = offset
-
     api_key = env.get("ANTHROPIC_API_KEY", "")
+    _images_parsed = 0  # rate-limit: max 1 image per polling cycle
 
     for upd in updates:
         try:
@@ -567,10 +595,15 @@ def run():
 
             # ── Image message: parse position screenshot with Claude vision ──
             if has_image and not text:
+                if _images_parsed >= 1:
+                    send(token, chat_id,
+                         "⏳ One screenshot per poll cycle — re-send in 1 minute.")
+                    continue
                 if not api_key:
                     send(token, chat_id,
                          "⚠️ ANTHROPIC_API_KEY missing — cannot parse image.")
                     continue
+                _images_parsed += 1
                 file_id = (photos[-1].get("file_id") if photos
                            else doc.get("file_id"))
                 send(token, chat_id, "🔍 Analysing screenshot...")
@@ -654,6 +687,14 @@ def run():
             if action == "STATUS":
                 state = load_state()
                 send(token, chat_id, format_status(state))
+                continue
+
+            if action == "SUMMARY":
+                send(token, chat_id, _format_summary())
+                continue
+
+            if action == "HITRATE":
+                send(token, chat_id, _format_hitrate())
                 continue
 
             # Route to correct agent based on symbol
