@@ -371,7 +371,7 @@ def render_html_email(plain_body: str) -> str:
             continue
 
         # ── Setup / position card titles (emoji-prefixed or "SYM LONG/SHORT" pattern) ──
-        if in_section and (line[:2] in ('🔴', '🟣', '🟡', '🟠', '⚪', '🟢') or
+        if in_section and (line[0] in ('🔴', '🟣', '🟡', '🟠', '⚪', '🟢') or
                            bool(_CARD_TITLE_RE.match(line))):
             close_card()
             out.append(f'<div class="card"><div class="card-title">{_colorize(line)}</div>')
