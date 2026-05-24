@@ -182,16 +182,22 @@ This is an active tactical position. Perform a full multi-factor analysis:
 - Action: HOLD unless structural change in global energy supply architecture
 - 3-5 lines max. No short-term setup generation.
 
-**VWCE + VWRL (Global equity ETFs):**
-- 25-year compounding vehicles. These should NEVER be closed on short-term macro noise.
-- VWCE (accumulating) ≈ VWRL (distributing) — same underlying exposure
-- EUR-denominated: EUR/USD matters for NAV in base currency
+**VWCE (Vanguard FTSE All-World acc, XETRA):**
+- 25-year accumulating vehicle. NEVER close on short-term macro noise.
+- EUR-denominated; accumulates dividends. EUR/USD matters for NAV in base currency.
 - Structural concern triggers (only if present, flag with ⚠️ or 🚨):
   * US 30Y > 5.5% sustained → deleveraging risk in global equities
   * CARRY_COLLAPSE → systemic sell-off, consider partial TRIM
-  * Confirmed recession (2 consecutive quarters) → consider ADD (dip buyer, 25yr horizon)
+  * Confirmed recession (2 consecutive quarters) → consider ADD
 - Default action: HOLD. ADD only if macro strongly BULLISH or major dip. TRIM only in systemic stress.
-- 3-5 lines max.
+- 3-5 lines max. Show own entry, price, P&L, action.
+
+**VWRL (Vanguard FTSE All-World dist, Euronext AMS):**
+- 25-year distributing vehicle. Same underlying as VWCE; pays out dividends.
+- EUR-denominated on Euronext Amsterdam. Same macro drivers as VWCE.
+- Structural concern triggers: same as VWCE above.
+- Default action: HOLD. ADD only if macro strongly BULLISH or major dip. TRIM only in systemic stress.
+- 3-5 lines max. Show own entry, price, P&L, action. Note if dividend paid recently.
 
 **4GLD (Gold ETP — Xetra-Gold):**
 - Core inflation hedge and currency debasement store of value
@@ -240,7 +246,8 @@ Produce [EMAIL] and [STATE_DELTA] blocks exactly as specified in the user prompt
     WTI
     BRENT
     SPX
-    VWCE / VWRL
+    VWCE
+    VWRL
     GOLD
     SILVER
     SETUPS
@@ -255,7 +262,8 @@ Produce [EMAIL] and [STATE_DELTA] blocks exactly as specified in the user prompt
 - **SPX**: 8–12 lines. Yield level + direction, JPY carry risk,
   liquidity, earnings pulse, inflation/employment, technical, 1-week base case.
 - **BRENT**: 3–5 lines. Brent/WTI spread, macro regime, action.
-- **VWCE / VWRL**: 3–5 lines. EUR/USD impact, macro regime, any structural flag, action.
+- **VWCE**: 3–5 lines. Own entry/P&L, EUR/USD impact, macro regime, structural flag, action.
+- **VWRL**: 3–5 lines. Own entry/P&L, same macro drivers as VWCE, dividend note if applicable.
 - **GOLD**: 3–5 lines. DXY/USD direction, real yield proxy, action.
 - **SILVER**: 3–5 lines. DXY direction, gold/silver ratio, industrial demand pulse, action.
 - No standalone OPEN POSITIONS section — positions live inside each ticker.

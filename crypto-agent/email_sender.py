@@ -53,6 +53,8 @@ _SECTION_COLORS = {
     "SPX":                   "#003d2d",
     "EQUITIES":              "#003d2d",
     "VWCE / VWRL":           "#003d2d",
+    "VWCE":                  "#003d2d",
+    "VWRL":                  "#003d2d",
     "GOLD":                  "#3d3000",
     "SILVER":                "#2d3030",
     "SETUPS":                "#3d1c02",
@@ -115,7 +117,7 @@ _HTML_CSS = """
       padding:4px 0;border-bottom:1px solid #f3f4f6;font-size:13px}
   .kv:last-child{border-bottom:none}
   .kv-key{color:#6b7280;min-width:72px;flex-shrink:0;font-size:12px}
-  .kv-val{font-family:'Courier New',monospace;flex:1}
+  .kv-val{flex:1;line-height:1.5}
   .bullet{padding:5px 0 5px 14px;border-left:3px solid #d1d5db;
           margin:4px 0;font-size:13px;line-height:1.55}
   .bullet.info{border-left-color:#3b82f6}
@@ -145,7 +147,7 @@ _KNOWN_SECTIONS = [
     "WAITING", "CHANGES TODAY",
     # Portfolio agent
     "MACRO COMMENTARY", "WTI", "BRENT", "SPX", "EQUITIES",
-    "VWCE / VWRL", "GOLD", "SILVER", "SETUPS",
+    "VWCE / VWRL", "VWCE", "VWRL", "GOLD", "SILVER", "SETUPS",
 ]
 
 
@@ -245,7 +247,9 @@ def _render_card_line(line: str) -> str:
     stripped = line.strip()
     if ':' in stripped:
         return _render_kv_line(stripped)
-    return f'<div style="font-size:13px;padding:2px 0">{_colorize(stripped)}</div>'
+    # Narrative / continuation line — same font+color as kv-val, no divider
+    return (f'<div style="font-size:13px;padding:2px 0 2px 78px;'
+            f'color:#374151;line-height:1.5">{_colorize(stripped)}</div>')
 
 
 # ── Main renderer ─────────────────────────────────────────────────────────────
