@@ -17,7 +17,7 @@ from typing import Dict, List, Optional
 
 import anthropic
 
-BASE_DIR = Path(__file__).parent
+BASE_DIR = Path(__file__).resolve().parent
 
 # Re-use email_sender from crypto-agent (same repo)
 _CRYPTO_AGENT = str(BASE_DIR.parent / "crypto-agent")

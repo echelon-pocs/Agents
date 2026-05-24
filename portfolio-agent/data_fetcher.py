@@ -9,7 +9,7 @@ from typing import Dict
 
 import requests
 
-BASE_DIR = Path(__file__).parent
+BASE_DIR = Path(__file__).resolve().parent
 
 # Python 3.8 compatible headers
 CHROME_HDR = {
