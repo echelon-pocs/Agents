@@ -37,7 +37,7 @@ except ImportError as _e:
         f"Original error: {_e}"
     )
 
-from utils import load_env as _load_env, _fmt  # noqa: E402
+from utils import load_env as _load_env, _fmt, avg_into_position, reduce_position  # noqa: E402
 from assets import PORTFOLIO_ASSETS  # noqa: E402
 from data_fetcher import get_all_portfolio_data, get_macro_data  # noqa: E402
 
@@ -86,29 +86,72 @@ def apply_pending(state):
         sym    = upd.get("symbol", "").upper()
 
         if action == "ENTER":
-            key = (sym, upd.get("direction", "LONG").upper())
-            pos = {
-                "symbol":      sym,
-                "direction":   upd.get("direction", "LONG").upper(),
-                "market_type": upd.get("market_type", "spot"),
-                "tf":          upd.get("tf", "LONG_TERM"),
-                "entry_price": upd.get("price"),
-                "qty":         upd.get("qty") or upd.get("size_usd"),
-                "stop_loss":   upd.get("stop_loss"),
-                "tp1":         None,
-                "status":      "OPEN",
-            }
-            positions[key] = pos
-            log.append(f"ADOPTED: {sym} {pos['direction']} @ {pos['entry_price']}")
+            direction   = upd.get("direction", "LONG").upper()
+            key         = (sym, direction)
+            price       = upd.get("price")
+            size_usd    = upd.get("size_usd")
+            size_qty    = upd.get("size_qty") or upd.get("qty")
+
+            if key in positions and price is not None:
+                # Existing position — average in the new entry
+                avg_into_position(positions[key], price,
+                                  new_qty=size_qty, new_size_usd=size_usd)
+                new_avg = positions[key]["entry_price"]
+                log.append(f"AVERAGED IN: {sym} {direction} @ {price} "
+                            f"→ new avg {new_avg}")
+            else:
+                pos = {
+                    "symbol":      sym,
+                    "direction":   direction,
+                    "market_type": upd.get("market_type", "spot"),
+                    "tf":          upd.get("tf", "LONG_TERM"),
+                    "entry_price": price,
+                    "qty":         size_qty,
+                    "size_usd":    size_usd,
+                    "stop_loss":   upd.get("stop_loss"),
+                    "tp1":         None,
+                    "status":      "OPEN",
+                }
+                positions[key] = pos
+                log.append(f"ADOPTED: {sym} {direction} @ {price}")
 
         elif action == "CLOSE":
-            key_exact = (sym, upd.get("direction", "").upper())
+            direction = upd.get("direction", "").upper()
+            key_exact = (sym, direction) if direction else None
             key_any   = next((k for k in positions if k[0] == sym), None)
-            removed   = positions.pop(key_exact, None) or (
-                positions.pop(key_any) if key_any else None
-            )
-            if removed:
-                log.append(f"CLOSED: {sym}")
+
+            close_qty = upd.get("close_qty")
+            close_pct = upd.get("close_pct")
+            close_usd = upd.get("close_usd")
+            has_size  = any(v is not None for v in (close_qty, close_pct, close_usd))
+
+            matched = (key_exact if key_exact and key_exact in positions
+                       else key_any)
+
+            if matched:
+                if upd.get("partial") and has_size:
+                    updated = reduce_position(positions[matched],
+                                             close_qty=close_qty,
+                                             close_pct=close_pct,
+                                             close_usd=close_usd)
+                    if updated is None:
+                        del positions[matched]
+                        log.append(f"CLOSED: {sym} (partial consumed remaining qty)")
+                    else:
+                        positions[matched] = updated
+                        log.append(f"PARTIAL CLOSE: {sym} "
+                                   f"→ remaining qty {updated.get('qty', '?')}")
+                elif upd.get("partial"):
+                    positions[matched]["notes"] = (
+                        (positions[matched].get("notes") or "") +
+                        " | Partial close flagged."
+                    )
+                    log.append(f"PARTIAL CLOSE flagged: {sym}")
+                else:
+                    del positions[matched]
+                    log.append(f"CLOSED: {sym}")
+            else:
+                log.append(f"CLOSE {sym}: not found in open positions (ignored)")
 
         elif action == "NOTE":
             key_any = next((k for k in positions if k[0] == sym), None)

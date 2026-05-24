@@ -199,17 +199,40 @@ def parse_command(text):
         }
 
     if cmd == "close" and len(parts) >= 2:
-        symbol = parts[1].upper()
+        symbol    = parts[1].upper()
         modifiers = [p.lower() for p in parts[2:]]
-        partial = any(m in ("partial",) for m in modifiers)
+        partial   = False
         direction = None
+        close_qty = None
+        close_usd = None
+        close_pct = None
+
         for m in modifiers:
-            if m in ("long", "buy", "spot"):
+            if m == "partial":
+                partial = True
+            elif m in ("long", "buy", "spot"):
                 direction = "LONG"
-                break
-            if m in ("short", "sell"):
+            elif m in ("short", "sell"):
                 direction = "SHORT"
-                break
+            elif m.endswith("%"):
+                try:
+                    close_pct = float(m[:-1])
+                    partial   = True
+                except ValueError:
+                    pass
+            elif m.endswith("usd"):
+                try:
+                    close_usd = float(m[:-3].replace(",", ""))
+                    partial   = True
+                except ValueError:
+                    pass
+            else:
+                try:
+                    close_qty = float(m.replace(",", ""))
+                    partial   = True
+                except ValueError:
+                    pass
+
         result = {
             "action":    "CLOSE",
             "symbol":    symbol,
@@ -218,6 +241,12 @@ def parse_command(text):
         }
         if direction:
             result["direction"] = direction
+        if close_qty is not None:
+            result["close_qty"] = close_qty
+        if close_usd is not None:
+            result["close_usd"] = close_usd
+        if close_pct is not None:
+            result["close_pct"] = close_pct
         return result
 
     if cmd == "note" and len(parts) >= 3:
@@ -436,9 +465,16 @@ HELP_TEXT = """*Agents — Commands*
 `/enter WTI long 72.50` — WTI perpetual (→ portfolio agent)
 
 *Close a position:*
-`/close ETH` — close ETH (all)
+`/close ETH` — close ETH fully
 `/close BTC short` — close BTC short leg
-`/close BTC partial` — flag partial close
+`/close BTC partial` — partial close (flag only)
+`/close BTC partial 0.5` — close 0.5 units
+`/close BTC partial 500usd` — close $500 worth
+`/close BTC partial 50%` — close 50% of position
+
+*Averaging into a position:*
+Sending `/enter` for a ticker you already own
+adds to the position and recalculates avg cost.
 
 *Other:*
 `/note ETH trailing stop to $2300` — add note
@@ -771,19 +807,71 @@ def run():
 
             if action == "ENTER":
                 size_usd    = parsed.get("size_usd")
+                size_qty    = parsed.get("size_qty")
                 size_note   = f", size ${size_usd:,.0f}" if size_usd is not None else ""
                 direction   = parsed.get("direction", "LONG")
                 market_type = parsed.get("market_type", "spot")
-                send(token, chat_id,
-                     f"✅ Queued{agent_note}: *{direction} {parsed['symbol']}* ({market_type}) @ "
-                     f"{_fmt_price(parsed.get('price'))}{size_note}\n"
-                     f"_Will be applied on next daily run._")
+                new_price   = parsed.get("price")
+
+                # Check if there's already an open position to show avg preview
+                try:
+                    _st = load_state()
+                    _pf_path = _PORTFOLIO_DIR / "state.json"
+                    _pf_st   = json.loads(_pf_path.read_text()) if _pf_path.exists() else {}
+                    _all_pos = (_st.get("open_positions", []) +
+                                _pf_st.get("open_positions", []))
+                    _existing = next(
+                        (p for p in _all_pos
+                         if isinstance(p, dict)
+                         and p.get("symbol", "").upper() == sym
+                         and p.get("direction", "LONG").upper() == direction),
+                        None,
+                    )
+                except Exception:
+                    _existing = None
+
+                if _existing and new_price:
+                    old_avg  = float(_existing.get("entry_price") or new_price)
+                    old_qty  = _existing.get("qty")
+                    old_size = _existing.get("size_usd")
+                    # derive new qty for preview
+                    nq = size_qty
+                    if nq is None and size_usd and new_price:
+                        nq = size_usd / new_price
+                    if nq is None and old_size and old_avg:
+                        oq = old_size / old_avg
+                        new_avg_p = (old_avg * oq + new_price * 1) / (oq + 1)
+                    elif nq is not None and old_qty is not None:
+                        new_avg_p = (old_avg * old_qty + new_price * nq) / (old_qty + nq)
+                    elif nq is not None:
+                        new_avg_p = (old_avg + new_price) / 2
+                    else:
+                        count = int(_existing.get("_entry_count", 1))
+                        new_avg_p = (old_avg * count + new_price) / (count + 1)
+                    send(token, chat_id,
+                         f"✅ Queued{agent_note}: ADD to *{direction} {sym}*{size_note}\n"
+                         f"New entry @ {_fmt_price(new_price)}\n"
+                         f"Avg cost: {_fmt_price(old_avg)} → *{_fmt_price(new_avg_p)}*\n"
+                         f"_Will be applied on next daily run._")
+                else:
+                    send(token, chat_id,
+                         f"✅ Queued{agent_note}: *{direction} {parsed['symbol']}* "
+                         f"({market_type}) @ {_fmt_price(new_price)}{size_note}\n"
+                         f"_Will be applied on next daily run._")
 
             elif action == "CLOSE":
                 kind = "PARTIAL CLOSE" if parsed.get("partial") else "CLOSE"
-                dir_note = f" {parsed['direction']}" if parsed.get("direction") else ""
+                dir_note  = f" {parsed['direction']}" if parsed.get("direction") else ""
+                size_parts = []
+                if parsed.get("close_qty") is not None:
+                    size_parts.append(f"{parsed['close_qty']} units")
+                if parsed.get("close_usd") is not None:
+                    size_parts.append(f"${parsed['close_usd']:,.0f}")
+                if parsed.get("close_pct") is not None:
+                    size_parts.append(f"{parsed['close_pct']:.0f}%")
+                size_str = f" ({', '.join(size_parts)})" if size_parts else ""
                 send(token, chat_id,
-                     f"✅ Queued{agent_note}: *{kind} {parsed['symbol']}{dir_note}*\n"
+                     f"✅ Queued{agent_note}: *{kind} {parsed['symbol']}{dir_note}*{size_str}\n"
                      f"_Will be applied on next daily run._")
 
             elif action == "NOTE":

@@ -25,7 +25,7 @@ _SHARED = str(BASE_DIR.parent / "shared")
 if _SHARED not in sys.path:
     sys.path.insert(0, _SHARED)
 
-from utils import sanitize_state  # noqa: E402
+from utils import sanitize_state, avg_into_position, reduce_position  # noqa: E402
 
 
 def _slim_transfer(tx):
@@ -122,26 +122,36 @@ def apply_pending_updates(state):
         if action == "ENTER":
             price       = u.get("price", 0)
             size_usd    = u.get("size_usd")
+            size_qty    = u.get("size_qty")
             setup       = setups.get(symbol, {})
             # Telegram update direction takes precedence over the setup's direction
             direction   = u.get("direction") or setup.get("direction", "LONG")
             market_type = u.get("market_type", "spot")
             key = f"{symbol}_{direction}"  # allow both legs of a futures pair
-            positions[key] = {
-                "symbol":      symbol,
-                "direction":   direction,
-                "market_type": market_type,
-                "entry_price": price,
-                "entry_date":  u.get("timestamp", "")[:10],
-                "stop_loss":   setup.get("stop_loss"),
-                "target_1":    setup.get("target_1"),
-                "target_2":    setup.get("target_2"),
-                "size_usd":    size_usd,
-                "tf":          u.get("tf") or setup.get("timeframe") or "UNKNOWN",
-                "pnl_pct":     None,
-                "notes":       "User confirmed via Telegram.",
-            }
-            log.append(f"ENTERED {direction} {symbol} ({market_type}) @ ${price:,}")
+            if key in positions:
+                # Existing position — average the cost, accumulate quantity
+                avg_into_position(positions[key], price,
+                                  new_qty=size_qty, new_size_usd=size_usd)
+                new_avg = positions[key]["entry_price"]
+                log.append(f"AVERAGED IN {direction} {symbol} @ ${price:,} "
+                            f"→ new avg ${new_avg:,.4f}")
+            else:
+                positions[key] = {
+                    "symbol":      symbol,
+                    "direction":   direction,
+                    "market_type": market_type,
+                    "entry_price": price,
+                    "entry_date":  u.get("timestamp", "")[:10],
+                    "stop_loss":   setup.get("stop_loss"),
+                    "target_1":    setup.get("target_1"),
+                    "target_2":    setup.get("target_2"),
+                    "size_usd":    size_usd,
+                    "qty":         size_qty,
+                    "tf":          u.get("tf") or setup.get("timeframe") or "UNKNOWN",
+                    "pnl_pct":     None,
+                    "notes":       "User confirmed via Telegram.",
+                }
+                log.append(f"ENTERED {direction} {symbol} ({market_type}) @ ${price:,}")
 
             # If no active setup exists for this symbol, create a placeholder so
             # Claude analyses it on the next run and fills in targets/stop/whale score.
@@ -167,19 +177,34 @@ def apply_pending_updates(state):
                 log.append(f"AUTO-SETUP created for {symbol} (no prior setup found)")
 
         elif action == "CLOSE":
-            # Build candidate keys: direction-specific first, then symbol-only fallback
             direction = u.get("direction")
             candidates = []
             if direction:
                 candidates.append(f"{symbol}_{direction}")
             candidates.append(symbol)
-            # Also match any key starting with symbol_ (covers both legs if no direction given)
             if not direction:
                 candidates += [k for k in list(positions) if k.startswith(f"{symbol}_")]
 
             matched = next((k for k in candidates if k in positions), None)
             if matched:
-                if u.get("partial"):
+                close_qty = u.get("close_qty")
+                close_pct = u.get("close_pct")
+                close_usd = u.get("close_usd")
+                has_size  = any(v is not None for v in (close_qty, close_pct, close_usd))
+
+                if u.get("partial") and has_size:
+                    updated = reduce_position(positions[matched],
+                                              close_qty=close_qty,
+                                              close_pct=close_pct,
+                                              close_usd=close_usd)
+                    if updated is None:
+                        del positions[matched]
+                        log.append(f"CLOSED {matched} (partial close consumed remaining qty)")
+                    else:
+                        positions[matched] = updated
+                        log.append(f"PARTIAL CLOSE {matched} "
+                                   f"→ remaining qty {updated.get('qty', '?')}")
+                elif u.get("partial"):
                     positions[matched]["notes"] = (
                         positions[matched].get("notes", "") + " | Partial close flagged."
                     )
