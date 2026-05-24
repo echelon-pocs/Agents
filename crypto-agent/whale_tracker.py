@@ -9,6 +9,7 @@ import json
 import re
 import time
 import requests
+from concurrent.futures import ThreadPoolExecutor, as_completed, wait, FIRST_COMPLETED
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
@@ -65,18 +66,30 @@ COINGECKO_IDS = {
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
-def _get(url: str, params: dict = None, timeout: int = 12) -> Optional[dict]:
-    try:
-        r = requests.get(url, params=params, timeout=timeout,
-                         headers={"User-Agent": "CryptoAgent/1.0"})
-        if r.status_code == 200:
-            return r.json()
-    except Exception:
-        pass
+def _get(url: str, params: dict = None, timeout: int = 12,
+         retries: int = 2, backoff: float = 2.0) -> Optional[dict]:
+    """GET with retry on 429/503. retries=2 → up to 3 total attempts."""
+    for attempt in range(retries + 1):
+        try:
+            r = requests.get(url, params=params, timeout=timeout,
+                             headers={"User-Agent": "CryptoAgent/1.0"})
+            if r.status_code == 200:
+                return r.json()
+            if r.status_code in (429, 503) and attempt < retries:
+                time.sleep(backoff * (2 ** attempt))
+                continue
+        except Exception:
+            if attempt < retries:
+                time.sleep(backoff * (2 ** attempt))
     return None
 
-def get_prices() -> Dict[str, float]:
-    """Fetch current USD prices for all tracked assets via CoinGecko."""
+
+def get_prices(prices: Dict[str, float] = None) -> Dict[str, float]:
+    """Fetch current USD prices for all tracked assets via CoinGecko.
+    If a pre-fetched dict is passed, return it immediately (cache passthrough).
+    """
+    if prices is not None:
+        return prices
     ids = ",".join(COINGECKO_IDS.values())
     data = _get("https://api.coingecko.com/api/v3/simple/price",
                 params={"ids": ids, "vs_currencies": "usd"})
@@ -191,9 +204,9 @@ def get_historical_price(symbol: str, date_str: str) -> float:
 
 # ─── BTC ─────────────────────────────────────────────────────────────────────
 
-def get_btc_large_transfers(min_usd: float = 1_000_000) -> List[Dict]:
+def get_btc_large_transfers(min_usd: float = 1_000_000, prices: Dict[str, float] = None) -> List[Dict]:
     """Detect large BTC transfers in last 24h via Blockchair."""
-    price_data = get_prices()
+    price_data = get_prices(prices)
     btc_price = price_data.get("BTC", 80000)
     min_btc = min_usd / btc_price
 
@@ -232,9 +245,9 @@ def get_btc_wallet_activity(address: str) -> Dict:
 
 ETHERSCAN_KEY = "YourEtherscanKey"  # set in .env as ETHERSCAN_API_KEY (optional, free tier works without)
 
-def get_eth_large_transfers(etherscan_key: str = "", min_usd: float = 1_000_000) -> List[Dict]:
+def get_eth_large_transfers(etherscan_key: str = "", min_usd: float = 1_000_000, prices: Dict[str, float] = None) -> List[Dict]:
     """Detect large ETH transfers in last 24h via Etherscan."""
-    price_data = get_prices()
+    price_data = get_prices(prices)
     eth_price = price_data.get("ETH", 2500)
     min_eth = min_usd / eth_price
 
@@ -264,9 +277,9 @@ def get_eth_large_transfers(etherscan_key: str = "", min_usd: float = 1_000_000)
                 })
     return results
 
-def get_ondo_large_transfers(etherscan_key: str = "", min_usd: float = 500_000) -> List[Dict]:
+def get_ondo_large_transfers(etherscan_key: str = "", min_usd: float = 500_000, prices: Dict[str, float] = None) -> List[Dict]:
     """Detect large ONDO token transfers in last 24h via Etherscan."""
-    price_data = get_prices()
+    price_data = get_prices(prices)
     ondo_price = price_data.get("ONDO", 0.45)
 
     start_block = _estimate_block_from_hours_ago(24, "eth")
@@ -325,9 +338,9 @@ def _block_from_hours_ago(hours: int, etherscan_key: str = "") -> int:
 
 # ─── SOL ─────────────────────────────────────────────────────────────────────
 
-def get_sol_large_transfers(min_usd: float = 1_000_000) -> List[Dict]:
+def get_sol_large_transfers(min_usd: float = 1_000_000, prices: Dict[str, float] = None) -> List[Dict]:
     """Detect large SOL transfers via public Solana RPC."""
-    price_data = get_prices()
+    price_data = get_prices(prices)
     sol_price = price_data.get("SOL", 95)
 
     # Query recent signatures from known large holders
@@ -358,9 +371,9 @@ def get_sol_large_transfers(min_usd: float = 1_000_000) -> List[Dict]:
 
 # ─── XRP ─────────────────────────────────────────────────────────────────────
 
-def get_xrp_large_transfers(min_usd: float = 500_000) -> List[Dict]:
+def get_xrp_large_transfers(min_usd: float = 500_000, prices: Dict[str, float] = None) -> List[Dict]:
     """Detect large XRP payments via XRPL public API."""
-    price_data = get_prices()
+    price_data = get_prices(prices)
     xrp_price = price_data.get("XRP", 1.45)
     min_xrp = min_usd / xrp_price
 
@@ -943,102 +956,129 @@ def get_macro_data() -> Dict:
         except Exception:
             return (None, None)
 
-    result["us_10y"],  _    = _yield_multi("10ustb.b", "^TNX",  "10 YR")
-    result["us_30y"],  _    = _yield_multi("30ustb.b", "^TYX",  "30 YR")
-    result["spx"],     _    = _yield_multi("^spx", "^GSPC")
+    # ── Fetch independent series in parallel ─────────────────────────────────
+    def _fetch_us10y():
+        return ("us_10y", _yield_multi("10ustb.b", "^TNX", "10 YR"))
 
-    # JGB: try multiple stooq symbols → MOF CSV → Nasdaq Data Link → FRED → Yahoo Finance → worldgov → BOJ
-    # Stooq uses `.b` suffix for bonds; Japan symbol candidates differ by source
-    _jgb10_candidates = ["10jgbs.b", "10jgb.b", "jgbs10.b", "10jpb.b"]
-    _jgb30_candidates = ["30jgbs.b", "30jgb.b", "jgbs30.b", "30jpb.b"]
-    for _sym in _jgb10_candidates:
-        _v, _ = _stooq(_sym, _verbose=True)
-        if _v is not None:
-            result["japan_10y"] = _v
-            print(f"[JGB] stooq 10Y OK: {_sym} = {_v}")
-            break
-    for _sym in _jgb30_candidates:
-        _v, _ = _stooq(_sym, _verbose=True)
-        if _v is not None:
-            result["japan_30y"] = _v
-            print(f"[JGB] stooq 30Y OK: {_sym} = {_v}")
-            break
-    if result["japan_10y"] is None or result["japan_30y"] is None:
-        j10, j30 = _mof_jgb()
-        print(f"[JGB] MOF CSV: 10Y={j10} 30Y={j30}")
-        if result["japan_10y"] is None:
-            result["japan_10y"] = j10
-        if result["japan_30y"] is None:
-            result["japan_30y"] = j30
-    if result["japan_10y"] is None or result["japan_30y"] is None:
-        j10, j30 = _jgb_nasdaq()
-        print(f"[JGB] Nasdaq MOFJ: 10Y={j10} 30Y={j30}")
-        if result["japan_10y"] is None:
-            result["japan_10y"] = j10
-        if result["japan_30y"] is None:
-            result["japan_30y"] = j30
-    if result["japan_10y"] is None:
-        j10, _ = _jgb_fred()
-        print(f"[JGB] FRED: 10Y={j10}")
-        if j10 is not None:
-            result["japan_10y"] = j10
-    if result["japan_10y"] is None or result["japan_30y"] is None:
-        j10, j30 = _jgb_yfinance_try()
-        print(f"[JGB] Yahoo Finance: 10Y={j10} 30Y={j30}")
-        if result["japan_10y"] is None:
-            result["japan_10y"] = j10
-        if result["japan_30y"] is None:
-            result["japan_30y"] = j30
-    if result["japan_10y"] is None or result["japan_30y"] is None:
-        j10, j30 = _jgb_worldgov()
-        print(f"[JGB] worldgovernmentbonds.com: 10Y={j10} 30Y={j30}")
-        if result["japan_10y"] is None:
-            result["japan_10y"] = j10
-        if result["japan_30y"] is None:
-            result["japan_30y"] = j30
-    if result["japan_10y"] is None or result["japan_30y"] is None:
-        j10, j30 = _jgb_boj()
-        print(f"[JGB] BOJ stats: 10Y={j10} 30Y={j30}")
-        if result["japan_10y"] is None:
-            result["japan_10y"] = j10
-        if result["japan_30y"] is None:
-            result["japan_30y"] = j30
-    print(f"[JGB] Final: 10Y={result['japan_10y']} 30Y={result['japan_30y']}")
+    def _fetch_us30y():
+        return ("us_30y", _yield_multi("30ustb.b", "^TYX", "30 YR"))
 
-    # USDJPY — stooq → Yahoo → Bitfinex → AwesomeAPI, 8-day history
-    usdjpy_now, usdjpy_hist = _stooq("usdjpy", history=8)
-    if usdjpy_now is None:
-        usdjpy_now, usdjpy_hist = _yfinance("USDJPY=X", history=8)
-    if usdjpy_now is None:
-        usdjpy_now = _bitfinex_usdjpy()
-        usdjpy_hist = [usdjpy_now] if usdjpy_now else []
-    if usdjpy_now is None:
-        usdjpy_now = _awesomeapi_usdjpy()
-        usdjpy_hist = [usdjpy_now] if usdjpy_now else []
-    result["usdjpy"] = usdjpy_now
-    if len(usdjpy_hist) >= 6:
-        result["usdjpy_5d_ago"] = usdjpy_hist[-6]  # 5 trading days back
+    def _fetch_spx():
+        return ("spx", _yield_multi("^spx", "^GSPC"))
 
-    # Binance USDT-M futures — BTC funding rate
-    try:
-        r = requests.get("https://fapi.binance.com/fapi/v1/premiumIndex",
-                         params={"symbol": "BTCUSDT"}, timeout=10)
-        if r.status_code == 200:
-            result["btc_funding_rate_pct"] = round(float(r.json().get("lastFundingRate", 0)) * 100, 4)
-    except Exception:
-        pass
+    def _fetch_jgb():
+        """Run full JGB waterfall: stooq → MOF → Nasdaq → FRED → YF → worldgov → BOJ."""
+        j10, j30 = None, None
+        # stooq candidates
+        for _sym in ("10jgbs.b", "10jgb.b", "jgbs10.b", "10jpb.b"):
+            _v, _ = _stooq(_sym, _verbose=True)
+            if _v is not None:
+                j10 = _v
+                print(f"[JGB] stooq 10Y OK: {_sym} = {_v}")
+                break
+        for _sym in ("30jgbs.b", "30jgb.b", "jgbs30.b", "30jpb.b"):
+            _v, _ = _stooq(_sym, _verbose=True)
+            if _v is not None:
+                j30 = _v
+                print(f"[JGB] stooq 30Y OK: {_sym} = {_v}")
+                break
+        if j10 is None or j30 is None:
+            _j10, _j30 = _mof_jgb()
+            print(f"[JGB] MOF CSV: 10Y={_j10} 30Y={_j30}")
+            if j10 is None: j10 = _j10
+            if j30 is None: j30 = _j30
+        if j10 is None or j30 is None:
+            _j10, _j30 = _jgb_nasdaq()
+            print(f"[JGB] Nasdaq MOFJ: 10Y={_j10} 30Y={_j30}")
+            if j10 is None: j10 = _j10
+            if j30 is None: j30 = _j30
+        if j10 is None:
+            _j10, _ = _jgb_fred()
+            print(f"[JGB] FRED: 10Y={_j10}")
+            if _j10 is not None: j10 = _j10
+        if j10 is None or j30 is None:
+            _j10, _j30 = _jgb_yfinance_try()
+            print(f"[JGB] Yahoo Finance: 10Y={_j10} 30Y={_j30}")
+            if j10 is None: j10 = _j10
+            if j30 is None: j30 = _j30
+        if j10 is None or j30 is None:
+            _j10, _j30 = _jgb_worldgov()
+            print(f"[JGB] worldgovernmentbonds.com: 10Y={_j10} 30Y={_j30}")
+            if j10 is None: j10 = _j10
+            if j30 is None: j30 = _j30
+        if j10 is None or j30 is None:
+            _j10, _j30 = _jgb_boj()
+            print(f"[JGB] BOJ stats: 10Y={_j10} 30Y={_j30}")
+            if j10 is None: j10 = _j10
+            if j30 is None: j30 = _j30
+        print(f"[JGB] Final: 10Y={j10} 30Y={j30}")
+        return ("jgb", (j10, j30))
 
-    # Binance — BTC open interest (proxy for leverage buildup / liquidation risk)
-    try:
-        r = requests.get("https://fapi.binance.com/fapi/v1/openInterest",
-                         params={"symbol": "BTCUSDT"}, timeout=10)
-        if r.status_code == 200:
-            oi_btc = float(r.json().get("openInterest", 0))
-            prices = get_prices()
-            btc_price = prices.get("BTC", 80000)
-            result["btc_oi_usd_bn"] = round(oi_btc * btc_price / 1e9, 2)
-    except Exception:
-        pass
+    def _fetch_usdjpy():
+        usdjpy_now, usdjpy_hist = _stooq("usdjpy", history=8)
+        if usdjpy_now is None:
+            usdjpy_now, usdjpy_hist = _yfinance("USDJPY=X", history=8)
+        if usdjpy_now is None:
+            usdjpy_now = _bitfinex_usdjpy()
+            usdjpy_hist = [usdjpy_now] if usdjpy_now else []
+        if usdjpy_now is None:
+            usdjpy_now = _awesomeapi_usdjpy()
+            usdjpy_hist = [usdjpy_now] if usdjpy_now else []
+        return ("usdjpy", (usdjpy_now, usdjpy_hist))
+
+    def _fetch_binance_fr():
+        try:
+            r = requests.get("https://fapi.binance.com/fapi/v1/premiumIndex",
+                             params={"symbol": "BTCUSDT"}, timeout=10)
+            if r.status_code == 200:
+                return ("btc_fr", round(float(r.json().get("lastFundingRate", 0)) * 100, 4))
+        except Exception:
+            pass
+        return ("btc_fr", None)
+
+    def _fetch_binance_oi():
+        try:
+            r = requests.get("https://fapi.binance.com/fapi/v1/openInterest",
+                             params={"symbol": "BTCUSDT"}, timeout=10)
+            if r.status_code == 200:
+                oi_btc = float(r.json().get("openInterest", 0))
+                _oi_prices = get_prices()
+                btc_price = _oi_prices.get("BTC", 80000)
+                return ("btc_oi", round(oi_btc * btc_price / 1e9, 2))
+        except Exception:
+            pass
+        return ("btc_oi", None)
+
+    _tasks = [_fetch_us10y, _fetch_us30y, _fetch_spx,
+              _fetch_jgb, _fetch_usdjpy, _fetch_binance_fr, _fetch_binance_oi]
+
+    with ThreadPoolExecutor(max_workers=len(_tasks)) as _pool:
+        _futures = {_pool.submit(fn): fn.__name__ for fn in _tasks}
+        for _fut in as_completed(_futures):
+            try:
+                _key, _val = _fut.result()
+            except Exception as _exc:
+                print(f"[MacroData] {_futures[_fut]} raised: {_exc}")
+                continue
+            if _key == "us_10y":
+                result["us_10y"], _ = _val
+            elif _key == "us_30y":
+                result["us_30y"], _ = _val
+            elif _key == "spx":
+                result["spx"], _ = _val
+            elif _key == "jgb":
+                result["japan_10y"], result["japan_30y"] = _val
+            elif _key == "usdjpy":
+                _usdjpy_now, _usdjpy_hist = _val
+                result["usdjpy"] = _usdjpy_now
+                if len(_usdjpy_hist) >= 6:
+                    result["usdjpy_5d_ago"] = _usdjpy_hist[-6]
+            elif _key == "btc_fr":
+                if _val is not None:
+                    result["btc_funding_rate_pct"] = _val
+            elif _key == "btc_oi":
+                if _val is not None:
+                    result["btc_oi_usd_bn"] = _val
 
     # Derived signals
     if result["us_10y"] and result["us_30y"]:
@@ -1137,12 +1177,12 @@ def get_all_whale_data(etherscan_key: str = "",
 
     prices = get_prices()
 
-    # 1. Large transfers across chains
-    btc_txs = get_btc_large_transfers(min_usd=2_000_000)
-    eth_txs = get_eth_large_transfers(etherscan_key, min_usd=1_000_000)
-    ondo_txs = get_ondo_large_transfers(etherscan_key, min_usd=300_000)
-    xrp_txs = get_xrp_large_transfers(min_usd=500_000)
-    sol_activity = get_sol_large_transfers(min_usd=1_000_000)
+    # 1. Large transfers across chains (pass cached prices to avoid repeat CoinGecko calls)
+    btc_txs = get_btc_large_transfers(min_usd=2_000_000, prices=prices)
+    eth_txs = get_eth_large_transfers(etherscan_key, min_usd=1_000_000, prices=prices)
+    ondo_txs = get_ondo_large_transfers(etherscan_key, min_usd=300_000, prices=prices)
+    xrp_txs = get_xrp_large_transfers(min_usd=500_000, prices=prices)
+    sol_activity = get_sol_large_transfers(min_usd=1_000_000, prices=prices)
 
     print(f"[WhaleTracker] BTC:{len(btc_txs)} ETH:{len(eth_txs)} "
           f"ONDO:{len(ondo_txs)} XRP:{len(xrp_txs)} SOL:{len(sol_activity)}")

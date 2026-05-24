@@ -223,7 +223,9 @@ def apply_pending_updates(state):
     state["open_positions"] = list(positions.values())
     state["active_setups"]  = list(setups.values())
     try:
-        pending_path.write_text("[]")
+        tmp_path = pending_path.with_suffix(".tmp")
+        tmp_path.write_text("[]")
+        os.rename(str(tmp_path), str(pending_path))
     except Exception as e:
         print(f"[Agent] WARNING: could not clear pending_updates.json: {e}")
     return state, log
