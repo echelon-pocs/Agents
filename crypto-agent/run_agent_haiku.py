@@ -21,29 +21,11 @@ from email_sender import send_report, build_subject
 
 BASE_DIR = Path(__file__).parent
 
+_SHARED = str(BASE_DIR.parent / "shared")
+if _SHARED not in sys.path:
+    sys.path.insert(0, _SHARED)
 
-def sanitize_state(state):
-    """
-    Normalize state to a predictable structure regardless of what Claude wrote
-    or what legacy format was on disk. Called after every load and after every
-    save to ensure downstream code never sees malformed data.
-    """
-    if not isinstance(state, dict):
-        state = {}
-
-    # Lists that must contain only dicts with a 'symbol' key
-    for key in ("open_positions", "active_setups"):
-        raw = state.get(key, [])
-        if not isinstance(raw, list):
-            raw = []
-        state[key] = [e for e in raw if isinstance(e, dict) and e.get("symbol")]
-
-    # Lists that must simply be lists
-    for key in ("alerted", "profitable_wallets_discovered"):
-        if not isinstance(state.get(key), list):
-            state[key] = []
-
-    return state
+from utils import sanitize_state  # noqa: E402
 
 
 def _slim_transfer(tx):
@@ -408,7 +390,7 @@ def merge_state_delta(prior_state, delta, macro_data, prices, profitable_wallets
         if field in delta:
             new_state[field] = delta[field]
 
-    return sanitize_state(new_state)
+    return new_state
 
 
 def extract_state_delta(text):
@@ -931,7 +913,7 @@ CHANGES TODAY
         fallback = extract_state_from_response(state_text)
         if fallback:
             fallback["profitable_wallets_discovered"] = whale_data.get("profitable_wallets_discovered", [])
-            updated_state = sanitize_state(fallback)
+            updated_state = fallback
             save_state(updated_state)
             log_setup_snapshot(updated_state, date_str)
             print(f"[{datetime.utcnow().isoformat()}] state.json updated via fallback full-JSON")

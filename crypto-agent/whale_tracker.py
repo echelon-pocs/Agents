@@ -7,11 +7,19 @@ APIs used (all free): blockchain.info, Etherscan, Solana RPC, XRPL, Sui RPC, Coi
 
 import json
 import re
+import sys
 import time
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed, wait, FIRST_COMPLETED
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Dict, List, Optional
+
+_SHARED = str(Path(__file__).resolve().parent.parent / "shared")
+if _SHARED not in sys.path:
+    sys.path.insert(0, _SHARED)
+
+from utils import CHROME_HDR  # noqa: E402
 
 HALVING_DATE = datetime(2024, 4, 20)
 
@@ -669,16 +677,6 @@ def get_macro_data() -> Dict:
         "japan_10y": None, "japan_30y": None,
         "usdjpy": None, "usdjpy_5d_ago": None,
         "spx": None, "btc_funding_rate_pct": None, "btc_oi_usd_bn": None,
-    }
-
-    CHROME_HDR = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/124.0.0.0 Safari/537.36"
-        ),
-        "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "en-US,en;q=0.9",
     }
 
     # stooq CSV helper: returns (latest_close, [last_n_closes])

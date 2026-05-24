@@ -10,16 +10,12 @@ from typing import Dict
 import requests
 
 BASE_DIR = Path(__file__).resolve().parent
+_SHARED = str(BASE_DIR.parent / "shared")
+if _SHARED not in sys.path:
+    sys.path.insert(0, _SHARED)
 
-# Python 3.8 compatible headers
-CHROME_HDR = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36"
-    ),
-    "Accept": "application/json, text/plain, */*",
-}
+from utils import CHROME_HDR  # noqa: E402
+from assets import PORTFOLIO_ASSETS, YF_SYMBOLS, MEXC_SYMBOLS  # noqa: E402
 
 # ── Yahoo Finance ──────────────────────────────────────────────────────────────
 
@@ -157,27 +153,6 @@ def get_macro_data():
     return macro
 
 
-# ── Asset universe ────────────────────────────────────────────────────────────
-
-# Yahoo Finance tickers for each asset
-YF_SYMBOLS = {
-    "WTI":   "CL=F",       # WTI crude oil futures
-    "BRENT": "BZ=F",       # Brent crude oil futures
-    "SPX":   "^GSPC",      # S&P 500 index
-    "VWCE":  "VWCE.DE",    # Vanguard FTSE All-World (acc) - XETRA
-    "VWRL":  "VWRL.AS",    # Vanguard FTSE All-World (dist) - Euronext AMS
-    "4GLD":  "4GLD.DE",    # Xetra-Gold ETP
-    "8PSB":  "8PSB.DE",    # Invesco Physical Silver ETC - XETRA
-}
-
-# MEXC perpetual candidates (first working symbol used)
-MEXC_SYMBOLS = {
-    "WTI":   ["WTI_USDT", "CRUDE_USDT", "OIL_USDT", "USOIL_USDT"],
-    "BRENT": ["BRENT_USDT", "UKOIL_USDT", "BRNT_USDT"],
-    "SPX":   ["SPX_USDT", "SP500_USDT", "US500_USDT", "SPX500_USDT"],
-}
-
-
 def get_all_portfolio_data():
     """Fetch prices + derived stats for all portfolio assets."""
     result = {}
@@ -231,7 +206,7 @@ def get_all_portfolio_data():
         f"[Portfolio] "
         + " ".join(
             f"{a}:{result[a].get('price', 'N/A')}"
-            for a in ["WTI", "BRENT", "SPX", "VWCE", "VWRL", "4GLD", "8PSB"]
+            for a in PORTFOLIO_ASSETS
         )
     )
     return result
