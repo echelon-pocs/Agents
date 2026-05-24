@@ -94,9 +94,37 @@ def _property_card(prop: Property) -> str:
     </div>"""
 
 
-def build_html_email(properties: List[Property], total_known: int) -> str:
+def _scraper_health_html(scraper_health: dict) -> str:
+    if not scraper_health:
+        return ""
+    rows = ""
+    for name, h in scraper_health.items():
+        zeros = h.get("consecutive_zeros", 0)
+        mode = h.get("last_mode", "normal")
+        if zeros == 0:
+            badge = '<span style="color:#2e7d32;font-weight:bold;">OK</span>'
+        elif zeros >= 3:
+            badge = f'<span style="color:#c62828;font-weight:bold;">⚠ {zeros} runs sem resultados — modo {mode}</span>'
+        else:
+            badge = f'<span style="color:#e65100;">⚠ {zeros} run(s) sem resultados</span>'
+        rows += f"<tr><td style='padding:3px 8px;color:#555;'>{name}</td><td style='padding:3px 8px;'>{badge}</td></tr>"
+    return f"""
+    <div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px;margin-bottom:16px;">
+      <p style="margin:0 0 10px;font-size:13px;font-weight:bold;color:#333;">Estado dos scrapers</p>
+      <table style="font-size:12px;border-collapse:collapse;width:100%">{rows}</table>
+    </div>"""
+
+
+def build_html_email(properties: List[Property], total_known: int, scraper_health: dict = None) -> str:
     today = datetime.now().strftime("%d de %B de %Y")
     cards = "".join(_property_card(p) for p in properties)
+    no_results_note = ""
+    if not properties:
+        no_results_note = """
+        <div style="background:#fff3e0;border:1px solid #ffe0b2;border-radius:10px;padding:16px;margin-bottom:16px;text-align:center;color:#e65100;">
+          Nenhum imóvel novo encontrado hoje. Consulte o estado dos scrapers abaixo.
+        </div>"""
+    health_html = _scraper_health_html(scraper_health or {})
     return f"""
     <!DOCTYPE html>
     <html lang="pt">
@@ -113,7 +141,9 @@ def build_html_email(properties: List[Property], total_known: int) -> str:
           Total acumulado na base de dados: {total_known} imóveis
         </div>
         <div style="padding:20px 0;">
+          {no_results_note}
           {cards}
+          {health_html}
         </div>
         <div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px;font-size:12px;color:#999;text-align:center;">
           Esta pesquisa é automática e cobre: Idealista · Imovirtual · Casa.sapo · Supercasa · OLX · CustoJusto · ERA · RE/MAX<br>
@@ -124,7 +154,7 @@ def build_html_email(properties: List[Property], total_known: int) -> str:
     </html>"""
 
 
-def send_email(properties: List[Property], total_known: int) -> bool:
+def send_email(properties: List[Property], total_known: int, scraper_health: dict = None) -> bool:
     sender = os.environ.get("EMAIL_SENDER")
     password = os.environ.get("EMAIL_PASSWORD")
     if not sender or not password:
@@ -141,7 +171,7 @@ def send_email(properties: List[Property], total_known: int) -> bool:
         text_body += f"• {p.title} — {_format_price(p.price)}\n  {p.url}\n\n"
 
     msg.attach(MIMEText(text_body, "plain", "utf-8"))
-    msg.attach(MIMEText(build_html_email(properties, total_known), "html", "utf-8"))
+    msg.attach(MIMEText(build_html_email(properties, total_known, scraper_health=scraper_health), "html", "utf-8"))
 
     try:
         with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:

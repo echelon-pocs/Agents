@@ -1,7 +1,7 @@
 import sqlite3
 import json
-from datetime import datetime
-from typing import List
+from datetime import datetime, timedelta
+from typing import List, Dict
 from pathlib import Path
 
 from models import Property
@@ -35,6 +35,15 @@ class PropertyStorage:
                     amenities_detail TEXT,
                     found_at TEXT,
                     sent_at TEXT
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS scraper_runs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    scraper TEXT NOT NULL,
+                    run_at TEXT NOT NULL,
+                    found_count INTEGER NOT NULL,
+                    mode TEXT NOT NULL
                 )
             """)
             conn.commit()
@@ -86,3 +95,55 @@ class PropertyStorage:
     def count(self) -> int:
         with sqlite3.connect(self.db_path) as conn:
             return conn.execute("SELECT COUNT(*) FROM properties").fetchone()[0]
+
+    # ── scraper health ────────────────────────────────────────────────────────
+
+    def record_run(self, scraper_name: str, found_count: int, mode: str = "normal"):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "INSERT INTO scraper_runs (scraper, run_at, found_count, mode) VALUES (?,?,?,?)",
+                (scraper_name, datetime.now().isoformat(), found_count, mode),
+            )
+            conn.commit()
+
+    def get_health(self, scraper_name: str, lookback_days: int = 7) -> Dict:
+        """Returns consecutive_zeros, last_success_days_ago, total_runs, last_mode."""
+        since = (datetime.now() - timedelta(days=lookback_days)).isoformat()
+        with sqlite3.connect(self.db_path) as conn:
+            rows = conn.execute(
+                "SELECT found_count, mode, run_at FROM scraper_runs "
+                "WHERE scraper = ? AND run_at >= ? ORDER BY run_at DESC",
+                (scraper_name, since),
+            ).fetchall()
+
+        if not rows:
+            return {"consecutive_zeros": 0, "last_success_days_ago": None,
+                    "total_runs": 0, "last_mode": None}
+
+        consecutive_zeros = 0
+        for count, _, _ in rows:
+            if count == 0:
+                consecutive_zeros += 1
+            else:
+                break
+
+        last_success_days_ago = None
+        for count, _, run_at in rows:
+            if count > 0:
+                delta = datetime.now() - datetime.fromisoformat(run_at)
+                last_success_days_ago = delta.days
+                break
+
+        return {
+            "consecutive_zeros": consecutive_zeros,
+            "last_success_days_ago": last_success_days_ago,
+            "total_runs": len(rows),
+            "last_mode": rows[0][1] if rows else None,
+        }
+
+    def all_health(self) -> Dict[str, Dict]:
+        with sqlite3.connect(self.db_path) as conn:
+            scrapers = conn.execute(
+                "SELECT DISTINCT scraper FROM scraper_runs"
+            ).fetchall()
+        return {row[0]: self.get_health(row[0]) for row in scrapers}

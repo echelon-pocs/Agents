@@ -80,26 +80,82 @@ def print_summary(properties: list[Property]) -> None:
     print()
 
 
+# Number of consecutive zero-result runs before escalating to a higher tier
+ZERO_THRESHOLD_JSONLD = 2
+ZERO_THRESHOLD_HEURISTIC = 3
+
+
+def run_scraper_adaptive(scraper, storage: PropertyStorage) -> tuple[list[Property], str]:
+    """
+    3-tier adaptive scraping:
+      Tier 1 (normal)    — CSS selectors + Next.js JSON extraction
+      Tier 2 (JSON-LD)   — schema.org structured data, survives visual redesigns
+      Tier 3 (heuristic) — pattern-based link/price scan, fully site-agnostic
+    Escalates to the next tier when consecutive zero runs exceed the threshold.
+    Returns (properties, mode_used).
+    """
+    health = storage.get_health(scraper.name)
+    zeros = health["consecutive_zeros"]
+
+    # Always try normal first
+    mode = "normal"
+    found: list[Property] = []
+    try:
+        found = scraper.search()
+    except Exception as e:
+        logger.error(f"[{scraper.name}] Normal scrape failed: {e}", exc_info=True)
+
+    if not found and zeros >= ZERO_THRESHOLD_JSONLD:
+        logger.warning(
+            f"[{scraper.name}] {zeros} consecutive zero runs — trying JSON-LD tier"
+        )
+        mode = "jsonld"
+        try:
+            found = scraper.search_jsonld()
+        except Exception as e:
+            logger.error(f"[{scraper.name}] JSON-LD scrape failed: {e}", exc_info=True)
+
+    if not found and zeros >= ZERO_THRESHOLD_HEURISTIC:
+        logger.warning(
+            f"[{scraper.name}] Still zero after JSON-LD — trying heuristic tier"
+        )
+        mode = "heuristic"
+        try:
+            found = scraper.search_heuristic()
+        except Exception as e:
+            logger.error(f"[{scraper.name}] Heuristic scrape failed: {e}", exc_info=True)
+
+    return found, mode
+
+
 def run(dry_run: bool = False) -> None:
     storage = PropertyStorage("data/properties.db")
     all_new: list[Property] = []
+    scraper_health: dict = {}
 
     for ScraperClass in ALL_SCRAPERS:
         scraper = ScraperClass()
-        try:
-            logger.info(f"Scraping {scraper.name}…")
-            found = scraper.search()
-            filtered = [p for p in found if passes_filter(p)]
-            new_props = storage.filter_new(filtered)
-            logger.info(
-                f"[{scraper.name}] total={len(found)} filtered={len(filtered)} new={len(new_props)}"
-            )
-            all_new.extend(new_props)
-        except Exception as e:
-            logger.error(f"[{scraper.name}] Scraper failed: {e}", exc_info=True)
+        found, mode = run_scraper_adaptive(scraper, storage)
+        filtered = [p for p in found if passes_filter(p)]
+        new_props = storage.filter_new(filtered)
+
+        logger.info(
+            f"[{scraper.name}] mode={mode} total={len(found)} "
+            f"filtered={len(filtered)} new={len(new_props)}"
+        )
+
+        if not dry_run:
+            storage.record_run(scraper.name, len(found), mode)
+
+        health = storage.get_health(scraper.name)
+        scraper_health[scraper.name] = {**health, "last_count": len(found), "last_mode": mode}
+
+        all_new.extend(new_props)
 
     if not all_new:
         logger.info("No new properties found — no email sent.")
+        if not dry_run:
+            _maybe_send_health_alert(scraper_health, storage)
         return
 
     # Sort by price (ascending, unknowns last)
@@ -109,6 +165,7 @@ def run(dry_run: bool = False) -> None:
     enrich_with_amenities(all_new)
 
     print_summary(all_new)
+    _print_health(scraper_health)
 
     if dry_run:
         logger.info("Dry-run mode — skipping database save and email.")
@@ -117,12 +174,36 @@ def run(dry_run: bool = False) -> None:
     storage.save(all_new)
     total_known = storage.count()
 
-    sent = send_email(all_new, total_known)
+    sent = send_email(all_new, total_known, scraper_health=scraper_health)
     if sent:
         storage.mark_sent([p.property_id for p in all_new])
         logger.info(f"Email sent. Total in DB: {total_known}")
     else:
         logger.error("Email failed — properties saved to DB but not marked as sent.")
+
+
+def _maybe_send_health_alert(scraper_health: dict, storage: PropertyStorage) -> None:
+    """Send a health-only email if any scraper has been broken for many days."""
+    broken = {
+        name: h for name, h in scraper_health.items()
+        if h["consecutive_zeros"] >= ZERO_THRESHOLD_HEURISTIC + 1
+    }
+    if broken:
+        logger.warning(f"Scrapers possibly broken: {list(broken.keys())} — sending alert")
+        send_email([], total_known=storage.count(), scraper_health=scraper_health)
+
+
+def _print_health(scraper_health: dict) -> None:
+    print(f"\n{'─'*60}")
+    print("  Scraper health")
+    print(f"{'─'*60}")
+    for name, h in scraper_health.items():
+        zeros = h["consecutive_zeros"]
+        mode = h["last_mode"]
+        status = "OK" if zeros == 0 else f"⚠ {zeros} zero run(s)"
+        tier = f" [mode={mode}]" if mode != "normal" else ""
+        print(f"  {name:<15} {status}{tier}")
+    print()
 
 
 def send_test_email() -> None:
