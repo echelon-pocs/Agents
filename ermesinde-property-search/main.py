@@ -12,6 +12,7 @@ import logging
 import os
 import sys
 from datetime import datetime
+from typing import Dict, List, Tuple
 
 from dotenv import load_dotenv
 
@@ -56,7 +57,7 @@ def passes_hard_filter(prop: Property) -> bool:
 
 # ── geocoding + distance ──────────────────────────────────────────────────────
 
-def apply_distance_filter(properties: list[Property]) -> list[Property]:
+def apply_distance_filter(properties: List[Property]) -> List[Property]:
     """
     Geocode each property, store lat/lon and distance_km on the object.
     Discard properties > 10 km from Ermesinde centre.
@@ -79,7 +80,7 @@ def apply_distance_filter(properties: list[Property]) -> list[Property]:
 
 # ── detail-page enrichment ────────────────────────────────────────────────────
 
-def fetch_details_for(properties: list[Property]) -> None:
+def fetch_details_for(properties: List[Property]) -> None:
     """Visit individual listing pages (in-place) up to MAX_DETAIL_FETCHES."""
     scraper_map = {cls.name: cls() for cls in ALL_SCRAPERS}
     count = 0
@@ -98,7 +99,7 @@ def fetch_details_for(properties: list[Property]) -> None:
 
 # ── amenity enrichment ────────────────────────────────────────────────────────
 
-def enrich_with_amenities(properties: list[Property]) -> None:
+def enrich_with_amenities(properties: List[Property]) -> None:
     for prop in properties:
         if not prop.location:
             continue
@@ -114,7 +115,7 @@ def enrich_with_amenities(properties: list[Property]) -> None:
 
 # ── adaptive scraper runner ───────────────────────────────────────────────────
 
-def run_scraper_adaptive(scraper, storage: PropertyStorage) -> tuple[list[Property], str]:
+def run_scraper_adaptive(scraper, storage: PropertyStorage) -> Tuple[List[Property], str]:
     """
     3 (+1 optional) tier fallback:
       Tier 1: CSS selectors + Next.js JSON
@@ -124,7 +125,7 @@ def run_scraper_adaptive(scraper, storage: PropertyStorage) -> tuple[list[Proper
     """
     health = storage.get_health(scraper.name)
     zeros = health["consecutive_zeros"]
-    found: list[Property] = []
+    found: List[Property] = []
     mode = "normal"
 
     try:
@@ -165,7 +166,7 @@ def is_sunday() -> bool:
     return datetime.now().weekday() == 6
 
 
-def build_weekly_digest(storage: PropertyStorage, exclude_ids: list[str]) -> list[dict]:
+def build_weekly_digest(storage: PropertyStorage, exclude_ids: List[str]) -> List[dict]:
     if not is_sunday():
         return []
     return storage.get_top_properties(limit=5, exclude_ids=exclude_ids)
@@ -175,12 +176,12 @@ def build_weekly_digest(storage: PropertyStorage, exclude_ids: list[str]) -> lis
 
 def run(dry_run: bool = False) -> None:
     storage = PropertyStorage("data/properties.db")
-    all_new: list[Property] = []
-    price_drops: list[Property] = []
+    all_new: List[Property] = []
+    price_drops: List[Property] = []
     scraper_health: dict = {}
 
     # ── 1. scrape all sources ─────────────────────────────────────────────────
-    all_scraped: list[Property] = []
+    all_scraped: List[Property] = []
     for ScraperClass in ALL_SCRAPERS:
         scraper = ScraperClass()
         found, mode = run_scraper_adaptive(scraper, storage)
@@ -270,7 +271,7 @@ def _maybe_send_health_alert(scraper_health: dict, storage: PropertyStorage) -> 
                    scraper_health=scraper_health, weekly_digest=[])
 
 
-def _print_summary(new_props: list[Property], price_drops: list[Property]) -> None:
+def _print_summary(new_props: List[Property], price_drops: List[Property]) -> None:
     print(f"\n{'='*65}")
     print(f"  {len(new_props)} new properties  |  {len(price_drops)} price drops")
     print(f"{'='*65}")
