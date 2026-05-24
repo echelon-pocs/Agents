@@ -124,9 +124,22 @@ class BaseScraper(ABC):
     @staticmethod
     def detect_garage(text: str) -> tuple:
         text_l = text.lower()
-        has = any(w in text_l for w in ["garagem", "garage", "box ", "lugar de garagem", "estacionamento"])
+        # Match specific phrases; avoid over-matching "sem estacionamento" / "sem garagem"
+        positive_phrases = [
+            "lugar de garagem", "lugares de garagem",
+            "lugar de estacionamento", "parque de estacionamento",
+            "box de garagem", "box garagem",
+        ]
+        loose_keywords = ["garagem", "garage"]
+        negative = any(neg in text_l for neg in ["sem garagem", "sem garage", "sem estacionamento", "não tem garagem"])
+        if negative:
+            return False, 0
+        has = (
+            any(p in text_l for p in positive_phrases)
+            or any(k in text_l for k in loose_keywords)
+        )
         spaces = 0
-        m = re.search(r"(\d+)\s*lugar(?:es)?\s*(?:de\s*)?garagem", text_l)
+        m = re.search(r"(\d+)\s*lugar(?:es)?\s*(?:de\s*)?(?:garagem|estacionamento)", text_l)
         if m:
             spaces = int(m.group(1))
         elif has:
@@ -418,7 +431,7 @@ class BaseScraper(ABC):
             container = None
             for tag in ("article", "li", "div", "section"):
                 container = a.find_parent(tag)
-                if container and len(container.get_text()) > 50:
+                if container and len(container.get_text(strip=True)) > 20:
                     break
             if not container:
                 continue

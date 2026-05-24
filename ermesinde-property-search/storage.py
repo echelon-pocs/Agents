@@ -215,14 +215,6 @@ class PropertyStorage:
             return {"consecutive_zeros": 0, "last_success_days_ago": None,
                     "total_runs": 0, "last_mode": None}
 
-        consecutive_zeros = sum(1 for count, _, _ in rows if count == 0)
-        for count, _, _ in rows:
-            if count > 0:
-                consecutive_zeros = 0
-                break
-            consecutive_zeros += 1
-
-        # Recount properly
         consecutive_zeros = 0
         for count, _, _ in rows:
             if count == 0:
