@@ -2,3 +2,7 @@ requests>=2.31.0
 beautifulsoup4>=4.12.0
 lxml>=5.1.0
 python-dotenv>=1.0.0
+
+# Optional: install for Tier-4 Playwright fallback
+# pip install playwright && playwright install chromium
+# playwright>=1.43.0

@@ -6,6 +6,10 @@ from .supercasa import SupercasaScraper
 from .era import EraScraper
 from .remax import RemaxScraper
 from .custojusto import CustoJustoScraper
+from .century21 import Century21Scraper
+from .bpi import BpiScraper
+from .predimed import PredimedScraper
+from .lugarcerto import LugarCertoScraper
 
 ALL_SCRAPERS = [
     IdealistaScraper,
@@ -16,4 +20,8 @@ ALL_SCRAPERS = [
     EraScraper,
     RemaxScraper,
     CustoJustoScraper,
+    Century21Scraper,
+    BpiScraper,
+    PredimedScraper,
+    LugarCertoScraper,
 ]

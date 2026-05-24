@@ -22,6 +22,12 @@ class Property:
     found_at: datetime = field(default_factory=datetime.now)
     amenities_score: int = 0
     amenities_detail: str = ""
+    # New fields
+    match_score: int = 0
+    distance_km: Optional[float] = None
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+    price_dropped_from: Optional[float] = None   # set when re-scraped at lower price
     raw_data: Dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -47,4 +53,8 @@ class Property:
             "found_at": self.found_at.isoformat(),
             "amenities_score": self.amenities_score,
             "amenities_detail": self.amenities_detail,
+            "match_score": self.match_score,
+            "distance_km": self.distance_km,
+            "lat": self.lat,
+            "lon": self.lon,
         }
