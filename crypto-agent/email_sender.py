@@ -113,11 +113,11 @@ _HTML_CSS = """
   .sec-head{padding:8px 14px;font-size:10px;font-weight:700;
             letter-spacing:1.5px;text-transform:uppercase;color:#fff}
   .sec-body{padding:10px 14px}
-  .kv{display:flex;align-items:baseline;gap:6px;
+  .kv{display:flex;align-items:baseline;flex-wrap:wrap;gap:2px 6px;
       padding:4px 0;border-bottom:1px solid #f3f4f6;font-size:13px}
   .kv:last-child{border-bottom:none}
   .kv-key{color:#6b7280;min-width:72px;flex-shrink:0;font-size:12px}
-  .kv-val{flex:1;line-height:1.5}
+  .kv-val{flex:1;min-width:140px;line-height:1.5}
   .bullet{padding:5px 0 5px 14px;border-left:3px solid #d1d5db;
           margin:4px 0;font-size:13px;line-height:1.55}
   .bullet.info{border-left-color:#3b82f6}

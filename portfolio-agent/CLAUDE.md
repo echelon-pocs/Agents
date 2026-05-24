@@ -268,6 +268,13 @@ Produce [EMAIL] and [STATE_DELTA] blocks exactly as specified in the user prompt
 - **SILVER**: 3–5 lines. DXY direction, gold/silver ratio, industrial demand pulse, action.
 - No standalone OPEN POSITIONS section — positions live inside each ticker.
 - SETUPS: Tier 1 only (WTI, SPX). Write "None." if empty.
+  Each setup MUST use this exact card format (one card per setup):
+    SYMBOL LONG      ← or SHORT — bare symbol + direction, nothing else on this line
+    Status: WAITING/APPROACHING/ENTER/INVALIDATED
+    Range: X-Y
+    Stop: X.XX
+    Target: X.XX
+    Note: one line of context
 - CHANGES TODAY: one bullet per change: NEW / ENTER / REVISED / HOLD / ADD / TRIM / ADOPTED
 
 ---
