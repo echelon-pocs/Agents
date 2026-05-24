@@ -6,6 +6,7 @@ APIs used (all free): blockchain.info, Etherscan, Solana RPC, XRPL, Sui RPC, Coi
 """
 
 import json
+import re
 import time
 import requests
 from datetime import datetime, timedelta, timezone
@@ -857,8 +858,6 @@ def get_macro_data() -> Dict:
     def _jgb_yfinance_try():
         """Yahoo Finance fallback — Japan 10Y/30Y via Reuters-style suffix."""
         j10, j30 = None, None
-        # JP10YT=RR and JP30YT=RR are Reuters/Refinitiv codes Yahoo Finance
-        # sometimes resolves; try multiple known aliases
         for sym in ("JP10YT=RR", "^JN10Y", "IRJPY=R"):
             v, _ = _yfinance(sym, history=3)
             if v is not None:
@@ -870,6 +869,50 @@ def get_macro_data() -> Dict:
                 j30 = v
                 break
         return (j10, j30)
+
+    def _jgb_worldgov():
+        """worldgovernmentbonds.com — scrape Japan 10Y and 30Y yield."""
+        j10, j30 = None, None
+        try:
+            r = requests.get(
+                "http://www.worldgovernmentbonds.com/country/japan/",
+                timeout=15, headers=CHROME_HDR,
+            )
+            if r.status_code != 200:
+                return (None, None)
+            text = r.text
+            for label, years in (("10 Years", "10"), ("30 Years", "30")):
+                m = re.search(
+                    re.escape(label) + r'.*?(\d+\.\d+)%',
+                    text, re.DOTALL
+                )
+                if m:
+                    val = round(float(m.group(1)), 4)
+                    if years == "10":
+                        j10 = val
+                    else:
+                        j30 = val
+        except Exception:
+            pass
+        return (j10, j30)
+
+    def _jgb_boj():
+        """Bank of Japan official statistics page — scrape yield values."""
+        try:
+            r = requests.get(
+                "https://www.boj.or.jp/en/statistics/market/interest/index.htm",
+                timeout=15, headers=CHROME_HDR,
+            )
+            if r.status_code != 200:
+                return (None, None)
+            text = r.text
+            m10 = re.search(r'10.year[^<]*?(\d+\.\d{2,4})', text, re.IGNORECASE)
+            m30 = re.search(r'30.year[^<]*?(\d+\.\d{2,4})', text, re.IGNORECASE)
+            j10 = round(float(m10.group(1)), 4) if m10 else None
+            j30 = round(float(m30.group(1)), 4) if m30 else None
+            return (j10, j30)
+        except Exception:
+            return (None, None)
 
     result["us_10y"],  _    = _yield_multi("10ustb.b", "^TNX",  "10 YR")
     result["us_30y"],  _    = _yield_multi("30ustb.b", "^TYX",  "30 YR")
@@ -896,6 +939,18 @@ def get_macro_data() -> Dict:
             result["japan_10y"] = j10
     if result["japan_10y"] is None or result["japan_30y"] is None:
         j10, j30 = _jgb_yfinance_try()
+        if result["japan_10y"] is None:
+            result["japan_10y"] = j10
+        if result["japan_30y"] is None:
+            result["japan_30y"] = j30
+    if result["japan_10y"] is None or result["japan_30y"] is None:
+        j10, j30 = _jgb_worldgov()
+        if result["japan_10y"] is None:
+            result["japan_10y"] = j10
+        if result["japan_30y"] is None:
+            result["japan_30y"] = j30
+    if result["japan_10y"] is None or result["japan_30y"] is None:
+        j10, j30 = _jgb_boj()
         if result["japan_10y"] is None:
             result["japan_10y"] = j10
         if result["japan_30y"] is None:

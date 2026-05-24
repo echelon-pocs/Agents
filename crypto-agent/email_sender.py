@@ -9,7 +9,7 @@ import smtplib
 # Matches position/setup card titles:
 #   "BTC LONG"  "SUI SHORT"  (bare)
 #   "⚠️ BTC LONG"  "🚨 ETH SHORT"  (danger-flagged position)
-_CARD_TITLE_RE = re.compile(r'^[A-Z]{2,8}\s+(LONG|SHORT)\b')
+_CARD_TITLE_RE = re.compile(r'^[A-Z][A-Z0-9]{1,7}\s+(LONG|SHORT)\b')
 import ssl
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -290,10 +290,10 @@ def render_html_email(plain_body: str) -> str:
             close_bullet()
             rest = line[2:].strip()   # strip emoji + space
             if _CARD_TITLE_RE.match(rest):
-                # danger-flagged position card — open as a card with coloured title
+                # danger-flagged position card — same card style as plain positions,
+                # emoji in the title provides the visual cue
                 close_card()
-                bg = '#fef3c7' if line.startswith('⚠️') else '#fde8e8'
-                out.append(f'<div class="card" style="border-color:#f59e0b;background:{bg}">'
+                out.append(f'<div class="card">'
                             f'<div class="card-title">{_colorize(line)}</div>')
                 in_card = True
             else:

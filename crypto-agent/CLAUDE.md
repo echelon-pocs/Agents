@@ -22,6 +22,8 @@ User says "I entered X at $Y" → move to `open_positions` with their entry.
 User says "I closed X" → mark COMPLETED, remove from tracking.
 No confirmation → stay in `active_setups`, never track P&L.
 
+**Email section rule — NO DUPLICATION:** If a symbol has an entry in `open_positions`, it MUST appear ONLY under OPEN POSITIONS in the email. Do NOT list it again under SHORT-TERM SETUPS, LONG-TERM SETUPS, or WAITING, even if a matching `active_setups` entry still exists. Cross-referencing the setup from within the position card (e.g., "T1 $1.60") is fine; a duplicate card in the setups section is not.
+
 **Unplanned positions rule:** If a position appears in `open_positions` with no matching entry in `active_setups` (status = "OPEN", conviction = "UNKNOWN"), it was opened outside the analysis. You MUST:
 1. Run full whale + TA analysis for that symbol immediately (Steps 3–5).
 2. Create a proper `active_setups` entry with real levels: stop_loss, tp1, tp2, r_r_ratio, conviction, rationale.
