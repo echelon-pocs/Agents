@@ -167,7 +167,7 @@ def _fmt_chg(v):
 
 def build_prices_section(prices):
     lines = []
-    for asset in ["WTI", "BRENT", "SPX", "VWCE", "VWRL", "4GLD"]:
+    for asset in ["WTI", "BRENT", "SPX", "VWCE", "VWRL", "4GLD", "8PSB"]:
         d = prices.get(asset, {})
         p = _fmt(d.get("price"))
         c1 = _fmt_chg(d.get("chg_1d"))
@@ -361,6 +361,10 @@ Analysis instructions:
 - WTI and SPX are Tier 1 (active trading). Run full deep 1-week analysis per CLAUDE.md.
 - All other assets are Tier 2 (25-year long-term holdings). 3-5 lines max:
   macro regime check + position status + HOLD/ADD/TRIM. No short-term setups.
+- 8PSB is the Invesco Physical Silver ETC (XETRA). It tracks physical silver price.
+  Silver drivers: USD/DXY (inverse), gold/silver ratio, industrial demand (solar/EVs/electronics
+  ~50% of demand), monetary safe-haven demand. More volatile than gold, more industrial beta.
+  High gold/silver ratio (>80) historically signals silver is cheap vs gold.
 - POSITIONS ARE EMBEDDED in each ticker section — not in a separate block.
   In every section where an open position exists, start the section body with:
     Line 1: LONG/SHORT | Entry:X.XX | Now:X.XX | P&L:±X.X%
@@ -418,8 +422,14 @@ Sections IN THIS EXACT ORDER (exact names):
      — Position block first (if open position exists)
      — DXY direction. Real yield proxy. Action: HOLD_CORE/ADD/TRIM.
 
-  10. SETUPS (Tier 1 only — WTI and SPX; write "None." if empty)
-  11. CHANGES TODAY
+  10. SILVER  [TIER 2 — 3-5 lines]
+      (8PSB = Invesco Physical Silver ETC, tracks physical silver)
+      — Position block first (if open position exists)
+      — DXY direction. Gold/silver ratio (high >80 = silver cheap).
+        Industrial demand pulse (solar/EVs). Action: HOLD_CORE/ADD/TRIM.
+
+  11. SETUPS (Tier 1 only — WTI and SPX; write "None." if empty)
+  12. CHANGES TODAY
 
 [/EMAIL]
 

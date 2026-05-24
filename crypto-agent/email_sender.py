@@ -38,7 +38,7 @@ _SECTION_COLORS = {
     "EQUITIES":              "#003d2d",
     "VWCE / VWRL":           "#003d2d",
     "GOLD":                  "#3d3000",
-    "BITCOIN ETP":           "#2d1b69",
+    "SILVER":                "#2d3030",
     "SETUPS":                "#3d1c02",
 }
 
@@ -129,7 +129,7 @@ _KNOWN_SECTIONS = [
     "WAITING", "CHANGES TODAY",
     # Portfolio agent
     "MACRO COMMENTARY", "WTI", "BRENT", "SPX", "EQUITIES",
-    "VWCE / VWRL", "GOLD", "BITCOIN ETP", "SETUPS",
+    "VWCE / VWRL", "GOLD", "SILVER", "SETUPS",
 ]
 
 
