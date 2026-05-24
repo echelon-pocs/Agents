@@ -444,6 +444,10 @@ def send_report(subject: str, body: str, is_alert: bool = False,
 
     primary    = cfg.get("ALERT_EMAIL", smtp_user)
     recipients = [primary]
+    # Additional crypto-agent recipients (comma-separated in .env)
+    extra = cfg.get("CRYPTO_CC_EMAILS", "")
+    if extra:
+        recipients += [e.strip() for e in extra.split(",") if e.strip()]
 
     if not smtp_user or not smtp_pass:
         print("[Email] ERROR: SMTP_USER or SMTP_PASS not found in .env")
