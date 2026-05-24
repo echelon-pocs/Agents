@@ -187,6 +187,15 @@ def _section_header(s: str) -> Optional[str]:
     for sec in _KNOWN_SECTIONS:
         if s == sec:
             return sec
+        # Allow trailing tier annotations the model sometimes appends:
+        # "WTI  [TIER 1 — DEEP ANALYSIS]" → "WTI"
+        # "SILVER (8PSB)" → "SILVER"
+        # Exclude kv lines: "SPX   : 5800" must NOT match "SPX" section.
+        if (s.startswith(sec)
+                and len(s) > len(sec)
+                and s[len(sec)] in ' \t(['
+                and ':' not in s):
+            return sec
     return None
 
 

@@ -235,7 +235,16 @@ Produce [EMAIL] and [STATE_DELTA] blocks exactly as specified in the user prompt
 - No markdown (no **, ##, _underscores_). Plain text only.
 - Max ~35 chars per line (mobile).
 - Each asset MUST be its own named section. Never group assets together.
-  Section names (exact): WTI | BRENT | SPX | VWCE / VWRL | GOLD
+  Section names — write EXACTLY these bare names, nothing appended:
+    MACRO COMMENTARY
+    WTI
+    BRENT
+    SPX
+    VWCE / VWRL
+    GOLD
+    SILVER
+    SETUPS
+    CHANGES TODAY
 - **Open positions are embedded inside the relevant ticker section** — not in a separate block.
   If an open position exists for an asset, the section body starts with:
     Line 1: LONG/SHORT | Entry:X.XX | Now:X.XX | P&L:±X.X%
