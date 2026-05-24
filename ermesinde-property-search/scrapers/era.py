@@ -30,14 +30,7 @@ class EraScraper(BaseScraper):
         properties: List[Property] = []
         seen: set = set()
 
-        # Try JSON API first
-        api_props = self._try_api()
-        for p in api_props:
-            if p.property_id not in seen:
-                seen.add(p.property_id)
-                properties.append(p)
-
-        # Fall back to HTML scraping
+        # HTML scraping only — API endpoint no longer valid
         for base_url in self.SEARCH_URLS:
             for page in range(1, self.MAX_PAGES + 1):
                 url = base_url if page == 1 else f"{base_url}&pagina={page}"

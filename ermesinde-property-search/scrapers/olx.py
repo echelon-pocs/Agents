@@ -15,9 +15,8 @@ class OlxScraper(BaseScraper):
     base_url = "https://www.olx.pt"
 
     SEARCH_URLS = [
-        "https://www.olx.pt/imoveis/apartamento-casa-a-venda/valongo-porto/q-t3/?search%5Bfilter_float_price%3Ato%5D=380000",
-        "https://www.olx.pt/imoveis/apartamento-casa-a-venda/ermesinde/?search%5Bfilter_float_price%3Ato%5D=380000",
-        "https://www.olx.pt/imoveis/apartamentos/porto/?search%5Bfilter_float_price%3Ato%5D=380000&search%5Bfilter_enum_rooms%5D%5B0%5D=three&search%5Bfilter_enum_rooms%5D%5B1%5D=four",
+        "https://www.olx.pt/imoveis/apartamento-casa-a-venda/valongo-porto/?search%5Bfilter_float_price%3Ato%5D=380000",
+        "https://www.olx.pt/imoveis/q-ermesinde/?search%5Bfilter_float_price%3Ato%5D=380000&search%5Bfilter_enum_category%5D=imoveis",
     ]
 
     def search(self) -> List[Property]:
