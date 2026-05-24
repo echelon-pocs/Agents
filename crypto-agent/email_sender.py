@@ -376,8 +376,8 @@ def render_html_email(plain_body: str) -> str:
             continue
 
         # ── Change-log items (lines starting with •, NEW, ENTER, ADOPTED, etc.) ──
-        if in_section and line.startswith(('NEW', 'ENTER', 'ADOPTED', 'REVISED',
-                                           'INVALIDATED', 'COMPLETED', 'HOLD')):
+        if in_section and not in_card and line.startswith(('NEW', 'ENTER', 'ADOPTED', 'REVISED',
+                                                           'INVALIDATED', 'COMPLETED', 'HOLD')):
             close_bullet()
             close_card()
             out.append(f'<div class="change-item">▸ {_colorize(line)}</div>')
