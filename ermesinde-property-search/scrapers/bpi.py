@@ -16,11 +16,11 @@ class BpiScraper(BaseScraper):
     Covers distressed / foreclosure properties plus standard agency listings.
     """
     name = "BPI Imobiliário"
-    base_url = "https://www.bpiimobiliario.pt"
+    base_url = "https://www.bpiexpressoimobiliario.pt"
 
     SEARCH_URLS = [
-        "https://www.bpiimobiliario.pt/imoveis?distrito=Porto&municipio=Valongo&tipologia=T3&tipologia=T4&tipologia=T5&preco_max=380000&finalidade=venda",
-        "https://www.bpiimobiliario.pt/imoveis?distrito=Porto&municipio=Valongo&preco_max=380000&finalidade=venda",
+        "https://www.bpiexpressoimobiliario.pt/imoveis?distrito=Porto&municipio=Valongo&tipologia=T3&tipologia=T4&tipologia=T5&preco_max=380000&finalidade=venda",
+        "https://www.bpiexpressoimobiliario.pt/imoveis?distrito=Porto&municipio=Valongo&preco_max=380000&finalidade=venda",
     ]
 
     # Millennium BCP also has a bank RE portal worth covering
@@ -112,7 +112,7 @@ class BpiScraper(BaseScraper):
                 continue
             href = link.get("href", "")
             if not href.startswith("http"):
-                href = self.base_url + href
+                href = "https://www.bpiexpressoimobiliario.pt" + href
             title_el = card.select_one("h2, h3, .title")
             title = title_el.get_text(strip=True) if title_el else ""
             price_el = card.select_one("[class*='price'], [class*='preco']")
