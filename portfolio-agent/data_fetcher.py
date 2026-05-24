@@ -1,12 +1,12 @@
 """
 Price and macro data fetcher for the Portfolio Agent.
-Sources: Yahoo Finance (no key), MEXC public API (no key).
+Sources: Yahoo Finance (no key), MEXC public API (no key), FRED API (free key).
 """
 import sys
 import time
 from pathlib import Path
 from datetime import datetime
-from typing import Dict
+from typing import Dict, Optional
 
 import requests
 
@@ -123,6 +123,85 @@ def _mexc_first(candidates):
         except Exception:
             continue
     return None
+
+
+# ── FRED API ─────────────────────────────────────────────────────────────────
+
+_FRED_BASE = "https://api.stlouisfed.org/fred/series/observations"
+
+
+def _fred_latest(series_id, api_key, n_lookback=5):
+    # type: (str, str, int) -> Optional[float]
+    """Return the most-recent non-missing FRED observation for series_id."""
+    try:
+        r = requests.get(
+            _FRED_BASE,
+            params={
+                "series_id":  series_id,
+                "api_key":    api_key,
+                "file_type":  "json",
+                "sort_order": "desc",
+                "limit":      n_lookback,
+            },
+            timeout=15,
+            headers=CHROME_HDR,
+        )
+        if r.status_code != 200:
+            print(f"[Portfolio] FRED {series_id}: HTTP {r.status_code}")
+            return None
+        for obs in r.json().get("observations", []):
+            v = obs.get("value", ".")
+            if v and v != ".":
+                return float(v)
+        return None
+    except Exception as e:
+        print(f"[Portfolio] FRED {series_id}: {e}")
+        return None
+
+
+def get_crs_data(fred_key=None, vix_spot=None):
+    # type: (Optional[str], Optional[float]) -> Dict
+    """
+    Fetch Crash Risk Score component data.
+    Yahoo Finance series are always fetched (no key needed).
+    FRED series (HY OAS, 2s10s, TIPS, ISM, SLOOS, SOFR) require FRED_API_KEY in .env.
+    Obtain a free key at https://fred.stlouisfed.org/docs/api/api_key.html
+    """
+    data = {}  # type: Dict
+
+    # ── Yahoo Finance (always available) ──────────────────────────────────────
+    vix9d, _  = _yf_fetch("^VIX9D", history=5)   # 9-day VIX (term structure signal)
+    copper, _ = _yf_fetch("HG=F",   history=5)   # Copper futures $/lb
+    gold_p, _ = _yf_fetch("GC=F",   history=5)   # Gold futures $/oz
+    irx, _    = _yf_fetch("^IRX",   history=5)   # 13-week T-bill rate (%)
+    tnx, _    = _yf_fetch("^TNX",   history=5)   # 10Y Treasury yield (%)
+
+    data["vix_9d"]       = vix9d
+    data["vix_spot"]     = vix_spot   # passed from already-fetched prices
+    data["copper_price"] = copper
+    data["gold_price"]   = gold_p
+
+    # 3m10y spread derived from Yahoo Finance tickers
+    if tnx is not None and irx is not None:
+        data["curve_3m10y"] = round(tnx - irx, 3)
+    else:
+        data["curve_3m10y"] = None
+
+    # ── FRED API (requires FRED_API_KEY) ──────────────────────────────────────
+    if fred_key:
+        data["hy_oas"]          = _fred_latest("BAMLH0A0HYM2", fred_key)   # HY OAS (bps)
+        data["curve_2s10s"]     = _fred_latest("T10Y2Y",       fred_key)   # % (neg = inverted)
+        data["tips_10y"]        = _fred_latest("DFII10",       fred_key)   # 10Y real yield %
+        data["ism_pmi"]         = _fred_latest("NAPM",         fred_key, n_lookback=3)
+        data["lending_std"]     = _fred_latest("DRTSCILM",     fred_key, n_lookback=5)
+        data["sofr"]            = _fred_latest("SOFR",         fred_key)
+        data["fed_funds_upper"] = _fred_latest("DFEDTARU",     fred_key)
+    else:
+        for k in ("hy_oas", "curve_2s10s", "tips_10y", "ism_pmi",
+                  "lending_std", "sofr", "fed_funds_upper"):
+            data[k] = None
+
+    return data
 
 
 # ── Macro data (independent of crypto agent) ─────────────────────────────────

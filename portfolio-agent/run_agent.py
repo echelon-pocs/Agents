@@ -39,7 +39,7 @@ except ImportError as _e:
 
 from utils import load_env as _load_env, _fmt, avg_into_position, reduce_position  # noqa: E402
 from assets import PORTFOLIO_ASSETS  # noqa: E402
-from data_fetcher import get_all_portfolio_data, get_macro_data  # noqa: E402
+from data_fetcher import get_all_portfolio_data, get_macro_data, get_crs_data  # noqa: E402
 
 
 # ── State helpers ─────────────────────────────────────────────────────────────
@@ -167,6 +167,190 @@ def apply_pending(state):
     return state, log
 
 
+# ── Crash Risk Score ─────────────────────────────────────────────────────────
+
+def compute_crash_risk_score(crs_data, macro):
+    # type: (dict, dict) -> tuple
+    """
+    0-10 composite Crash Risk Score from 120-year cross-cycle indicator research.
+    Returns (float score, dict components, str regime).
+
+    Weights (sum to 100%):
+      HY credit spread  25%  — highest cross-crash hit rate
+      Yield curve 2s10s 20%  — recession predictor (replaces less-reliable 10/30 spread)
+      VIX term structure15%  — near-term stress gauge
+      Carry regime      15%  — existing variable
+      Real yield (TIPS) 10%  — P/E multiple driver
+      ISM PMI            7.5% — economic cycle
+      Bank lending std   7.5% — credit cycle turning point
+      Japan stress       5%  — existing variable
+      Modifier bonuses:  Cu/Gold ratio + SOFR stress (capped +2.0)
+    """
+    score = 0.0
+    comp  = {}
+
+    # 1. HY Credit Spread — max 2.5 pts
+    hy = crs_data.get("hy_oas")
+    if hy is not None:
+        if   hy < 350:  c1, cr = 0.0, "CREDIT_TIGHT"
+        elif hy < 450:  c1, cr = 0.5, "CREDIT_NORMAL"
+        elif hy < 600:  c1, cr = 1.5, "CREDIT_ELEVATED"
+        elif hy < 900:  c1, cr = 2.0, "CREDIT_STRESS"
+        else:           c1, cr = 2.5, "CREDIT_CRISIS"
+        score += c1
+        comp["hy_credit_regime"] = cr
+        comp["hy_oas_bps"]       = int(round(hy))
+    else:
+        comp["hy_credit_regime"] = "NO_DATA"
+
+    # 2. Yield curve (2s10s + 3m10y) — max 2.0 pts
+    c2s10s = crs_data.get("curve_2s10s")
+    c3m10y = crs_data.get("curve_3m10y")
+    valid  = [v for v in (c2s10s, c3m10y) if v is not None]
+    if valid:
+        n_inv   = sum(1 for v in valid if v < -0.25)
+        deepest = min(valid)
+        if n_inv == 0:
+            c2, crv = 0.0, "CURVE_NORMAL"
+        elif n_inv == 1:
+            c2, crv = 0.5, "CURVE_FLAT"
+        elif deepest > -0.5:
+            c2, crv = 1.0, "CURVE_INVERTED"
+        else:
+            c2, crv = 1.5, "CURVE_DEEP_INVERTED"
+        score += c2
+        comp["curve_2s10s_status"] = crv
+        if c2s10s is not None:
+            comp["curve_2s10s_bps"] = int(round(c2s10s * 100))
+        if c3m10y is not None:
+            comp["curve_3m10y_bps"] = int(round(c3m10y * 100))
+    else:
+        comp["curve_2s10s_status"] = "NO_DATA"
+
+    # 3. VIX level + term structure — max 1.5 pts
+    vix   = crs_data.get("vix_spot") or macro.get("vix")
+    vix9d = crs_data.get("vix_9d")
+    if vix is not None:
+        if   vix < 15:  c3, vts = 0.0, "VTS_COMPLACENCY"
+        elif vix < 20:  c3, vts = 0.3, "VTS_CONTANGO"
+        elif vix < 25:  c3, vts = 0.6, "VTS_FLAT"
+        elif vix < 35:  c3, vts = 1.0, "VTS_BACKWARDATION"
+        else:           c3, vts = 1.5, "VTS_DEEP_BACKWARDATION"
+        # VIX9D > VIX = near-term fear above far-term = backwardation premium
+        if vix9d is not None and vix9d > vix * 1.05 and c3 < 1.5:
+            c3  = min(c3 + 0.3, 1.5)
+            vts = "VTS_BACKWARDATION"
+        score += c3
+        comp["vix_term_structure"] = vts
+        comp["vix_spot"]           = round(vix, 1)
+        if vix9d is not None:
+            comp["vix_9d"] = round(vix9d, 1)
+    else:
+        comp["vix_term_structure"] = "NO_DATA"
+
+    # 4. Carry regime (existing agent variable) — max 1.5 pts
+    carry = macro.get("carry_regime", "CARRY_STABLE")
+    c4 = {"CARRY_STABLE": 0.0, "CARRY_STRESS": 0.5,
+          "CARRY_UNWIND": 1.0, "CARRY_COLLAPSE": 1.5}.get(carry, 0.0)
+    score += c4
+    comp["carry_regime_crs"] = carry
+
+    # 5. Real yield 10Y TIPS — max 1.0 pt
+    tips = crs_data.get("tips_10y")
+    if tips is not None:
+        if   tips < -0.5: c5, ry = 0.0, "REAL_YIELD_VERY_NEGATIVE"
+        elif tips < 0.0:  c5, ry = 0.2, "REAL_YIELD_NEGATIVE"
+        elif tips < 1.0:  c5, ry = 0.5, "REAL_YIELD_POSITIVE"
+        elif tips < 2.0:  c5, ry = 0.7, "REAL_YIELD_HIGH"
+        else:             c5, ry = 1.0, "REAL_YIELD_EXTREME"
+        score += c5
+        comp["real_yield_regime"] = ry
+        comp["tips_10y"]          = tips
+    else:
+        # Fallback: estimate from us_10y - 2.5%
+        us10 = macro.get("us_10y")
+        if us10 is not None:
+            est = us10 - 2.5
+            if   est < 0.0: c5, ry = 0.2, "EST_REAL_NEGATIVE"
+            elif est < 1.0: c5, ry = 0.5, "EST_REAL_POSITIVE"
+            elif est < 2.0: c5, ry = 0.7, "EST_REAL_HIGH"
+            else:           c5, ry = 1.0, "EST_REAL_EXTREME"
+            score += c5
+            comp["real_yield_regime"] = ry
+
+    # 6. ISM Manufacturing PMI — max 0.75 pts
+    pmi = crs_data.get("ism_pmi")
+    if pmi is not None:
+        if   pmi > 52: c6, pr = 0.00, "PMI_EXPANDING"
+        elif pmi > 50: c6, pr = 0.15, "PMI_MODERATE"
+        elif pmi > 48: c6, pr = 0.35, "PMI_STALL"
+        elif pmi > 46: c6, pr = 0.55, "PMI_CONTRACTING"
+        else:          c6, pr = 0.75, "PMI_DEEP_CONTRACTION"
+        score += c6
+        comp["pmi_regime"] = pr
+        comp["ism_pmi"]    = pmi
+
+    # 7. Bank lending standards (SLOOS) — max 0.75 pts
+    sloos = crs_data.get("lending_std")
+    if sloos is not None:
+        if   sloos < 0:  c7, lr = 0.00, "LENDING_EASING"
+        elif sloos < 10: c7, lr = 0.15, "LENDING_NEUTRAL"
+        elif sloos < 25: c7, lr = 0.40, "LENDING_TIGHTENING"
+        elif sloos < 50: c7, lr = 0.60, "LENDING_SHARPLY_TIGHTENING"
+        else:            c7, lr = 0.75, "LENDING_CRISIS_TIGHTENING"
+        score += c7
+        comp["lending_regime"] = lr
+        comp["sloos_pct"]      = sloos
+
+    # 8. Japan stress (existing) — max 0.5 pts
+    jstress = macro.get("japan_stress", "NORMAL")
+    c8 = {"NORMAL": 0.0, "ELEVATED": 0.15,
+          "HIGH": 0.3,   "CRITICAL": 0.5}.get(jstress, 0.0)
+    score += c8
+    comp["japan_stress_crs"] = jstress
+
+    # ── Modifier bonuses (cap +2.0) ───────────────────────────────────────────
+    bonuses = 0.0
+
+    cu = crs_data.get("copper_price")
+    gp = crs_data.get("gold_price")
+    if cu is not None and gp is not None and gp > 0:
+        cu_gold = cu / gp
+        comp["copper_gold_ratio"] = round(cu_gold, 5)
+        # Stress: copper cheap vs gold (industrial demand fear dominating)
+        # Historical threshold ~0.0013–0.0017 (copper ~$4/lb, gold ~$2500/oz)
+        if cu_gold < 0.0015:
+            bonuses += 0.5
+            comp["copper_gold_signal"] = "STRESS"
+        else:
+            comp["copper_gold_signal"] = "NORMAL"
+
+    sofr = crs_data.get("sofr")
+    ffu  = crs_data.get("fed_funds_upper")
+    if sofr is not None and ffu is not None:
+        spread_bps = round((sofr - ffu) * 100, 1)
+        comp["sofr_spread_bps"] = spread_bps
+        if spread_bps > 25:
+            bonuses += 0.5
+            comp["repo_stress"] = "REPO_STRESS"
+        elif spread_bps > 10:
+            bonuses += 0.25
+            comp["repo_stress"] = "REPO_ELEVATED"
+        else:
+            comp["repo_stress"] = "REPO_NORMAL"
+
+    score = min(round(score + min(bonuses, 2.0), 1), 10.0)
+
+    if   score <= 3.9: regime = "LOW"
+    elif score <= 5.9: regime = "MODERATE"
+    elif score <= 7.4: regime = "ELEVATED"
+    elif score <= 8.9: regime = "HIGH"
+    else:              regime = "CRITICAL"
+
+    comp["crs_regime"] = regime
+    return score, comp, regime
+
+
 # ── Analytics helpers ─────────────────────────────────────────────────────────
 
 def compute_pnl(position, prices):
@@ -278,10 +462,16 @@ def extract_email_body(text):
     return text
 
 
-def merge_delta(prior, delta, prices):
+def merge_delta(prior, delta, prices, crs_score=None, crs_regime=None, crs_comp=None):
     """Merge STATE_DELTA from Claude into full state."""
     updated = dict(prior)
     updated["last_run"] = datetime.now(timezone.utc).isoformat()
+
+    # Python-computed CRS fields (not delegated to Claude)
+    if crs_score is not None:
+        updated["crash_risk_score"]  = crs_score
+        updated["crash_risk_regime"] = crs_regime
+        updated["crs_components"]    = crs_comp
 
     # Claude-owned fields
     for field in ["macro_bias", "bias_short", "bias_long", "last_analysis",
@@ -328,11 +518,18 @@ def run():
     state = load_state()
     state, pending_log = apply_pending(state)
 
+    fred_key = env.get("FRED_API_KEY", "")
+
     # ── Step 2: Fetch data ──
     print("[Portfolio] Fetching prices...")
-    prices     = get_all_portfolio_data()
+    prices = get_all_portfolio_data()
     print("[Portfolio] Fetching macro data...")
-    macro      = get_macro_data()
+    macro  = get_macro_data()
+    print("[Portfolio] Fetching CRS data...")
+    crs_data = get_crs_data(fred_key=fred_key or None,
+                             vix_spot=prices.get("_vix"))
+    crs_score, crs_comp, crs_regime = compute_crash_risk_score(crs_data, macro)
+    print(f"[Portfolio] CRS: {crs_score}/10 ({crs_regime})")
 
     today_str  = datetime.utcnow().strftime("%Y-%m-%d")
     prices_txt = build_prices_section(prices)
@@ -341,14 +538,17 @@ def run():
     with open(BASE_DIR / "CLAUDE.md") as f:
         system_prompt = f.read()
 
-    macro_snapshot = json.dumps({
-        k: macro.get(k) for k in [
+    macro_snapshot = json.dumps(dict(
+        {k: macro.get(k) for k in [
             "us_10y", "us_30y", "japan_10y", "japan_30y",
             "spx", "usdjpy", "carry_regime", "japan_stress",
             "us_curve_status", "usdjpy_weekly_chg_pct",
             "carry_architecture_alert",
-        ]
-    }, default=str)
+        ]},
+        crash_risk_score=crs_score,
+        crash_risk_regime=crs_regime,
+        crs_components=crs_comp,
+    ), default=str)
 
     # Pre-fill header + macro card
     us10  = _fmt(macro.get("us_10y"), 2)
@@ -358,6 +558,10 @@ def run():
     usd   = _fmt(macro.get("usdjpy"), 2)
     carry = macro.get("carry_regime", "N/A")
     spx   = _fmt(macro.get("spx"), 0)
+
+    hy_str  = (f"{crs_comp['hy_oas_bps']}bps"
+               if crs_comp.get("hy_oas_bps") is not None else "N/A")
+    crv_str = crs_comp.get("curve_2s10s_status", "N/A")
 
     prefill = (
         f"[EMAIL]\n"
@@ -370,6 +574,8 @@ def run():
         f"JGB10Y: {j10}  30Y: {j30}\n"
         f"SPX   : {spx}\n"
         f"USDJPY: {usd}  Carry: {carry}\n"
+        f"CRS   : {crs_score}/10 ({crs_regime})"
+        f"  HY:{hy_str} Curve:{crv_str}\n"
         f"------------------------------\n"
         f"SHORT bias:"
     ).rstrip()
@@ -403,6 +609,11 @@ Analysis instructions:
   Then continue with the analysis below that.
   If no position exists for that ticker, skip these lines.
 - Bias check: SHORT_TERM positions vs bias_short; LONG_TERM vs bias_long.
+- CRASH RISK SCORE (CRS={crs_score}/10, {crs_regime}): Use this composite to calibrate
+  the urgency of warnings. CRS ≤ 4 = low systemic risk (normal sizing). CRS 5-6 = note
+  in MACRO COMMENTARY. CRS 7-7.9 = flag WARNING, review Tier 2 positions. CRS ≥ 8 =
+  equivalent to CARRY_COLLAPSE — trigger TRIM review for VWCE/VWRL, flag SPX cautiously.
+  CRS components: {json.dumps(crs_comp, separators=(',',':'))}
 
 ═══ EMAIL FORMAT — MANDATORY ═══
 No markdown. Max ~35 chars/line. Plain text.
@@ -435,8 +646,14 @@ Section order and EXACT header names to write:
     technical (MA20/50, ATH distance), funding/OI,
     1-week base case + key events.
 
-  VWCE / VWRL
-  ← Position block if open. EUR/USD. Macro regime. Action.
+  VWCE
+  ← VWCE position block if open (own entry/P&L/stop/action).
+    EUR/USD. Macro regime. CRS impact if elevated. Action.
+    3-5 lines max.
+
+  VWRL
+  ← VWRL position block if open (own entry/P&L/stop/action).
+    Same macro drivers as VWCE. Dividend note if applicable.
     3-5 lines max.
 
   GOLD
@@ -522,9 +739,14 @@ FR    : X.XX% | OI: <rising/falling>
 1-wk  : <dominant driver — key events>
 ------------------------------
 
-VWCE / VWRL
+VWCE
 ------------------------------
-<position block if open, then 3-5 lines>
+<VWCE position block if open, then 3-5 lines>
+------------------------------
+
+VWRL
+------------------------------
+<VWRL position block if open, then 3-5 lines>
 ------------------------------
 
 GOLD
@@ -589,7 +811,10 @@ CHANGES TODAY
     # ── Step 5: Update state ──
     delta = extract_state_delta(response)
     if delta:
-        updated_state = merge_delta(state, delta, prices)
+        updated_state = merge_delta(state, delta, prices,
+                                    crs_score=crs_score,
+                                    crs_regime=crs_regime,
+                                    crs_comp=crs_comp)
         save_state(updated_state)
         print(f"[{datetime.utcnow().isoformat()}] State updated via delta")
     else:
