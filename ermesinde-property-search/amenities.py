@@ -5,7 +5,7 @@ Geocoding is delegated to geo.py so coordinates are shared across modules.
 import logging
 import time
 import requests
-from typing import Tuple
+from typing import Dict, Tuple
 
 from geo import geocode
 
@@ -34,7 +34,7 @@ _LABELS = {
 
 def check_amenities(lat: float, lon: float) -> Tuple[int, str]:
     """Returns (score 0-5, human-readable summary string)."""
-    scores: dict[str, int] = {}
+    scores: Dict[str, int] = {}
 
     for name, tag_filter in _AMENITY_QUERIES.items():
         try:

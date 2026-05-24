@@ -6,7 +6,7 @@ import math
 import time
 import logging
 import requests
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ _NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 _HEADERS = {"User-Agent": "ErmesindPropertySearch/1.0 (personal-use)"}
 
 # Simple in-process cache so we don't re-geocode the same address in one run
-_geocode_cache: dict[str, Optional[Tuple[float, float]]] = {}
+_geocode_cache: Dict[str, Optional[Tuple[float, float]]] = {}
 
 
 def geocode(address: str) -> Optional[Tuple[float, float]]:
