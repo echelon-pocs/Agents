@@ -181,7 +181,9 @@ def get_all_portfolio_data():
             entry["above_ma50"] = price > entry["ma_50"]
         result[asset] = entry
 
-    # Overlay MEXC perpetual data for tradable assets
+    # Overlay MEXC perpetual data for tradable assets.
+    # MEXC price is always primary for assets traded as perps — positions and
+    # P&L must be calculated against the actual exchange price, not YF futures.
     for asset, candidates in MEXC_SYMBOLS.items():
         mexc = _mexc_first(candidates)
         if mexc:
@@ -189,9 +191,9 @@ def get_all_portfolio_data():
             result[asset]["mexc_symbol"]   = mexc.get("symbol")
             result[asset]["funding_rate"]  = mexc.get("funding_rate")
             result[asset]["oi_usd_bn"]     = mexc.get("oi_usd_bn")
-            # Use MEXC price as primary if YF unavailable
-            if result[asset]["price"] is None:
-                result[asset]["price"] = mexc.get("price")
+            # MEXC perpetual price is primary; keep YF price as reference only
+            result[asset]["yf_price"]      = result[asset].get("price")
+            result[asset]["price"]         = mexc.get("price")
 
     # Extra context indicators
     vix, _    = _yf_fetch("^VIX",    history=5)
