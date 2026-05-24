@@ -373,64 +373,111 @@ Analysis instructions:
   If no position exists for that ticker, skip these lines.
 - Bias check: SHORT_TERM positions vs bias_short; LONG_TERM vs bias_long.
 
-═══ EMAIL FORMAT ═══
+═══ EMAIL FORMAT — MANDATORY ═══
 No markdown. Max ~35 chars/line. Plain text.
-Sections IN THIS EXACT ORDER (exact names):
+RULE: Each section header is a BARE LINE — the section name ONLY,
+nothing else. Immediately follow every header with a ------ divider.
+NEVER append [TIER...], (8PSB), or any annotation to a section name.
 
-  1. Header (already written)
-  2. MACRO REGIME (already written — continue from prefill)
-  3. SHORT bias / LONG bias (continue from prefill)
-  4. MACRO COMMENTARY
-     3-4 lines covering: yield curve direction, carry regime,
-     USD direction, net risk-on/off signal for this portfolio.
+Section order and EXACT header names to write:
 
-  5. WTI  [TIER 1 — DEEP ANALYSIS]
-     — Position block first (if open position exists)
-     — Then cover in order:
-       Price, MA20/50, trend + % distance
-       Geopolitical premium: active risks + LOW/MED/HIGH
-       OPEC+ stance: RESTRICTIVE/NEUTRAL/LOOSENING
-       USD/DXY direction + oil correlation
-       Demand: China + US + seasonal (one line)
-       MEXC funding rate + OI if available
-       WTI/Brent spread
-       1-week base case: dominant driver, key level to watch
+  MACRO COMMENTARY
+  ← 3-4 lines: yield curve, carry regime, USD, net signal
 
-  6. BRENT  [TIER 2 — 3-5 lines]
-     — Position block first (if open position exists)
-     — Brent/WTI spread. Macro regime. Action.
+  WTI
+  ← Position block first (if open position exists, write:
+      LONG/SHORT | Entry:X.XX | Now:X.XX | P&L:±X.X%
+      Stop:X.XX | Action: <action>
+    Then: 8-12 lines covering geo risk, OPEC+, USD/DXY,
+    demand pulse, technical (MA20/50, key levels), funding
+    rate/OI, WTI/Brent spread, 1-week base case.
 
-  7. SPX  [TIER 1 — DEEP ANALYSIS]
-     — Position block first (if open position exists)
-     — Then cover in order:
-       Price, MA20/50, trend, distance from ATH
-       US 10Y/30Y level + direction + real yield signal
-       Curve shape + recession flag if inverted
-       JPY carry: USDJPY trend + carry regime risk
-       Liquidity: INJECTING/NEUTRAL/DRAINING
-       Earnings: season status + mega-cap tech pulse
-       Inflation/employment → Fed reaction in one line
-       VIX: level + complacency/normal/fear signal
-       MEXC funding rate + OI if available
-       1-week base case: dominant driver, key events this week
+  BRENT
+  ← Position block if open. Brent/WTI spread. Macro. Action.
+    3-5 lines max.
 
-  8. VWCE / VWRL  [TIER 2 — 3-5 lines]
-     — Position block first (if open position exists)
-     — EUR/USD impact. Macro regime. Structural flag if present. Action.
+  SPX
+  ← Position block if open.
+    8-12 lines: yields (10Y/30Y level+direction), real yield,
+    JPY carry risk, liquidity, earnings pulse,
+    inflation/employment → Fed reaction, VIX,
+    technical (MA20/50, ATH distance), funding/OI,
+    1-week base case + key events.
 
-  9. GOLD  [TIER 2 — 3-5 lines]
-     — Position block first (if open position exists)
-     — DXY direction. Real yield proxy. Action: HOLD_CORE/ADD/TRIM.
+  VWCE / VWRL
+  ← Position block if open. EUR/USD. Macro regime. Action.
+    3-5 lines max.
 
-  10. SILVER  [TIER 2 — 3-5 lines]
-      (8PSB = Invesco Physical Silver ETC, tracks physical silver)
-      — Position block first (if open position exists)
-      — DXY direction. Gold/silver ratio (high >80 = silver cheap).
-        Industrial demand pulse (solar/EVs). Action: HOLD_CORE/ADD/TRIM.
+  GOLD
+  ← Position block if open. DXY. Real yield. Action.
+    3-5 lines max.
 
-  11. SETUPS (Tier 1 only — WTI and SPX; write "None." if empty)
-  12. CHANGES TODAY
+  SILVER
+  ← (8PSB = Invesco Physical Silver ETC, tracks physical silver)
+    Position block if open. DXY. Gold/silver ratio.
+    Industrial demand pulse. Action: HOLD_CORE/ADD/TRIM.
+    3-5 lines max.
 
+  SETUPS
+  ← Tier 1 (WTI, SPX) only. Write "None." if empty.
+
+  CHANGES TODAY
+  ← One bullet per change. Tags: NEW / ENTER / REVISED /
+    HOLD / ADD / TRIM / ADOPTED
+
+[NOTE: The email has already been started for you.
+ MACRO REGIME is pre-filled. Continue from SHORT bias.
+ Your response will be appended after "SHORT bias: "
+ Write ONLY what comes after — do NOT repeat MACRO REGIME.]
+
+Your output must continue as:
+<bias_short>  (days–weeks)
+LONG  bias: <bias_long>   (months+)
+------------------------------
+
+MACRO COMMENTARY
+------------------------------
+<3-4 lines on yield curve, carry, USD, net signal>
+------------------------------
+
+WTI
+------------------------------
+<position block if open, then 8-12 lines of deep analysis>
+------------------------------
+
+BRENT
+------------------------------
+<position block if open, then 3-5 lines>
+------------------------------
+
+SPX
+------------------------------
+<position block if open, then 8-12 lines of deep analysis>
+------------------------------
+
+VWCE / VWRL
+------------------------------
+<position block if open, then 3-5 lines>
+------------------------------
+
+GOLD
+------------------------------
+<position block if open, then 3-5 lines>
+------------------------------
+
+SILVER
+------------------------------
+<position block if open, then 3-5 lines>
+------------------------------
+
+SETUPS
+------------------------------
+<Tier 1 setups only, or "None.">
+------------------------------
+
+CHANGES TODAY
+------------------------------
+<one bullet per change>
 [/EMAIL]
 
 [STATE_DELTA]

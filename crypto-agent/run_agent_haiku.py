@@ -746,10 +746,15 @@ VIOLATION OF ANY RULE BELOW = WRONG OUTPUT.
 6. OPEN POSITIONS: every entry in open_positions MUST appear as a card.
    No exceptions. If none: write exactly "None confirmed."
    The OPEN POSITIONS section contains ONLY confirmed open positions.
-   Setup cards (🔴 🟣) NEVER appear inside OPEN POSITIONS — they belong
-   in SHORT-TERM SETUPS or LONG-TERM SETUPS. Do not blur these sections.
-   SHORT-TERM SETUPS contains ALL SHORT_TERM setups (even status=ENTER).
-   LONG-TERM SETUPS contains ALL MEDIUM/LONG_TERM setups.
+   Setup cards (🔴 🟣) NEVER appear inside OPEN POSITIONS.
+
+   SECTION BOUNDARY RULE — CRITICAL:
+   If a symbol is in open_positions, it MUST appear in OPEN POSITIONS
+   and MUST NOT appear again in SHORT-TERM SETUPS or LONG-TERM SETUPS.
+   SHORT-TERM SETUPS = SHORT_TERM setups whose symbol is NOT in open_positions.
+   LONG-TERM SETUPS  = MEDIUM/LONG_TERM setups whose symbol is NOT in open_positions.
+   A position already tracked in OPEN POSITIONS needs no duplicate setup card.
+   Violating this rule = duplicate content = wrong output.
 
 7. Max ~35 characters per line (mobile screen). No wide lines.
 
