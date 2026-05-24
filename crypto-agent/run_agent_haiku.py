@@ -696,6 +696,8 @@ Analysis instructions:
 - No positions are open unless listed in current state open_positions.
 - ALL open positions must appear in the email with P&L, stop status, and a specific action.
 - Positions with status=OPEN and conviction=UNKNOWN were opened outside analysis — run full whale+TA on them and adopt them into active_setups with real levels.
+- SPX / SP500 / US500 / S&P 500 is a PORTFOLIO AGENT asset. In the crypto email it appears only as a number in the pre-filled MACRO REGIME card. Do NOT write SPX setups, SPX position cards, or any SPX analysis section. If SPX appears in open_positions, flag it as a routing error in CHANGES TODAY only.
+- All crypto perpetual positions are labeled as "perp" (not "spot") unless market_type is explicitly "spot" AND the user confirmed a spot purchase. When in doubt, use "perp".
 - pre_computed.position_analytics contains Python-verified P&L and flags for each position. Use these values exactly — do NOT recalculate P&L. Keys are "SYMBOL_DIRECTION" (e.g. "BTC_LONG").
 - pre_computed.setup_statuses contains Python-verified ENTER/APPROACHING/WAITING/INVALIDATED for each setup. Use these, do NOT re-derive from price.
 - pre_computed.cycle_metrics contains btc_mvrv_approx: MVRV>3.0 = historically expensive (cycle top risk), MVRV<1.0 = historically cheap (bottom zone). Use this for cycle analysis.
@@ -743,6 +745,11 @@ VIOLATION OF ANY RULE BELOW = WRONG OUTPUT.
 
 6. OPEN POSITIONS: every entry in open_positions MUST appear as a card.
    No exceptions. If none: write exactly "None confirmed."
+   The OPEN POSITIONS section contains ONLY confirmed open positions.
+   Setup cards (🔴 🟣) NEVER appear inside OPEN POSITIONS — they belong
+   in SHORT-TERM SETUPS or LONG-TERM SETUPS. Do not blur these sections.
+   SHORT-TERM SETUPS contains ALL SHORT_TERM setups (even status=ENTER).
+   LONG-TERM SETUPS contains ALL MEDIUM/LONG_TERM setups.
 
 7. Max ~35 characters per line (mobile screen). No wide lines.
 
@@ -800,18 +807,19 @@ LIQUIDITY ANALYSIS
 OPEN POSITIONS
 ------------------------------
 <If open_positions is empty: write "None confirmed.">
-<One card per position — NO EXCEPTIONS.
- TF MUST appear and drives the bias check:>
-<SYM> <DIRECTION> (<market_type>)
+<One card per position. Use exactly this layout.
+ NEVER put setup entries (🔴 🟣) in this section.>
+<SYM> <DIRECTION>
+  Type  : <perp|spot>
   TF    : <SHORT_TERM|MEDIUM_TERM|LONG_TERM>
   Entry : $<entry_price>
   Now   : $<current>  P&L: <pnl>%
-  Stop  : $<stop_loss>
-  Bias  : <Aligned with bias_<tf>|CONFLICT>
-  Action: <action respects TF — see rules>
+  Stop  : $<stop_loss or N/A>
+  Bias  : <Aligned|CONFLICT>
+  Action: <specific action>
 ------------------------------
-<P&L < -10% or stop missing — prefix with ⚠️>
-<P&L < -15% or stop breached — prefix with 🚨>
+<P&L < -10% or stop missing — open card with ⚠️ SYM DIRECTION>
+<P&L < -15% or stop breached — open card with 🚨 SYM DIRECTION>
 
 SHORT-TERM SETUPS (days–2wk)
 ------------------------------

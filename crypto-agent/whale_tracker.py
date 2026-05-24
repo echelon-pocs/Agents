@@ -855,14 +855,16 @@ def get_macro_data() -> Dict:
         return (None, None)
 
     def _jgb_yfinance_try():
-        """Yahoo Finance fallback — try known JGB yield tickers."""
+        """Yahoo Finance fallback — Japan 10Y/30Y via Reuters-style suffix."""
         j10, j30 = None, None
-        for sym in ("^JGBS10", "GJGB10.TYO", "^TNX2"):
+        # JP10YT=RR and JP30YT=RR are Reuters/Refinitiv codes Yahoo Finance
+        # sometimes resolves; try multiple known aliases
+        for sym in ("JP10YT=RR", "^JN10Y", "IRJPY=R"):
             v, _ = _yfinance(sym, history=3)
             if v is not None:
                 j10 = v
                 break
-        for sym in ("^JGBS30", "GJGB30.TYO"):
+        for sym in ("JP30YT=RR", "^JN30Y"):
             v, _ = _yfinance(sym, history=3)
             if v is not None:
                 j30 = v
@@ -874,8 +876,8 @@ def get_macro_data() -> Dict:
     result["spx"],     _    = _yield_multi("^spx", "^GSPC")
 
     # JGB: stooq → MOF CSV → Nasdaq Data Link → FRED → Yahoo Finance
-    result["japan_10y"], _ = _stooq("10ygjb.b")
-    result["japan_30y"], _ = _stooq("30ygjb.b")
+    result["japan_10y"], _ = _stooq("10jgbs.b")
+    result["japan_30y"], _ = _stooq("30jgbs.b")
     if result["japan_10y"] is None or result["japan_30y"] is None:
         j10, j30 = _mof_jgb()
         if result["japan_10y"] is None:

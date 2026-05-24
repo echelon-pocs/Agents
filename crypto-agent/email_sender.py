@@ -6,6 +6,9 @@ Sends multipart/alternative (HTML + plain text) with full-report attachment.
 
 import re
 import smtplib
+# Matches position/setup card titles:
+#   "BTC LONG"  "SUI SHORT"  (bare)
+#   "⚠️ BTC LONG"  "🚨 ETH SHORT"  (danger-flagged position)
 _CARD_TITLE_RE = re.compile(r'^[A-Z]{2,8}\s+(LONG|SHORT)\b')
 import ssl
 from email.mime.text import MIMEText
@@ -281,16 +284,22 @@ def render_html_email(plain_body: str) -> str:
                 close_card()
             continue
 
-        # ── ⚠️ / 🚨 alert lines ──
-        if line.startswith('⚠️'):
+        # ── ⚠️ / 🚨 lines: position card if "SYM LONG/SHORT" follows,
+        #    otherwise a plain alert box ──
+        if line.startswith('⚠️') or line.startswith('🚨'):
             close_bullet()
-            close_card()
-            out.append(f'<div class="warn-box">{_colorize(line)}</div>')
-            continue
-        if line.startswith('🚨'):
-            close_bullet()
-            close_card()
-            out.append(f'<div class="danger-box">{_colorize(line)}</div>')
+            rest = line[2:].strip()   # strip emoji + space
+            if _CARD_TITLE_RE.match(rest):
+                # danger-flagged position card — open as a card with coloured title
+                close_card()
+                bg = '#fef3c7' if line.startswith('⚠️') else '#fde8e8'
+                out.append(f'<div class="card" style="border-color:#f59e0b;background:{bg}">'
+                            f'<div class="card-title">{_colorize(line)}</div>')
+                in_card = True
+            else:
+                close_card()
+                cls = 'warn-box' if line.startswith('⚠️') else 'danger-box'
+                out.append(f'<div class="{cls}">{_colorize(line)}</div>')
             continue
 
         # ── Section header ──
