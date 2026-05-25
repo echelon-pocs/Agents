@@ -16,21 +16,14 @@ class EraScraper(BaseScraper):
 
     SEARCH_URLS = [
         "https://www.era.pt/comprar/habitacao/porto/valongo/?quartos=2&preco-max=380000",
+        "https://www.era.pt/comprar/habitacao/porto/valongo/ermesinde/?preco-max=380000",
         "https://www.era.pt/comprar/habitacao/porto/gondomar/?quartos=2&preco-max=380000",
     ]
-
-    # ERA also exposes a JSON endpoint via their search API
-    API_URL = (
-        "https://www.era.pt/api/listing/search?"
-        "transactionType=buy&propertyType=residential"
-        "&location=valongo&minBedrooms=2&maxPrice=380000&pageSize=30"
-    )
 
     def search(self) -> List[Property]:
         properties: List[Property] = []
         seen: set = set()
 
-        # HTML scraping only — API endpoint no longer valid
         for base_url in self.SEARCH_URLS:
             for page in range(1, self.MAX_PAGES + 1):
                 url = base_url if page == 1 else f"{base_url}&pagina={page}"
@@ -38,8 +31,11 @@ class EraScraper(BaseScraper):
                 if soup is None:
                     break
 
-                props = self._parse_page(soup)
+                # Try structured parse first, fall back to heuristic immediately
+                props = self._parse_page(soup) or self._heuristic_extract(soup)
                 if not props:
+                    logger.warning(f"[{self.name}] Zero results on {url} — body classes: "
+                                   f"{[c for el in soup.select('[class]') for c in (el.get('class') or []) if 'card' in c.lower() or 'listing' in c.lower() or 'property' in c.lower()][:8]}")
                     break
 
                 for p in props:
@@ -47,7 +43,7 @@ class EraScraper(BaseScraper):
                         seen.add(p.property_id)
                         properties.append(p)
 
-                if not soup.select_one(".pagination .next"):
+                if not soup.select_one(".pagination .next, a[rel='next'], [aria-label='Next']"):
                     break
 
         logger.info(f"[{self.name}] Found {len(properties)} listings")

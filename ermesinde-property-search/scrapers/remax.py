@@ -42,8 +42,9 @@ class RemaxScraper(BaseScraper):
                 if soup is None:
                     break
 
-                props = self._parse_page(soup)
+                props = self._parse_page(soup) or self._heuristic_extract(soup)
                 if not props:
+                    logger.warning(f"[{self.name}] Zero on {url} — title: {soup.title.string if soup.title else 'n/a'}")
                     break
 
                 for p in props:

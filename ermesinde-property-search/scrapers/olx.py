@@ -17,7 +17,6 @@ class OlxScraper(BaseScraper):
     SEARCH_URLS = [
         "https://www.olx.pt/imoveis/apartamento-casa-a-venda/valongo-porto/?search%5Bfilter_float_price%3Ato%5D=380000",
         "https://www.olx.pt/imoveis/q-ermesinde/?search%5Bfilter_float_price%3Ato%5D=380000&search%5Bfilter_enum_category%5D=imoveis",
-        "https://www.olx.pt/imoveis/comprar/valongo/?search%5Bfilter_float_price%3Ato%5D=380000",
     ]
 
     def search(self) -> List[Property]:
@@ -31,7 +30,11 @@ class OlxScraper(BaseScraper):
                 if soup is None:
                     break
 
-                props = self._extract_nextjs(soup) or self._parse_html(soup)
+                props = (
+                    self._extract_nextjs(soup)
+                    or self._parse_html(soup)
+                    or self._heuristic_extract(soup)   # inline fallback
+                )
                 if not props:
                     break
 
@@ -53,12 +56,14 @@ class OlxScraper(BaseScraper):
         try:
             data = json.loads(script.string)
             page_props = data.get("props", {}).get("pageProps", {})
+            # Log top-level keys so we can fix the path if it changes again
+            logger.warning(f"[{self.name}] __NEXT_DATA__ pageProps keys: {list(page_props.keys())[:10]}")
             ads = self._find_ads(page_props)
             if not ads:
                 return None
             return [p for p in (self._parse_ad(ad) for ad in ads) if p]
         except Exception as e:
-            logger.debug(f"[{self.name}] Next.js parse failed: {e}")
+            logger.warning(f"[{self.name}] Next.js parse failed: {e}")
             return None
 
     @staticmethod

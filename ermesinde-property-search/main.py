@@ -40,9 +40,9 @@ logger = logging.getLogger("main")
 MIN_ROOMS = 2
 MAX_PRICE = 380_000
 MAX_DETAIL_FETCHES = 20   # max detail-page HTTP calls per run
-ZERO_THRESHOLD_JSONLD = 2
-ZERO_THRESHOLD_HEURISTIC = 3
-ZERO_THRESHOLD_PLAYWRIGHT = 4
+ZERO_THRESHOLD_JSONLD = 1
+ZERO_THRESHOLD_HEURISTIC = 2
+ZERO_THRESHOLD_PLAYWRIGHT = 3
 
 
 # ── filtering ─────────────────────────────────────────────────────────────────
