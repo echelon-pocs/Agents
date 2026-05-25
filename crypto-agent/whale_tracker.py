@@ -116,19 +116,75 @@ def _get(url: str, params: dict = None, timeout: int = 12,
     return None
 
 
+# Binance spot symbols for assets that CoinGecko may miss or rate-limit
+_BINANCE_SPOT = {
+    "BTC": "BTCUSDT", "ETH": "ETHUSDT", "SOL": "SOLUSDT",
+    "XRP": "XRPUSDT", "BNB": "BNBUSDT", "SUI": "SUIUSDT",
+    "DOGE": "DOGEUSDT", "ADA": "ADAUSDT", "AVAX": "AVAXUSDT",
+    "LINK": "LINKUSDT", "DOT": "DOTUSDT", "ATOM": "ATOMUSDT",
+    "LTC": "LTCUSDT", "BCH": "BCHUSDT", "UNI": "UNIUSDT",
+    "AAVE": "AAVEUSDT", "OP": "OPUSDT", "ARB": "ARBUSDT",
+    "APT": "APTUSDT", "INJ": "INJUSDT", "TIA": "TIAUSDT",
+    "HYPE": "HYPEUSDT", "TAO": "TAOUSDT", "ONDO": "ONDOUSDT",
+}
+
+
+def _fetch_binance_spot_prices(symbols):
+    # type: (list) -> Dict[str, float]
+    """Bulk-fetch Binance spot prices for a list of our symbol names."""
+    pairs = [_BINANCE_SPOT[s] for s in symbols if s in _BINANCE_SPOT]
+    if not pairs:
+        return {}
+    try:
+        import json as _json
+        r = requests.get(
+            "https://api.binance.com/api/v3/ticker/price",
+            params={"symbols": _json.dumps(pairs)},
+            timeout=10,
+        )
+        if r.status_code != 200:
+            return {}
+        pair_to_price = {item["symbol"]: float(item["price"])
+                         for item in r.json() if item.get("price")}
+        return {sym: pair_to_price[_BINANCE_SPOT[sym]]
+                for sym in symbols
+                if sym in _BINANCE_SPOT and _BINANCE_SPOT[sym] in pair_to_price}
+    except Exception as e:
+        print(f"[Prices] Binance spot fallback error: {e}")
+        return {}
+
+
 def get_prices(prices: Dict[str, float] = None) -> Dict[str, float]:
-    """Fetch current USD prices for all tracked assets via CoinGecko.
+    """Fetch current USD prices for all tracked assets.
+    Primary: CoinGecko (free). Fallback: Binance spot for any missing assets.
     If a pre-fetched dict is passed, return it immediately (cache passthrough).
     """
     if prices is not None:
         return prices
+
+    result = {}  # type: Dict[str, float]
+
+    # CoinGecko — fetch all in one call
     ids = ",".join(COINGECKO_IDS.values())
     data = _get("https://api.coingecko.com/api/v3/simple/price",
                 params={"ids": ids, "vs_currencies": "usd"})
-    if not data:
-        return {}
-    return {sym: data.get(cg_id, {}).get("usd", 0)
-            for sym, cg_id in COINGECKO_IDS.items()}
+    if data:
+        for sym, cg_id in COINGECKO_IDS.items():
+            price = data.get(cg_id, {}).get("usd", 0)
+            if price:
+                result[sym] = price
+
+    # Binance spot fallback for anything missing or zero
+    missing = [s for s in COINGECKO_IDS if not result.get(s)]
+    if missing:
+        print(f"[Prices] CoinGecko missing {missing} — trying Binance spot")
+        binance_prices = _fetch_binance_spot_prices(missing)
+        result.update(binance_prices)
+        still_missing = [s for s in missing if not result.get(s)]
+        if still_missing:
+            print(f"[Prices] WARNING: no price found for {still_missing}")
+
+    return result
 
 def get_market_globals() -> Dict:
     """Fear & Greed, BTC dominance, total market cap — free, no key."""
