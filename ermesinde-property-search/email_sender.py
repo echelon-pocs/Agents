@@ -1,3 +1,4 @@
+import html
 import os
 import smtplib
 import logging
@@ -124,7 +125,7 @@ def _property_card(prop: Property, is_price_drop: bool = False) -> str:
       {drop_banner}
       {img_html}
       <h2 style="margin:0 0 4px;font-size:17px;color:#1a1a1a;">
-        <a href="{prop.url}" style="color:#1565c0;text-decoration:none;">{prop.title}</a>
+        <a href="{html.escape(prop.url)}" style="color:#1565c0;text-decoration:none;">{prop.title}</a>
         {score_badge}
       </h2>
       <p style="margin:0 0 12px;color:#666;font-size:13px;">📍 {prop.location}{dist_html} &nbsp;|&nbsp; {prop.source}</p>
@@ -155,7 +156,7 @@ def _property_card(prop: Property, is_price_drop: bool = False) -> str:
       </table>
       {"<p style='margin:16px 0 0;font-size:13px;color:#777;'>" + prop.description[:300] + ("…" if len(prop.description) > 300 else "") + "</p>" if prop.description else ""}
       <p style="margin:16px 0 0;">
-        <a href="{prop.url}" style="background:#1565c0;color:#fff;padding:10px 20px;border-radius:5px;text-decoration:none;font-size:14px;">Ver anúncio →</a>
+        <a href="{html.escape(prop.url)}" style="background:#1565c0;color:#fff;padding:10px 20px;border-radius:5px;text-decoration:none;font-size:14px;">Ver anúncio →</a>
       </p>
     </div>"""
 
@@ -181,7 +182,7 @@ def _digest_card(row: dict) -> str:
     return (
         f'<div style="padding:10px;border-bottom:1px solid #eee;overflow:hidden;">'
         f'{img_html}'
-        f'<a href="{row["url"]}" style="color:#1565c0;text-decoration:none;font-weight:bold;font-size:14px;">{row["title"][:70]}</a><br>'
+        f'<a href="{html.escape(row["url"])}" style="color:#1565c0;text-decoration:none;font-weight:bold;font-size:14px;">{row["title"][:70]}</a><br>'
         f'<span style="font-size:13px;color:#2e7d32;font-weight:bold;">{price_str}</span>'
         f' &nbsp; <span style="font-size:12px;color:#555;">{rooms_str} · {row.get("location","")}{dist_str}</span>'
         f' &nbsp; <span style="background:{sc_color};color:#fff;font-size:11px;padding:1px 6px;border-radius:10px;">Score {sc}</span>'
