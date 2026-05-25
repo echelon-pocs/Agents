@@ -1,8 +1,10 @@
 """
-ClaudeSearch — uses DuckDuckGo Lite for actual web search, Claude Haiku for extraction.
+ClaudeSearch — web search + Claude Haiku extraction.
 
-Previous approach (web_search_20250305 tool) silently failed: Claude answered from
-memory in ~3s instead of searching. DuckDuckGo Lite is free, no API key, always works.
+Search engine cascade (each tried in order until results found):
+  1. DuckDuckGo Lite  — GET, no JS required
+  2. DuckDuckGo HTML  — POST fallback when Lite is blocked
+  3. Bing             — final fallback
 
 Covers: Idealista, Supercasa, Imovirtual, ERA, RE/MAX, and a general Ermesinde query.
 """
@@ -13,6 +15,7 @@ import re
 import time
 import random
 from typing import List, Optional
+from urllib.parse import unquote, parse_qs, urlparse
 
 from bs4 import BeautifulSoup
 
@@ -21,14 +24,13 @@ from .base import BaseScraper, _USER_AGENTS
 
 logger = logging.getLogger(__name__)
 
-# (source_label, DuckDuckGo query)
 _SEARCHES = [
     ("Idealista",   "apartamentos casas venda Ermesinde Valongo site:idealista.pt"),
     ("Imovirtual",  "apartamentos venda Ermesinde Valongo porto site:imovirtual.com"),
     ("Supercasa",   "imoveis venda Ermesinde Valongo site:supercasa.pt"),
     ("ERA",         "imoveis venda Ermesinde Valongo site:era.pt"),
     ("Remax",       "imoveis venda Ermesinde Valongo site:remax.pt"),
-    ("General",     "apartamentos T3 T4 venda Ermesinde Valongo porto preco"),
+    ("General",     "apartamentos T2 T3 T4 venda Ermesinde Valongo porto"),
 ]
 
 
@@ -54,9 +56,9 @@ class ClaudeSearchScraper(BaseScraper):
 
         for source_label, query in _SEARCHES:
             time.sleep(random.uniform(1.5, 3.0))
-            results_text = self._ddg_search(query)
+            results_text = self._search(query)
             if not results_text:
-                logger.warning(f"[ClaudeSearch/{source_label}] DDG returned nothing for: {query[:60]}")
+                logger.warning(f"[ClaudeSearch/{source_label}] All search engines returned nothing for: {query[:60]}")
                 continue
 
             found = self._extract_with_claude(client, source_label, results_text)
@@ -68,10 +70,21 @@ class ClaudeSearchScraper(BaseScraper):
         logger.info(f"[ClaudeSearch] {len(props)} listings across {len(_SEARCHES)} searches")
         return props
 
-    # ── DuckDuckGo Lite ───────────────────────────────────────────────────────
+    # ── Search engine cascade ─────────────────────────────────────────────────
 
-    def _ddg_search(self, query: str) -> str:
-        """Fetch DuckDuckGo Lite results and return formatted snippets."""
+    def _search(self, query: str) -> str:
+        """Try DDG Lite → DDG HTML → Bing, return first non-empty result."""
+        result = self._ddg_lite(query)
+        if result:
+            return result
+        time.sleep(random.uniform(1.0, 2.0))
+        result = self._ddg_html(query)
+        if result:
+            return result
+        time.sleep(random.uniform(1.0, 2.0))
+        return self._bing_search(query)
+
+    def _ddg_lite(self, query: str) -> str:
         headers = {
             "User-Agent": random.choice(_USER_AGENTS),
             "Accept": "text/html,application/xhtml+xml",
@@ -85,19 +98,65 @@ class ClaudeSearchScraper(BaseScraper):
                 timeout=15,
             )
             if not resp.ok:
-                logger.debug(f"[ClaudeSearch] DDG HTTP {resp.status_code}")
+                logger.debug(f"[ClaudeSearch] DDG Lite HTTP {resp.status_code}")
                 return ""
-            return self._parse_ddg_html(resp.text)
+            return self._parse_ddg_lite(resp.text)
         except Exception as e:
-            logger.debug(f"[ClaudeSearch] DDG error: {e}")
+            logger.debug(f"[ClaudeSearch] DDG Lite error: {e}")
             return ""
 
+    def _ddg_html(self, query: str) -> str:
+        """DuckDuckGo HTML endpoint — POST with form data, no JS required."""
+        headers = {
+            "User-Agent": random.choice(_USER_AGENTS),
+            "Accept": "text/html,application/xhtml+xml",
+            "Accept-Language": "pt-PT,pt;q=0.9,en;q=0.8",
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Referer": "https://duckduckgo.com/",
+            "Origin": "https://duckduckgo.com",
+        }
+        try:
+            resp = self.session.post(
+                "https://html.duckduckgo.com/html/",
+                data={"q": query, "kl": "pt-pt"},
+                headers=headers,
+                timeout=15,
+            )
+            if not resp.ok:
+                logger.debug(f"[ClaudeSearch] DDG HTML HTTP {resp.status_code}")
+                return ""
+            return self._parse_ddg_html_results(resp.text)
+        except Exception as e:
+            logger.debug(f"[ClaudeSearch] DDG HTML error: {e}")
+            return ""
+
+    def _bing_search(self, query: str) -> str:
+        headers = {
+            "User-Agent": random.choice(_USER_AGENTS),
+            "Accept": "text/html,application/xhtml+xml",
+            "Accept-Language": "pt-PT,pt;q=0.9,en;q=0.8",
+        }
+        try:
+            resp = self.session.get(
+                "https://www.bing.com/search",
+                params={"q": query, "setlang": "pt", "cc": "PT", "count": "15"},
+                headers=headers,
+                timeout=15,
+            )
+            if not resp.ok:
+                logger.debug(f"[ClaudeSearch] Bing HTTP {resp.status_code}")
+                return ""
+            return self._parse_bing_html(resp.text)
+        except Exception as e:
+            logger.debug(f"[ClaudeSearch] Bing error: {e}")
+            return ""
+
+    # ── HTML parsers ──────────────────────────────────────────────────────────
+
     @staticmethod
-    def _parse_ddg_html(html: str) -> str:
+    def _parse_ddg_lite(html: str) -> str:
         soup = BeautifulSoup(html, "html.parser")
         snippets = []
-
-        # DDG Lite: result links have class "result-link", snippets in next row
         for link in soup.select("a.result-link")[:12]:
             href = link.get("href", "")
             title = link.get_text(strip=True)
@@ -111,7 +170,6 @@ class ClaudeSearchScraper(BaseScraper):
                 snippets.append(f"URL: {href}\nTitle: {title}\nSnippet: {snippet}")
 
         if not snippets:
-            # Fallback: any external link with meaningful text
             for a in soup.find_all("a", href=True):
                 href = a.get("href", "")
                 if href.startswith("http") and "duckduckgo.com" not in href:
@@ -121,6 +179,44 @@ class ClaudeSearchScraper(BaseScraper):
                         if len(snippets) >= 10:
                             break
 
+        return "\n---\n".join(snippets)
+
+    @staticmethod
+    def _parse_ddg_html_results(html: str) -> str:
+        soup = BeautifulSoup(html, "html.parser")
+        snippets = []
+        for result in soup.select("div.result, .result")[:12]:
+            link = result.select_one("a.result__a, h2 a, .result__title a")
+            if not link:
+                continue
+            href = link.get("href", "")
+            if "uddg=" in href:
+                try:
+                    params = parse_qs(urlparse(href).query)
+                    href = unquote(params.get("uddg", [""])[0])
+                except Exception:
+                    pass
+            title = link.get_text(strip=True)
+            snippet_el = result.select_one(".result__snippet, a.result__snippet")
+            snippet = snippet_el.get_text(strip=True) if snippet_el else ""
+            if href and href.startswith("http") and "duckduckgo.com" not in href:
+                snippets.append(f"URL: {href}\nTitle: {title}\nSnippet: {snippet}")
+        return "\n---\n".join(snippets)
+
+    @staticmethod
+    def _parse_bing_html(html: str) -> str:
+        soup = BeautifulSoup(html, "html.parser")
+        snippets = []
+        for li in soup.select("li.b_algo")[:12]:
+            link = li.select_one("h2 a")
+            if not link:
+                continue
+            href = link.get("href", "")
+            title = link.get_text(strip=True)
+            snippet_el = li.select_one(".b_caption p, p")
+            snippet = snippet_el.get_text(strip=True) if snippet_el else ""
+            if href and href.startswith("http"):
+                snippets.append(f"URL: {href}\nTitle: {title}\nSnippet: {snippet}")
         return "\n---\n".join(snippets)
 
     # ── Claude extraction ─────────────────────────────────────────────────────

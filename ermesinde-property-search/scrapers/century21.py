@@ -15,9 +15,9 @@ class Century21Scraper(BaseScraper):
     base_url = "https://www.century21.pt"
 
     SEARCH_URLS = [
-        "https://www.century21.pt/imoveis?municipio=Valongo&tipologias=T3,T4,T5&preco_max=380000&tipo_negocio=VENDA&tipo_imovel=APARTAMENTO",
-        "https://www.century21.pt/imoveis?municipio=Valongo&tipologias=T3,T4,T5&preco_max=380000&tipo_negocio=VENDA&tipo_imovel=MORADIA",
-        "https://www.century21.pt/imoveis?municipio=Gondomar&tipologias=T3,T4,T5&preco_max=380000&tipo_negocio=VENDA&tipo_imovel=APARTAMENTO",
+        "https://www.century21.pt/imoveis/comprar/apartamento/porto/valongo/",
+        "https://www.century21.pt/imoveis/comprar/moradia/porto/valongo/",
+        "https://www.century21.pt/imoveis/comprar/apartamento/porto/gondomar/",
     ]
 
     # C21 Portugal exposes a REST search endpoint

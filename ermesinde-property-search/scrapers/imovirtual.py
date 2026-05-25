@@ -16,11 +16,9 @@ class ImovirtualScraper(BaseScraper):
     base_url = "https://www.imovirtual.com"
 
     SEARCH_URLS = [
-        # New URL format (2024+)
-        "https://www.imovirtual.com/pt/resultados/comprar/apartamento,t3/porto/valongo?preco-max-380000",
-        "https://www.imovirtual.com/pt/resultados/comprar/apartamento,t4/porto/valongo?preco-max-380000",
-        # Legacy URL format
-        "https://www.imovirtual.com/comprar/apartamento/valongo/?search%5Bfilter_float_price%3Ato%5D=380000&search%5Bfilter_enum_rooms_num%5D%5B0%5D=THREE&search%5Bfilter_enum_rooms_num%5D%5B1%5D=FOUR&search%5Bfilter_enum_rooms_num%5D%5B2%5D=FIVE",
+        "https://www.imovirtual.com/pt/resultados/comprar/apartamento/porto/valongo?preco-max=380000",
+        "https://www.imovirtual.com/pt/resultados/comprar/moradia/porto/valongo?preco-max=380000",
+        "https://www.imovirtual.com/comprar/apartamento/valongo/?search%5Bfilter_float_price%3Ato%5D=380000",
     ]
 
     def search(self) -> List[Property]:

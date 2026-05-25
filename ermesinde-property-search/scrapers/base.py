@@ -65,6 +65,9 @@ class BaseScraper(ABC):
                 if resp.status_code == 429:
                     logger.warning(f"[{self.name}] 429 — rate limited, skipping")
                     return None
+                if resp.status_code == 404:
+                    logger.warning(f"[{self.name}] 404 on {url} — skipping")
+                    return None
                 resp.raise_for_status()
                 return BeautifulSoup(resp.text, "html.parser")
             except requests.RequestException as e:

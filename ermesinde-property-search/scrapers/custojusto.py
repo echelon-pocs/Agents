@@ -78,10 +78,10 @@ class CustoJustoScraper(BaseScraper):
         title_el = card.select_one("h2") or card.select_one("h3") or card.select_one(".title")
         title = title_el.get_text(strip=True) if title_el else link.get_text(strip=True)
 
-        # Filter out non-T3+ listings by title check
-        if title and not any(t in title.upper() for t in ["T3", "T4", "T5", "3 QUARTO", "4 QUARTO"]):
+        # Filter out T0/T1 by title (main.py MIN_ROOMS handles the final cut)
+        if title:
             rooms_found = self.parse_rooms(title)
-            if rooms_found is not None and rooms_found < 3:
+            if rooms_found is not None and rooms_found < 2:
                 return None
 
         price_el = (

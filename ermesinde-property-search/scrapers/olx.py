@@ -52,6 +52,8 @@ class OlxScraper(BaseScraper):
     def _extract_nextjs(self, soup: BeautifulSoup) -> Optional[List[Property]]:
         script = soup.find("script", id="__NEXT_DATA__")
         if not script:
+            title = soup.title.string if soup.title else "no title"
+            logger.warning(f"[{self.name}] No __NEXT_DATA__ on page — title: {title!r}")
             return None
         try:
             data = json.loads(script.string)

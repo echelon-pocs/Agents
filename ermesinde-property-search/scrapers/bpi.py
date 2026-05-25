@@ -23,16 +23,11 @@ class BpiScraper(BaseScraper):
         "https://www.bpiexpressoimobiliario.pt/imoveis?distrito=Porto&municipio=Valongo&preco_max=380000&finalidade=venda",
     ]
 
-    # Millennium BCP also has a bank RE portal worth covering
-    _MBK_URLS = [
-        "https://www.millenniumbcp.pt/imoveis/pesquisa?distrito=Porto&municipio=Valongo&quartos=3&preco_max=380000",
-    ]
-
     def search(self) -> List[Property]:
         properties: List[Property] = []
         seen: set = set()
 
-        for url_list in (self.SEARCH_URLS, self._MBK_URLS):
+        for url_list in (self.SEARCH_URLS,):
             for base_url in url_list:
                 for page in range(1, self.MAX_PAGES + 1):
                     url = base_url if page == 1 else f"{base_url}&pagina={page}"

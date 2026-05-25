@@ -14,10 +14,8 @@ class IdealistaScraper(BaseScraper):
     base_url = "https://www.idealista.pt"
 
     SEARCH_URLS = [
-        # Ermesinde specifically
-        "https://www.idealista.pt/comprar-casas/porto/valongo/ermesinde/com-t3,t4,t5/?preco-maximo=380000&ordenado-por=atualizado-desc",
-        # Wider Valongo area to catch nearby listings
-        "https://www.idealista.pt/comprar-casas/porto/valongo/com-t3,t4,t5/?preco-maximo=380000&ordenado-por=atualizado-desc",
+        "https://www.idealista.pt/comprar-casas/porto/valongo/ermesinde/?preco-maximo=380000&ordenado-por=atualizado-desc",
+        "https://www.idealista.pt/comprar-casas/porto/valongo/?preco-maximo=380000&ordenado-por=atualizado-desc",
     ]
 
     def search(self) -> List[Property]:
