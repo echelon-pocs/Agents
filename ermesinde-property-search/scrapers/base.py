@@ -484,7 +484,11 @@ class BaseScraper(ABC):
         seen: set = set()
 
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(headless=True)
+            try:
+                browser = pw.chromium.launch(headless=True)
+            except Exception as e:
+                logger.warning(f"[{self.name}] Playwright browser cannot launch (missing system libs): {e}")
+                return []
             ctx = browser.new_context(
                 user_agent=random.choice(_USER_AGENTS),
                 locale="pt-PT",
