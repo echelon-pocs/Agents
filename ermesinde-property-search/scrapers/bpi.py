@@ -20,7 +20,8 @@ class BpiScraper(BaseScraper):
 
     SEARCH_URLS = [
         "https://www.bpiexpressoimobiliario.pt/imoveis?distrito=Porto&municipio=Valongo&tipologia=T3&tipologia=T4&tipologia=T5&preco_max=380000&finalidade=venda",
-        "https://www.bpiexpressoimobiliario.pt/imoveis?distrito=Porto&municipio=Valongo&preco_max=380000&finalidade=venda",
+        "https://www.bpiexpressoimobiliario.pt/imoveis?distrito=Porto&municipio=Gondomar&tipologia=T3&tipologia=T4&tipologia=T5&preco_max=380000&finalidade=venda",
+        "https://www.bpiexpressoimobiliario.pt/imoveis?distrito=Porto&municipio=Maia&tipologia=T3&tipologia=T4&tipologia=T5&preco_max=380000&finalidade=venda",
     ]
 
     def search(self) -> List[Property]:

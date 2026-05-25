@@ -196,7 +196,7 @@ def run(dry_run: bool = False) -> None:
     # ── 2. distance filter ────────────────────────────────────────────────────
     logger.info(f"Applying distance filter to {len(all_scraped)} properties…")
     within_range = apply_distance_filter(all_scraped)
-    logger.info(f"{len(within_range)} properties within 10 km of Ermesinde")
+    logger.info(f"{len(within_range)} properties within 20 km of Ermesinde")
 
     # ── 3. split new vs price drops ───────────────────────────────────────────
     price_drops = storage.check_and_update_price_drops(within_range)

@@ -18,6 +18,7 @@ class EraScraper(BaseScraper):
         "https://www.era.pt/comprar/habitacao/porto/valongo/?quartos=2&preco-max=380000",
         "https://www.era.pt/comprar/habitacao/porto/valongo/ermesinde/?preco-max=380000",
         "https://www.era.pt/comprar/habitacao/porto/gondomar/?quartos=2&preco-max=380000",
+        "https://www.era.pt/comprar/habitacao/porto/maia/?quartos=2&preco-max=380000",
     ]
 
     def search(self) -> List[Property]:

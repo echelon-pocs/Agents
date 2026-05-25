@@ -17,6 +17,10 @@ class RemaxScraper(BaseScraper):
     SEARCH_URLS = [
         "https://www.remax.pt/comprar/imoveis/apartamento/porto/valongo?quartos-min=2&preco-max=380000",
         "https://www.remax.pt/comprar/imoveis/moradia/porto/valongo?quartos-min=2&preco-max=380000",
+        "https://www.remax.pt/comprar/imoveis/apartamento/porto/gondomar?quartos-min=2&preco-max=380000",
+        "https://www.remax.pt/comprar/imoveis/moradia/porto/gondomar?quartos-min=2&preco-max=380000",
+        "https://www.remax.pt/comprar/imoveis/apartamento/porto/maia?quartos-min=2&preco-max=380000",
+        "https://www.remax.pt/comprar/imoveis/moradia/porto/maia?quartos-min=2&preco-max=380000",
     ]
 
     # RE/MAX GraphQL / internal API

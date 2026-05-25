@@ -23,12 +23,13 @@ from .base import BaseScraper, _USER_AGENTS
 logger = logging.getLogger(__name__)
 
 _SEARCHES = [
-    ("Idealista",   "apartamentos casas venda Ermesinde Valongo site:idealista.pt"),
-    ("Imovirtual",  "apartamentos venda Ermesinde Valongo porto site:imovirtual.com"),
-    ("Supercasa",   "imoveis venda Ermesinde Valongo site:supercasa.pt"),
-    ("ERA",         "imoveis venda Ermesinde Valongo site:era.pt"),
-    ("Remax",       "imoveis venda Ermesinde Valongo site:remax.pt"),
-    ("General",     "apartamentos T3 T4 venda Ermesinde Valongo porto"),
+    ("Idealista",    "apartamentos casas venda Valongo Gondomar Maia site:idealista.pt"),
+    ("Imovirtual",   "apartamentos venda Valongo Gondomar Maia porto site:imovirtual.com"),
+    ("Supercasa",    "imoveis venda Valongo Gondomar Maia site:supercasa.pt"),
+    ("ERA",          "imoveis venda Valongo Gondomar Maia site:era.pt"),
+    ("Remax",        "imoveis venda Valongo Gondomar Maia site:remax.pt"),
+    ("General-V",    "apartamentos T3 T4 venda Ermesinde Valongo Alfena porto"),
+    ("General-GM",   "apartamentos T3 T4 venda Gondomar Maia porto"),
 ]
 
 

@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 ERMESINDE_LAT = 41.2153
 ERMESINDE_LON = -8.5507
-MAX_DISTANCE_KM = 10.0
+MAX_DISTANCE_KM = 20.0
 
 _NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 _HEADERS = {"User-Agent": "ErmesindPropertySearch/1.0 (personal-use)"}

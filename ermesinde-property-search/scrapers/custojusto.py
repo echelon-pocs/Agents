@@ -17,8 +17,11 @@ class CustoJustoScraper(BaseScraper):
 
     SEARCH_URLS = [
         "https://www.custojusto.pt/porto/valongo/imoveis/comprar/apartamentos?pricemax=380000",
+        "https://www.custojusto.pt/porto/gondomar/imoveis/comprar/apartamentos?pricemax=380000",
+        "https://www.custojusto.pt/porto/maia/imoveis/comprar/apartamentos?pricemax=380000",
         "https://www.custojusto.pt/porto/imobiliario/apartamentos?pricemax=380000&q=T3+valongo",
-        "https://www.custojusto.pt/porto/imobiliario/apartamentos?pricemax=380000&q=T3+ermesinde",
+        "https://www.custojusto.pt/porto/imobiliario/apartamentos?pricemax=380000&q=T3+gondomar",
+        "https://www.custojusto.pt/porto/imobiliario/apartamentos?pricemax=380000&q=T3+maia",
     ]
 
     def search(self) -> List[Property]:

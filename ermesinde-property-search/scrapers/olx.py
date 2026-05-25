@@ -16,6 +16,8 @@ class OlxScraper(BaseScraper):
 
     SEARCH_URLS = [
         "https://www.olx.pt/imoveis/apartamento-casa-a-venda/valongo-porto/?search%5Bfilter_float_price%3Ato%5D=380000",
+        "https://www.olx.pt/imoveis/apartamento-casa-a-venda/gondomar-porto/?search%5Bfilter_float_price%3Ato%5D=380000",
+        "https://www.olx.pt/imoveis/apartamento-casa-a-venda/maia-porto/?search%5Bfilter_float_price%3Ato%5D=380000",
         "https://www.olx.pt/imoveis/q-ermesinde/?search%5Bfilter_float_price%3Ato%5D=380000&search%5Bfilter_enum_category%5D=imoveis",
     ]
 

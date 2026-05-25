@@ -18,6 +18,9 @@ class LugarCertoScraper(BaseScraper):
         "https://www.lugarcerto.pt/imoveis/venda/apartamento/porto/valongo/?tipologia=3,4,5&preco_maximo=380000",
         "https://www.lugarcerto.pt/imoveis/venda/moradia/porto/valongo/?tipologia=3,4,5&preco_maximo=380000",
         "https://www.lugarcerto.pt/imoveis/venda/apartamento/porto/gondomar/?tipologia=3,4,5&preco_maximo=380000",
+        "https://www.lugarcerto.pt/imoveis/venda/moradia/porto/gondomar/?tipologia=3,4,5&preco_maximo=380000",
+        "https://www.lugarcerto.pt/imoveis/venda/apartamento/porto/maia/?tipologia=3,4,5&preco_maximo=380000",
+        "https://www.lugarcerto.pt/imoveis/venda/moradia/porto/maia/?tipologia=3,4,5&preco_maximo=380000",
     ]
 
     def search(self) -> List[Property]:
