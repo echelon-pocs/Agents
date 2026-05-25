@@ -63,10 +63,8 @@ class BaseScraper(ABC):
             try:
                 resp = self.session.get(url, timeout=30, **kwargs)
                 if resp.status_code == 429:
-                    wait = (2 ** attempt) * random.uniform(10, 20)
-                    logger.warning(f"[{self.name}] 429 — waiting {wait:.0f}s (attempt {attempt+1})")
-                    time.sleep(wait)
-                    continue
+                    logger.warning(f"[{self.name}] 429 — rate limited, skipping")
+                    return None
                 resp.raise_for_status()
                 return BeautifulSoup(resp.text, "html.parser")
             except requests.RequestException as e:

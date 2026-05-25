@@ -15,8 +15,8 @@ class RemaxScraper(BaseScraper):
     base_url = "https://www.remax.pt"
 
     SEARCH_URLS = [
-        "https://www.remax.pt/comprar/imoveis/apartamento/porto/valongo?quartos-min=3&preco-max=380000",
-        "https://www.remax.pt/comprar/imoveis/moradia/porto/valongo?quartos-min=3&preco-max=380000",
+        "https://www.remax.pt/comprar/imoveis/apartamento/porto/valongo?quartos-min=2&preco-max=380000",
+        "https://www.remax.pt/comprar/imoveis/moradia/porto/valongo?quartos-min=2&preco-max=380000",
     ]
 
     # RE/MAX GraphQL / internal API
@@ -61,7 +61,7 @@ class RemaxScraper(BaseScraper):
         base = {
             "transactionTypeId": 1,  # buy
             "locationId": "porto/valongo",
-            "minBedrooms": 3,
+            "minBedrooms": 2,
             "maxPrice": 380000,
             "pageSize": 30,
         }

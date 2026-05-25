@@ -14,9 +14,11 @@ class SapoCasaScraper(BaseScraper):
     base_url = "https://casa.sapo.pt"
 
     SEARCH_URLS = [
+        "https://casa.sapo.pt/comprar-apartamentos/t2/valongo/ermesinde/",
         "https://casa.sapo.pt/comprar-apartamentos/t3/valongo/ermesinde/",
         "https://casa.sapo.pt/comprar-apartamentos/t3/valongo/",
         "https://casa.sapo.pt/comprar-moradias/t3/valongo/ermesinde/",
+        "https://casa.sapo.pt/comprar-moradias/t2/valongo/ermesinde/",
     ]
 
     def search(self) -> List[Property]:

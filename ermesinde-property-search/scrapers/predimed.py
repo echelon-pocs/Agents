@@ -15,9 +15,9 @@ class PredimedScraper(BaseScraper):
     base_url = "https://www.predimed.pt"
 
     SEARCH_URLS = [
-        "https://www.predimed.pt/venda/apartamentos/porto/valongo/?quartos_min=3&preco_max=380000",
-        "https://www.predimed.pt/venda/moradias/porto/valongo/?quartos_min=3&preco_max=380000",
-        "https://www.predimed.pt/venda/apartamentos/porto/gondomar/?quartos_min=3&preco_max=380000",
+        "https://www.predimed.pt/venda/apartamentos/porto/valongo/?quartos_min=2&preco_max=380000",
+        "https://www.predimed.pt/venda/moradias/porto/valongo/?quartos_min=2&preco_max=380000",
+        "https://www.predimed.pt/venda/apartamentos/porto/gondomar/?quartos_min=2&preco_max=380000",
     ]
 
     def search(self) -> List[Property]:

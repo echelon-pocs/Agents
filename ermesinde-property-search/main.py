@@ -37,7 +37,7 @@ logging.basicConfig(
 logger = logging.getLogger("main")
 
 # ── constants ─────────────────────────────────────────────────────────────────
-MIN_ROOMS = 3
+MIN_ROOMS = 2
 MAX_PRICE = 380_000
 MAX_DETAIL_FETCHES = 20   # max detail-page HTTP calls per run
 ZERO_THRESHOLD_JSONLD = 2

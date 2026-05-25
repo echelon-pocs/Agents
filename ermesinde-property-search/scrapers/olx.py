@@ -17,6 +17,7 @@ class OlxScraper(BaseScraper):
     SEARCH_URLS = [
         "https://www.olx.pt/imoveis/apartamento-casa-a-venda/valongo-porto/?search%5Bfilter_float_price%3Ato%5D=380000",
         "https://www.olx.pt/imoveis/q-ermesinde/?search%5Bfilter_float_price%3Ato%5D=380000&search%5Bfilter_enum_category%5D=imoveis",
+        "https://www.olx.pt/imoveis/comprar/valongo/?search%5Bfilter_float_price%3Ato%5D=380000",
     ]
 
     def search(self) -> List[Property]:
@@ -51,17 +52,32 @@ class OlxScraper(BaseScraper):
             return None
         try:
             data = json.loads(script.string)
-            ads = (
-                data.get("props", {})
-                .get("pageProps", {})
-                .get("ads", [])
-            )
+            page_props = data.get("props", {}).get("pageProps", {})
+            ads = self._find_ads(page_props)
             if not ads:
                 return None
             return [p for p in (self._parse_ad(ad) for ad in ads) if p]
         except Exception as e:
             logger.debug(f"[{self.name}] Next.js parse failed: {e}")
             return None
+
+    @staticmethod
+    def _find_ads(page_props: dict) -> list:
+        """Try multiple known paths for OLX's ads array."""
+        candidates = [
+            page_props.get("ads"),
+            page_props.get("listings"),
+            page_props.get("data", {}).get("ads") if isinstance(page_props.get("data"), dict) else None,
+            page_props.get("data", {}).get("listings") if isinstance(page_props.get("data"), dict) else None,
+            (page_props.get("initialState") or {}).get("listing", {}).get("ads"),
+            (page_props.get("initialState") or {}).get("listing", {}).get("listings"),
+            (page_props.get("initialState") or {}).get("listing", {}).get("items"),
+            (page_props.get("searchAds") or {}).get("ads"),
+        ]
+        for c in candidates:
+            if isinstance(c, list) and c:
+                return c
+        return []
 
     def _parse_ad(self, ad: dict) -> Optional[Property]:
         url = ad.get("url", "")

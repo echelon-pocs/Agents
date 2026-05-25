@@ -58,13 +58,14 @@ class ClaudeSearchScraper(BaseScraper):
 
     def _search_site(self, client, site: str) -> List[Property]:
         prompt = (
-            f"Search {site} for apartments and houses for sale near Ermesinde and Valongo, "
-            f"Porto district, Portugal. Requirements: T3 or more bedrooms (3+ rooms), "
-            f"maximum price 380,000 euros.\n\n"
-            f"Return ONLY a JSON array (no markdown, no explanation) with each listing:\n"
+            f"Search {site} for properties (apartments and houses) for sale in or near "
+            f"Ermesinde, Valongo, Porto, Portugal. Include T2, T3, T4 and larger. "
+            f"Price up to 400,000 euros.\n\n"
+            f"Return a JSON array with ALL listings you find. Each item:\n"
             f'[{{"url":"https://...","title":"...","price":250000,"rooms":3,'
-            f'"area_m2":95,"location":"Ermesinde","description":"brief description"}}]\n\n'
-            f"If no listings found, return: []"
+            f'"area_m2":95,"location":"Ermesinde","description":"..."}}]\n\n'
+            f"Return only raw JSON, no markdown fences, no explanation. "
+            f"If nothing found, return []."
         )
 
         try:
@@ -75,8 +76,18 @@ class ClaudeSearchScraper(BaseScraper):
                 messages=[{"role": "user", "content": prompt}],
             )
 
-            text = "".join(b.text for b in resp.content if hasattr(b, "text"))
+            # Collect text from all text blocks (web_search tool may add ToolUseBlocks)
+            text = "".join(
+                getattr(b, "text", "") for b in resp.content
+            ).strip()
+
+            if not text:
+                logger.debug(f"[ClaudeSearch/{site}] empty response (stop_reason={resp.stop_reason})")
+                return []
+
             listings = self._parse_json(text)
+            if not listings:
+                logger.debug(f"[ClaudeSearch/{site}] JSON parse failed; raw text: {text[:300]}")
 
             props = []
             site_label = site.split(".")[0].capitalize()
@@ -93,6 +104,9 @@ class ClaudeSearchScraper(BaseScraper):
             return []
 
     def _parse_json(self, text: str) -> list:
+        import re
+        # Strip markdown code fences
+        text = re.sub(r"```(?:json)?\s*", "", text, flags=re.IGNORECASE).strip()
         start = text.find("[")
         end = text.rfind("]")
         if start == -1 or end == -1:

@@ -15,15 +15,15 @@ class EraScraper(BaseScraper):
     base_url = "https://www.era.pt"
 
     SEARCH_URLS = [
-        "https://www.era.pt/comprar/habitacao/porto/valongo/?quartos=3&preco-max=380000",
-        "https://www.era.pt/comprar/habitacao/porto/gondomar/?quartos=3&preco-max=380000",
+        "https://www.era.pt/comprar/habitacao/porto/valongo/?quartos=2&preco-max=380000",
+        "https://www.era.pt/comprar/habitacao/porto/gondomar/?quartos=2&preco-max=380000",
     ]
 
     # ERA also exposes a JSON endpoint via their search API
     API_URL = (
         "https://www.era.pt/api/listing/search?"
         "transactionType=buy&propertyType=residential"
-        "&location=valongo&minBedrooms=3&maxPrice=380000&pageSize=30"
+        "&location=valongo&minBedrooms=2&maxPrice=380000&pageSize=30"
     )
 
     def search(self) -> List[Property]:
