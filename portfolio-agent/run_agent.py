@@ -668,6 +668,22 @@ Section order and EXACT header names to write:
 
   SETUPS
   ← Tier 1 (WTI, SPX) only. Write "None." if empty.
+    Each setup MUST start with EXACTLY "SYMBOL LONG" or "SYMBOL SHORT"
+    on its own line (no extra text on that first line). Example:
+
+    WTI LONG
+    Status: WAITING
+    Range: 88.00-92.00
+    Stop: 84.00
+    Target: 100.00
+    Note: one short context line
+
+    SPX SHORT
+    Status: APPROACHING
+    Range: 7500-7550
+    Stop: 7650
+    Target: 7200
+    Note: one short context line
 
   CHANGES TODAY
   ← One bullet per change. Tags: NEW / ENTER / REVISED /
@@ -761,7 +777,13 @@ SILVER
 
 SETUPS
 ------------------------------
-<Tier 1 setups only, or "None.">
+<One card per setup. FIRST LINE must be exactly "SYMBOL LONG" or "SYMBOL SHORT" — nothing else.>
+WTI LONG
+Status: WAITING
+Range: X.XX-X.XX
+Stop: X.XX
+Target: X.XX
+Note: <one line>
 ------------------------------
 
 CHANGES TODAY

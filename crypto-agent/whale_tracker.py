@@ -68,8 +68,32 @@ ONDO_CONTRACT = "0xfAbA6f8e4a5E8Ab82F62fe7C39859FA577269BE3"
 ESCAN = "https://api.etherscan.io/v2/api"
 
 COINGECKO_IDS = {
-    "BTC": "bitcoin", "ETH": "ethereum", "SOL": "solana",
-    "XRP": "ripple", "SUI": "sui", "ONDO": "ondo-finance",
+    # Tier 1
+    "BTC":  "bitcoin",
+    "ETH":  "ethereum",
+    "SOL":  "solana",
+    "XRP":  "ripple",
+    "BNB":  "binancecoin",
+    "ONDO": "ondo-finance",
+    # Tier 2
+    "SUI":  "sui",
+    "DOGE": "dogecoin",
+    "ADA":  "cardano",
+    "AVAX": "avalanche-2",
+    "LINK": "chainlink",
+    "DOT":  "polkadot",
+    "ATOM": "cosmos",
+    "LTC":  "litecoin",
+    "BCH":  "bitcoin-cash",
+    "UNI":  "uniswap",
+    "AAVE": "aave",
+    "OP":   "optimism",
+    "ARB":  "arbitrum",
+    "APT":  "aptos",
+    "INJ":  "injective-protocol",
+    "TIA":  "celestia",
+    "HYPE": "hyperliquid",
+    "TAO":  "bittensor",
 }
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────

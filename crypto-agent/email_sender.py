@@ -247,9 +247,11 @@ def _render_card_line(line: str) -> str:
     stripped = line.strip()
     if ':' in stripped:
         return _render_kv_line(stripped)
-    # Narrative / continuation line — same font+color as kv-val, no divider
-    return (f'<div style="font-size:13px;padding:2px 0 2px 78px;'
-            f'color:#374151;line-height:1.5">{_colorize(stripped)}</div>')
+    # Continuation line: use kv layout with invisible key to stay aligned with value column
+    return (f'<div class="kv">'
+            f'<span class="kv-key" style="visibility:hidden">_</span>'
+            f'<span class="kv-val">{_colorize(stripped)}</span>'
+            f'</div>')
 
 
 # ── Main renderer ─────────────────────────────────────────────────────────────
