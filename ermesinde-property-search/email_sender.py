@@ -12,8 +12,6 @@ from scoring import score_label, score_color
 logger = logging.getLogger(__name__)
 
 RECIPIENTS = ["Sofia.nuns@gmail.com", "pedromiguelralves@gmail.com"]
-SMTP_HOST = "smtp.gmail.com"
-SMTP_PORT = 587
 
 
 # ── formatting helpers ────────────────────────────────────────────────────────
@@ -293,10 +291,10 @@ def send_email(
     scraper_health: dict = None,
     weekly_digest: list = None,
 ) -> bool:
-    sender = os.environ.get("EMAIL_SENDER")
-    password = os.environ.get("EMAIL_PASSWORD")
+    sender = os.environ.get("SMTP_USER") or os.environ.get("EMAIL_SENDER")
+    password = os.environ.get("SMTP_PASS") or os.environ.get("EMAIL_PASSWORD")
     if not sender or not password:
-        logger.error("EMAIL_SENDER and EMAIL_PASSWORD env vars must be set")
+        logger.error("SMTP_USER and SMTP_PASS env vars must be set")
         return False
 
     n_new = len(new_properties)
@@ -332,8 +330,10 @@ def send_email(
     msg.attach(MIMEText(text_body, "plain", "utf-8"))
     msg.attach(MIMEText(html, "html", "utf-8"))
 
+    smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+    smtp_port = int(os.environ.get("SMTP_PORT", 587))
     try:
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+        with smtplib.SMTP(smtp_host, smtp_port) as server:
             server.ehlo()
             server.starttls()
             server.login(sender, password)
