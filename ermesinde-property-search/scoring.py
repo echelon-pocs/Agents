@@ -8,29 +8,27 @@ from models import Property
 def score_property(prop: Property) -> int:
     s = 0
 
-    # Garage — 2 spots is a hard requirement
+    # Garage — any garage counts, 2+ spots is a bonus
     if prop.garage_spaces >= 2:
         s += 3
     elif prop.has_garage:
-        s += 1
+        s += 2
 
-    # Outdoor space (shared or private)
-    if prop.has_outdoor:
-        s += 1
-
-    # Balcony / terrace ≥ 20 m²
+    # Outdoor space / balcony / terrace
     if prop.balcony_area_m2 is not None:
         if prop.balcony_area_m2 >= 20:
             s += 2
         elif prop.balcony_area_m2 >= 10:
             s += 1
+    elif prop.has_outdoor:
+        s += 1
 
-    # Kitchen + living room combined ≥ 35 m² (from detail scraping)
+    # Kitchen + living room combined ≥ 20 m² (from detail scraping)
     combined = prop.raw_data.get("kitchen_living_combined_m2")
     if combined is not None:
         if combined >= 35:
             s += 2
-        elif combined >= 25:
+        elif combined >= 20:
             s += 1
 
     # Typology: T4+ is a bonus

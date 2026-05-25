@@ -487,7 +487,7 @@ class BaseScraper(ABC):
             try:
                 browser = pw.chromium.launch(headless=True)
             except Exception as e:
-                logger.warning(f"[{self.name}] Playwright browser cannot launch (missing system libs): {e}")
+                logger.warning(f"[{self.name}] Playwright browser cannot launch (missing system libs): {str(e).splitlines()[0]}")
                 return []
             ctx = browser.new_context(
                 user_agent=random.choice(_USER_AGENTS),

@@ -1,10 +1,8 @@
 """
-ClaudeSearch — web search + Claude Haiku extraction.
+ClaudeSearch — uses Claude's web_search tool (forced) to find listings.
 
-Search engine cascade (each tried in order until results found):
-  1. DuckDuckGo Lite  — GET, no JS required
-  2. DuckDuckGo HTML  — POST fallback when Lite is blocked
-  3. Bing             — final fallback
+Primary: web_search_20250305 tool with tool_choice=any (forces actual web search)
+Fallback: DuckDuckGo Lite → DDG HTML → Bing scraping (if web tool fails)
 
 Covers: Idealista, Supercasa, Imovirtual, ERA, RE/MAX, and a general Ermesinde query.
 """
@@ -30,7 +28,7 @@ _SEARCHES = [
     ("Supercasa",   "imoveis venda Ermesinde Valongo site:supercasa.pt"),
     ("ERA",         "imoveis venda Ermesinde Valongo site:era.pt"),
     ("Remax",       "imoveis venda Ermesinde Valongo site:remax.pt"),
-    ("General",     "apartamentos T2 T3 T4 venda Ermesinde Valongo porto"),
+    ("General",     "apartamentos T3 T4 venda Ermesinde Valongo porto"),
 ]
 
 
@@ -42,12 +40,12 @@ class ClaudeSearchScraper(BaseScraper):
         try:
             import anthropic
         except ImportError:
-            logger.warning("[ClaudeSearch] anthropic not installed — pip install anthropic")
+            logger.warning("[ClaudeSearch] anthropic not installed")
             return []
 
         api_key = os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
-            logger.warning("[ClaudeSearch] ANTHROPIC_API_KEY not set — skipping")
+            logger.warning("[ClaudeSearch] ANTHROPIC_API_KEY not set")
             return []
 
         client = anthropic.Anthropic(api_key=api_key)
@@ -56,12 +54,18 @@ class ClaudeSearchScraper(BaseScraper):
 
         for source_label, query in _SEARCHES:
             time.sleep(random.uniform(1.5, 3.0))
-            results_text = self._search(query)
-            if not results_text:
-                logger.warning(f"[ClaudeSearch/{source_label}] All search engines returned nothing for: {query[:60]}")
-                continue
 
-            found = self._extract_with_claude(client, source_label, results_text)
+            # Primary: force Claude's own web search tool
+            found = self._search_with_web_tool(client, source_label, query)
+
+            # Fallback: scrape search engines if web tool returned nothing
+            if not found:
+                results_text = self._search_engines(query)
+                if results_text:
+                    found = self._extract_with_claude(client, source_label, results_text)
+                else:
+                    logger.warning(f"[ClaudeSearch/{source_label}] all search methods returned nothing")
+
             for p in found:
                 if p.property_id not in seen:
                     seen.add(p.property_id)
@@ -70,9 +74,62 @@ class ClaudeSearchScraper(BaseScraper):
         logger.info(f"[ClaudeSearch] {len(props)} listings across {len(_SEARCHES)} searches")
         return props
 
-    # ── Search engine cascade ─────────────────────────────────────────────────
+    # ── Primary: Claude web_search tool ──────────────────────────────────────
 
-    def _search(self, query: str) -> str:
+    def _search_with_web_tool(self, client, source_label: str, query: str) -> List[Property]:
+        """Force Claude to use web_search_20250305, then parse JSON output."""
+        prompt = (
+            f"Search the web for: {query}\n\n"
+            "Find property listings for sale (apartamentos ou moradias à venda) "
+            "in Ermesinde or Valongo, Portugal. "
+            "Return ONLY a JSON array of listings found:\n"
+            '[{"url":"https://...","title":"T3 Apt Ermesinde","price":250000,'
+            '"rooms":3,"area_m2":95,"location":"Ermesinde","description":"..."}]\n'
+            "Only include listings with real property URLs. Return [] if none found."
+        )
+        try:
+            resp = client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=3000,
+                tools=[{"type": "web_search_20250305", "name": "web_search"}],
+                tool_choice={"type": "any"},
+                messages=[{"role": "user", "content": prompt}],
+            )
+
+            # If the API returned tool_use stop_reason, do a second turn
+            if resp.stop_reason == "tool_use":
+                messages = [
+                    {"role": "user", "content": prompt},
+                    {"role": "assistant", "content": resp.content},
+                ]
+                tool_results = [
+                    {"type": "tool_result", "tool_use_id": b.id, "content": ""}
+                    for b in resp.content
+                    if hasattr(b, "type") and b.type == "tool_use"
+                ]
+                if tool_results:
+                    messages.append({"role": "user", "content": tool_results})
+                    resp = client.messages.create(
+                        model="claude-haiku-4-5-20251001",
+                        max_tokens=3000,
+                        tools=[{"type": "web_search_20250305", "name": "web_search"}],
+                        messages=messages,
+                    )
+
+            text = "".join(getattr(b, "text", "") for b in resp.content).strip()
+            logger.warning(f"[ClaudeSearch/{source_label}] web tool response: {text[:250]!r}")
+
+            listings = self._parse_json(text)
+            result = [p for p in (self._to_property(i, source_label) for i in listings) if p]
+            logger.info(f"[ClaudeSearch/{source_label}] {len(result)} listings (web tool)")
+            return result
+        except Exception as e:
+            logger.debug(f"[ClaudeSearch/{source_label}] web tool failed: {e}")
+            return []
+
+    # ── Fallback: search engine scraping ─────────────────────────────────────
+
+    def _search_engines(self, query: str) -> str:
         """Try DDG Lite → DDG HTML → Bing, return first non-empty result."""
         result = self._ddg_lite(query)
         if result:
@@ -98,7 +155,6 @@ class ClaudeSearchScraper(BaseScraper):
                 timeout=15,
             )
             if not resp.ok:
-                logger.debug(f"[ClaudeSearch] DDG Lite HTTP {resp.status_code}")
                 return ""
             return self._parse_ddg_lite(resp.text)
         except Exception as e:
@@ -106,7 +162,6 @@ class ClaudeSearchScraper(BaseScraper):
             return ""
 
     def _ddg_html(self, query: str) -> str:
-        """DuckDuckGo HTML endpoint — POST with form data, no JS required."""
         headers = {
             "User-Agent": random.choice(_USER_AGENTS),
             "Accept": "text/html,application/xhtml+xml",
@@ -123,7 +178,6 @@ class ClaudeSearchScraper(BaseScraper):
                 timeout=15,
             )
             if not resp.ok:
-                logger.debug(f"[ClaudeSearch] DDG HTML HTTP {resp.status_code}")
                 return ""
             return self._parse_ddg_html_results(resp.text)
         except Exception as e:
@@ -144,14 +198,11 @@ class ClaudeSearchScraper(BaseScraper):
                 timeout=15,
             )
             if not resp.ok:
-                logger.debug(f"[ClaudeSearch] Bing HTTP {resp.status_code}")
                 return ""
             return self._parse_bing_html(resp.text)
         except Exception as e:
             logger.debug(f"[ClaudeSearch] Bing error: {e}")
             return ""
-
-    # ── HTML parsers ──────────────────────────────────────────────────────────
 
     @staticmethod
     def _parse_ddg_lite(html: str) -> str:
@@ -168,7 +219,6 @@ class ClaudeSearchScraper(BaseScraper):
                     snippet = sib.get_text(" ", strip=True)[:280]
             if href and title:
                 snippets.append(f"URL: {href}\nTitle: {title}\nSnippet: {snippet}")
-
         if not snippets:
             for a in soup.find_all("a", href=True):
                 href = a.get("href", "")
@@ -178,7 +228,6 @@ class ClaudeSearchScraper(BaseScraper):
                         snippets.append(f"URL: {href}\nTitle: {title}")
                         if len(snippets) >= 10:
                             break
-
         return "\n---\n".join(snippets)
 
     @staticmethod
@@ -219,19 +268,18 @@ class ClaudeSearchScraper(BaseScraper):
                 snippets.append(f"URL: {href}\nTitle: {title}\nSnippet: {snippet}")
         return "\n---\n".join(snippets)
 
-    # ── Claude extraction ─────────────────────────────────────────────────────
+    # ── Claude extraction from search engine text ─────────────────────────────
 
     def _extract_with_claude(self, client, source: str, results_text: str) -> List[Property]:
         prompt = (
             "Extract property listings for sale in Ermesinde or Valongo, Portugal "
             "from these web search result snippets.\n\n"
             f"Search results:\n{results_text[:3500]}\n\n"
-            "Return ONLY a JSON array. Each item must have a valid URL:\n"
+            "Return ONLY a JSON array:\n"
             '[{"url":"https://...","title":"T3 Apt Ermesinde","price":250000,'
             '"rooms":3,"area_m2":95,"location":"Ermesinde","description":"..."}]\n'
-            "Only include price/rooms/area when clearly stated in the snippet. "
-            "Skip non-property URLs (news, agents home pages, etc.). "
-            "Return [] if no valid listings found."
+            "Only include price/rooms/area when clearly stated. "
+            "Skip non-property URLs. Return [] if none found."
         )
         try:
             resp = client.messages.create(
@@ -240,19 +288,12 @@ class ClaudeSearchScraper(BaseScraper):
                 messages=[{"role": "user", "content": prompt}],
             )
             text = "".join(getattr(b, "text", "") for b in resp.content).strip()
-            logger.warning(f"[ClaudeSearch/{source}] raw Claude response: {text[:200]!r}")
-
             listings = self._parse_json(text)
-            result = []
-            for item in listings:
-                p = self._to_property(item, source)
-                if p:
-                    result.append(p)
-
-            logger.info(f"[ClaudeSearch/{source}] {len(result)} listings")
+            result = [p for p in (self._to_property(i, source) for i in listings) if p]
+            logger.info(f"[ClaudeSearch/{source}] {len(result)} listings (engine fallback)")
             return result
         except Exception as e:
-            logger.warning(f"[ClaudeSearch/{source}] Claude extraction failed: {e}")
+            logger.warning(f"[ClaudeSearch/{source}] extraction failed: {e}")
             return []
 
     # ── helpers ───────────────────────────────────────────────────────────────

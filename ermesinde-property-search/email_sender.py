@@ -262,8 +262,8 @@ def build_html_email(
           <p style="margin:6px 0 0;opacity:0.85;">{today} — {total_shown} anúncio(s) para ver</p>
         </div>
         <div style="background:#e8f0fe;padding:12px 24px;font-size:13px;color:#333;">
-          <strong>Critérios:</strong> T3+, varanda ≥20 m², cozinha+sala ≥35 m², exterior,
-          garagem ≥2 lugares, ≤380 000 €, ≤10 km de Ermesinde &nbsp;|&nbsp;
+          <strong>Critérios:</strong> T3+, varanda ou terraço ≥20 m², cozinha+sala ≥20 m²,
+          garagem, ≤380 000 €, ≤10 km de Ermesinde &nbsp;|&nbsp;
           Base de dados: {total_known} imóveis
         </div>
         <div style="padding:20px 0;">
