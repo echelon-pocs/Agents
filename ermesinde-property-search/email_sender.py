@@ -22,6 +22,18 @@ def _fmt_price(price) -> str:
     return f"{price:,.0f} €".replace(",", ".")
 
 
+def _fmt_price_prop(prop: Property) -> str:
+    if prop.price is not None:
+        return _fmt_price(prop.price)
+    pf = prop.raw_data.get("price_from")
+    pt = prop.raw_data.get("price_to")
+    if pf and pt:
+        return f"A partir de {_fmt_price(pf)} até {_fmt_price(pt)}"
+    if pf:
+        return f"A partir de {_fmt_price(pf)}"
+    return "Preço não indicado"
+
+
 def _fmt_area(area) -> str:
     return f"{area:.0f} m²" if area else "—"
 
@@ -98,8 +110,9 @@ def _property_card(prop: Property, is_price_drop: bool = False) -> str:
     amenities_row = ""
     if prop.amenities_detail:
         amenities_row = (
-            f'<tr><td style="padding:4px 0;color:#555;">Comodidades</td>'
-            f'<td style="padding:4px 0;">{_stars(prop.amenities_score)} {prop.amenities_detail}</td></tr>'
+            f'<tr><td style="padding:4px 0;color:#555;vertical-align:top;">Comodidades</td>'
+            f'<td style="padding:4px 0;">{_stars(prop.amenities_score)} {prop.amenities_detail}'
+            f'<br><span style="font-size:11px;color:#aaa;">nº de locais num raio de 800 m</span></td></tr>'
         )
 
     outdoor = "✔ Sim" if prop.has_outdoor else "Não mencionado"
@@ -115,7 +128,7 @@ def _property_card(prop: Property, is_price_drop: bool = False) -> str:
         {score_badge}
       </h2>
       <p style="margin:0 0 12px;color:#666;font-size:13px;">📍 {prop.location}{dist_html} &nbsp;|&nbsp; {prop.source}</p>
-      <p style="margin:0 0 16px;font-size:22px;font-weight:bold;color:#2e7d32;">{_fmt_price(prop.price)}</p>
+      <p style="margin:0 0 16px;font-size:22px;font-weight:bold;color:#2e7d32;">{_fmt_price_prop(prop)}</p>
       <table style="border-collapse:collapse;width:100%;font-size:14px;">
         <tr>
           <td style="padding:4px 0;color:#555;width:160px;">Tipologia</td>
@@ -247,7 +260,6 @@ def build_html_email(
         </div>"""
 
     digest_html = _weekly_digest_html(weekly_digest or [])
-    health_html = _health_html(scraper_health or {})
 
     platforms = "Idealista · Imovirtual · OLX · Casa.sapo · Supercasa · ERA · RE/MAX · CustoJusto · Century21 · BPI · Predimed · LugarCerto"
 
@@ -271,7 +283,6 @@ def build_html_email(
           {drop_section}
           {new_cards}
           {digest_html}
-          {health_html}
         </div>
         <div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px;font-size:12px;color:#999;text-align:center;">
           {platforms}<br>
@@ -317,7 +328,7 @@ def send_email(
     for label, group in [("NOVO", new_properties), ("DESCIDA DE PREÇO", price_drops)]:
         for p in group:
             drop = f" (era {_fmt_price(p.price_dropped_from)})" if p.price_dropped_from else ""
-            text_body += f"[{label}] {p.title}\n  {_fmt_price(p.price)}{drop} | {p.location} | Score {p.match_score}\n  {p.url}\n\n"
+            text_body += f"[{label}] {p.title}\n  {_fmt_price_prop(p)}{drop} | {p.location} | Score {p.match_score}\n  {p.url}\n\n"
 
     html = build_html_email(
         new_properties=new_properties,

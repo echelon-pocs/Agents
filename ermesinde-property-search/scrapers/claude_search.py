@@ -84,7 +84,10 @@ class ClaudeSearchScraper(BaseScraper):
             "in Ermesinde or Valongo, Portugal. "
             "Return ONLY a JSON array of listings found:\n"
             '[{"url":"https://...","title":"T3 Apt Ermesinde","price":250000,'
+            '"price_from":null,"price_to":null,'
             '"rooms":3,"area_m2":95,"location":"Ermesinde","description":"..."}]\n'
+            "Use price for a single fixed price. Use price_from/price_to for ranges "
+            '(e.g. "a partir de 200000€" → price_from=200000, price=null). '
             "Only include listings with real property URLs. Return [] if none found."
         )
         try:
@@ -277,7 +280,9 @@ class ClaudeSearchScraper(BaseScraper):
             f"Search results:\n{results_text[:3500]}\n\n"
             "Return ONLY a JSON array:\n"
             '[{"url":"https://...","title":"T3 Apt Ermesinde","price":250000,'
+            '"price_from":null,"price_to":null,'
             '"rooms":3,"area_m2":95,"location":"Ermesinde","description":"..."}]\n'
+            "Use price for a single fixed price. Use price_from/price_to for ranges. "
             "Only include price/rooms/area when clearly stated. "
             "Skip non-property URLs. Return [] if none found."
         )
@@ -322,6 +327,18 @@ class ClaudeSearchScraper(BaseScraper):
         except (ValueError, TypeError):
             pass
 
+        price_from = None
+        try:
+            price_from = float(item["price_from"]) if item.get("price_from") else None
+        except (ValueError, TypeError):
+            pass
+
+        price_to = None
+        try:
+            price_to = float(item["price_to"]) if item.get("price_to") else None
+        except (ValueError, TypeError):
+            pass
+
         rooms = None
         try:
             rooms = int(item["rooms"]) if item.get("rooms") else None
@@ -343,10 +360,16 @@ class ClaudeSearchScraper(BaseScraper):
         has_outdoor = self.detect_outdoor(combined)
         balcony = self.detect_balcony_area(combined)
 
+        raw: dict = {}
+        if price_from:
+            raw["price_from"] = price_from
+        if price_to:
+            raw["price_to"] = price_to
+
         return Property(
             url=url, source=source, title=title, price=price,
             location=location, rooms=rooms, area_m2=area,
             balcony_area_m2=balcony, has_garage=has_garage,
             garage_spaces=garage_spaces, has_outdoor=has_outdoor,
-            description=description,
+            description=description, raw_data=raw,
         )
