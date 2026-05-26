@@ -89,7 +89,8 @@ class ClaudeSearchScraper(BaseScraper):
             '"rooms":3,"area_m2":95,"location":"Ermesinde","description":"..."}]\n'
             "Use price for a single fixed price. Use price_from/price_to for ranges "
             '(e.g. "a partir de 200000€" → price_from=200000, price=null). '
-            "Only include listings with real property URLs. Return [] if none found."
+            "IMPORTANT: only include URLs you can see directly in the search results — "
+            "do NOT construct, infer or guess URLs. Return [] if none found."
         )
         try:
             resp = client.messages.create(
@@ -285,6 +286,7 @@ class ClaudeSearchScraper(BaseScraper):
             '"rooms":3,"area_m2":95,"location":"Ermesinde","description":"..."}]\n'
             "Use price for a single fixed price. Use price_from/price_to for ranges. "
             "Only include price/rooms/area when clearly stated. "
+            "IMPORTANT: only include URLs visible in the snippets above — do NOT construct or infer URLs. "
             "Skip non-property URLs. Return [] if none found."
         )
         try:
@@ -301,6 +303,51 @@ class ClaudeSearchScraper(BaseScraper):
         except Exception as e:
             logger.warning(f"[ClaudeSearch/{source}] extraction failed: {e}")
             return []
+
+    # ── URL helpers ───────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _normalize_url(url: str) -> str:
+        """Fix known bad URL patterns that Claude's web search returns."""
+        # remax.pt: remove /pt/ locale prefix and trailing agent token
+        # Bad:  remax.pt/pt/imoveis/venda-moradia-t3-porto-valongo/123911202-28/FIjlEkCD-sL0N2l5razp6kXspSOR9E03
+        # Good: remax.pt/imoveis/venda-moradia-t3-porto-valongo/123911202-28
+        if "remax.pt" in url:
+            url = re.sub(r"(remax\.pt)/pt/", r"\1/", url)
+            url = re.sub(r"(remax\.pt/imoveis/[^/]+/\d+-\d+)/[A-Za-z0-9_-]{8,}$", r"\1", url)
+        # idealista.pt: strip trailing tracking params after listing ID
+        # Bad:  idealista.pt/imovel/12345678/?utm_source=...
+        # Good: idealista.pt/imovel/12345678/
+        if "idealista.pt" in url:
+            url = re.sub(r"(\d{8,}/).*", r"\1", url)
+        # imovirtual.com: strip query strings from detail pages
+        if "imovirtual.com" in url and "/anuncio/" in url:
+            url = url.split("?")[0]
+        return url
+
+    def _validate_url(self, url: str) -> bool:
+        """
+        Returns False if the URL is a confirmed dead link.
+        - HTTP 404 → dead
+        - Redirected to site root/homepage → listing no longer exists
+        Conservative: returns True on network errors or blocks (403/429).
+        """
+        try:
+            resp = self.session.get(url, timeout=8, allow_redirects=True, stream=True)
+            # Read a small chunk so we at least get the final redirected URL
+            next(resp.iter_content(512), None)
+            resp.close()
+            if resp.status_code == 404:
+                logger.debug(f"[ClaudeSearch] dead URL (404): {url}")
+                return False
+            # Detect redirect to homepage — listing no longer exists
+            final_path = urlparse(resp.url).path.rstrip("/")
+            if final_path in ("", "/pt", "/en") and urlparse(url).path.rstrip("/") != final_path:
+                logger.debug(f"[ClaudeSearch] dead URL (→ homepage): {url}")
+                return False
+            return True
+        except Exception:
+            return True  # network error or block — keep conservatively
 
     # ── helpers ───────────────────────────────────────────────────────────────
 
@@ -320,6 +367,11 @@ class ClaudeSearchScraper(BaseScraper):
         if not url or not url.startswith("http"):
             return None
         if any(skip in url for skip in ["duckduckgo.com", "google.com", "bing.com", "wikipedia"]):
+            return None
+
+        url = self._normalize_url(url)
+        if not self._validate_url(url):
+            logger.info(f"[ClaudeSearch/{source}] discarding dead URL: {url}")
             return None
 
         price = None
