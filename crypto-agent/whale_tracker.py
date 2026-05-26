@@ -125,13 +125,20 @@ _BINANCE_SPOT = {
     "LTC": "LTCUSDT", "BCH": "BCHUSDT", "UNI": "UNIUSDT",
     "AAVE": "AAVEUSDT", "OP": "OPUSDT", "ARB": "ARBUSDT",
     "APT": "APTUSDT", "INJ": "INJUSDT", "TIA": "TIAUSDT",
-    "HYPE": "HYPEUSDT", "TAO": "TAOUSDT", "ONDO": "ONDOUSDT",
+    "ONDO": "ONDOUSDT",
+    # Note: HYPE and TAO are NOT on Binance — use MEXC fallback below
+}
+
+# MEXC spot symbols for tokens not on Binance (HYPE, TAO, etc.)
+_MEXC_SPOT = {
+    "HYPE": "HYPEUSDT",
+    "TAO":  "TAOUSDT",
 }
 
 
 def _fetch_binance_spot_prices(symbols):
     # type: (list) -> Dict[str, float]
-    """Bulk-fetch Binance spot prices for a list of our symbol names."""
+    """Bulk-fetch Binance spot prices. Only queries symbols known to be on Binance."""
     pairs = [_BINANCE_SPOT[s] for s in symbols if s in _BINANCE_SPOT]
     if not pairs:
         return {}
@@ -150,13 +157,37 @@ def _fetch_binance_spot_prices(symbols):
                 for sym in symbols
                 if sym in _BINANCE_SPOT and _BINANCE_SPOT[sym] in pair_to_price}
     except Exception as e:
-        print(f"[Prices] Binance spot fallback error: {e}")
+        print(f"[Prices] Binance fallback error: {e}")
         return {}
+
+
+def _fetch_mexc_spot_prices(symbols):
+    # type: (list) -> Dict[str, float]
+    """Fetch individual MEXC spot prices for tokens not on Binance (HYPE, TAO)."""
+    result = {}
+    for sym in symbols:
+        pair = _MEXC_SPOT.get(sym)
+        if not pair:
+            continue
+        try:
+            r = requests.get(
+                "https://api.mexc.com/api/v3/ticker/price",
+                params={"symbol": pair},
+                timeout=8,
+                headers=CHROME_HDR,
+            )
+            if r.status_code == 200:
+                price = float(r.json().get("price", 0))
+                if price:
+                    result[sym] = price
+        except Exception as e:
+            print(f"[Prices] MEXC spot {sym} error: {e}")
+    return result
 
 
 def get_prices(prices: Dict[str, float] = None) -> Dict[str, float]:
     """Fetch current USD prices for all tracked assets.
-    Primary: CoinGecko (free). Fallback: Binance spot for any missing assets.
+    Primary: CoinGecko. Fallback 1: Binance spot. Fallback 2: MEXC spot (HYPE, TAO).
     If a pre-fetched dict is passed, return it immediately (cache passthrough).
     """
     if prices is not None:
@@ -174,15 +205,23 @@ def get_prices(prices: Dict[str, float] = None) -> Dict[str, float]:
             if price:
                 result[sym] = price
 
-    # Binance spot fallback for anything missing or zero
-    missing = [s for s in COINGECKO_IDS if not result.get(s)]
-    if missing:
-        print(f"[Prices] CoinGecko missing {missing} — trying Binance spot")
-        binance_prices = _fetch_binance_spot_prices(missing)
-        result.update(binance_prices)
-        still_missing = [s for s in missing if not result.get(s)]
-        if still_missing:
-            print(f"[Prices] WARNING: no price found for {still_missing}")
+    # Binance spot fallback for mainstream tokens missing from CoinGecko
+    missing_binance = [s for s in COINGECKO_IDS
+                       if not result.get(s) and s in _BINANCE_SPOT]
+    if missing_binance:
+        print(f"[Prices] CoinGecko miss → Binance: {missing_binance}")
+        result.update(_fetch_binance_spot_prices(missing_binance))
+
+    # MEXC spot fallback for HYPE, TAO and other non-Binance tokens
+    missing_mexc = [s for s in COINGECKO_IDS
+                    if not result.get(s) and s in _MEXC_SPOT]
+    if missing_mexc:
+        print(f"[Prices] CoinGecko/Binance miss → MEXC spot: {missing_mexc}")
+        result.update(_fetch_mexc_spot_prices(missing_mexc))
+
+    still_missing = [s for s in COINGECKO_IDS if not result.get(s)]
+    if still_missing:
+        print(f"[Prices] WARNING: no price for {still_missing}")
 
     return result
 
