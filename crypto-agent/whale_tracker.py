@@ -130,10 +130,15 @@ _BINANCE_SPOT = {
 }
 
 # MEXC spot symbols for tokens not on Binance (HYPE, TAO, etc.)
+# These are fetched from MEXC *always* — not just as a fallback —
+# because CoinGecko free tier may return stale cached prices for newer tokens.
 _MEXC_SPOT = {
     "HYPE": "HYPEUSDT",
     "TAO":  "TAOUSDT",
 }
+
+# Assets that should always use MEXC as primary (bypasses CoinGecko for these)
+_ALWAYS_MEXC = set(_MEXC_SPOT.keys())
 
 
 def _fetch_binance_spot_prices(symbols):
@@ -195,29 +200,30 @@ def get_prices(prices: Dict[str, float] = None) -> Dict[str, float]:
 
     result = {}  # type: Dict[str, float]
 
-    # CoinGecko — fetch all in one call
-    ids = ",".join(COINGECKO_IDS.values())
+    # Always fetch MEXC-primary assets first (HYPE, TAO) — never rely on CoinGecko
+    # for these because CoinGecko free tier may return stale cached prices.
+    mexc_primary = _fetch_mexc_spot_prices(list(_ALWAYS_MEXC))
+    result.update(mexc_primary)
+    if mexc_primary:
+        print(f"[Prices] MEXC primary: " +
+              " ".join(f"{s}={v}" for s, v in mexc_primary.items()))
+
+    # CoinGecko — fetch remaining assets (skip ALWAYS_MEXC)
+    cg_ids = {s: cg for s, cg in COINGECKO_IDS.items() if s not in _ALWAYS_MEXC}
+    ids = ",".join(cg_ids.values())
     data = _get("https://api.coingecko.com/api/v3/simple/price",
                 params={"ids": ids, "vs_currencies": "usd"})
     if data:
-        for sym, cg_id in COINGECKO_IDS.items():
+        for sym, cg_id in cg_ids.items():
             price = data.get(cg_id, {}).get("usd", 0)
             if price:
                 result[sym] = price
 
-    # Binance spot fallback for mainstream tokens missing from CoinGecko
-    missing_binance = [s for s in COINGECKO_IDS
-                       if not result.get(s) and s in _BINANCE_SPOT]
+    # Binance spot fallback for mainstream tokens still missing after CoinGecko
+    missing_binance = [s for s in cg_ids if not result.get(s) and s in _BINANCE_SPOT]
     if missing_binance:
         print(f"[Prices] CoinGecko miss → Binance: {missing_binance}")
         result.update(_fetch_binance_spot_prices(missing_binance))
-
-    # MEXC spot fallback for HYPE, TAO and other non-Binance tokens
-    missing_mexc = [s for s in COINGECKO_IDS
-                    if not result.get(s) and s in _MEXC_SPOT]
-    if missing_mexc:
-        print(f"[Prices] CoinGecko/Binance miss → MEXC spot: {missing_mexc}")
-        result.update(_fetch_mexc_spot_prices(missing_mexc))
 
     still_missing = [s for s in COINGECKO_IDS if not result.get(s)]
     if still_missing:
