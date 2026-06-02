@@ -1,0 +1,32 @@
+# Hermes Agent — configuration
+# All tuneable parameters live here. Secrets are in Modal secrets / .env.
+
+agent:
+  name: Hermes
+  soul_file: SOUL.md          # relative to hermes-agent/ root
+  max_tool_rounds: 8          # max LLM→tool→LLM loops per message
+  temperature: 0.7
+  max_tokens: 2048
+  context_window_turns: 30    # conversation turns to load from SQLite
+
+models:
+  # OpenRouter model IDs — both are on the free tier
+  primary:  deepseek/deepseek-chat-v3-0324:free
+  fallback: meta-llama/llama-4-maverick:free
+  timeout_s: 45
+
+openrouter:
+  base_url: https://openrouter.ai/api/v1
+  # shown in OpenRouter dashboard — helps with rate-limit attribution
+  http_referer: https://github.com/echelon-pocs/agents
+  x_title: Hermes Agent
+
+modal:
+  app_name: hermes-agent
+  volume_name: hermes-data
+  db_path: /data/hermes.db
+  container_timeout_s: 90     # Modal function timeout
+
+telegram:
+  parse_mode: Markdown
+  max_response_length: 4000   # Telegram cap is 4096; leave headroom

@@ -1,0 +1,7 @@
+# Runtime dependencies (also declared in modal_app.py Image definition)
+openai>=1.0.0
+pyyaml
+requests
+
+# Modal CLI (local dev / deployment)
+modal>=0.64.0
