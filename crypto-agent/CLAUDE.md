@@ -136,7 +136,7 @@ BTC has run on a ~4-year cycle anchored to halvings (2012-11, 2016-07, 2020-05, 
 **Required output fields (in state + email CYCLE VIEW section):**
 - `cycle_phase`: EARLY_BULL | LATE_BULL | DISTRIBUTION | BEAR | ACCUMULATION | PRE_HALVING
 - `cycle_year`: 1 | 2 | 3 | 4 (years since last halving)
-- `cycle_thesis`: one-line plain-English thesis — e.g. "Y3 bear; expect $40–50k bottom Q3–Q4 2026 before Y4 accumulation"
+- `cycle_thesis`: one-line plain-English thesis derived from current data — state the cycle phase, what historical drawdown range implies for the current BTC price (−70% to −85% from the confirmed cycle peak), and the expected timing. Do NOT anchor to a specific price target from prior runs or prior context. Recalculate each run using: peak_price × (1 − drawdown%). Example format: "Y3 bear; historical −70–85% drawdown from $X peak implies bottom zone $Y–$Z; timing mid-to-late 2026"
 - `cycle_bias_impact`: how the cycle phase shifts `bias_long` (e.g. "BEARISH override for next 3–6 months")
 
 **Cycle vs. short-term conflict rule (critical):**
@@ -162,6 +162,16 @@ Whale Score = (BULLISH - BEARISH) / total
 No data for an asset → note it, weight TA at 100%.
 Count wallets: 1 = LOW, 3–4 = MEDIUM, 6+ = HIGH on whale layer alone.
 Opening > closing (closing may be profit-taking, opening is a fresh bet).
+
+**Exchange flow classification** (from `direction` field on each transfer):
+- `DEPOSIT_TO_EXCHANGE` = whale moving coins to exchange → selling pressure → bearish weight
+- `WITHDRAWAL_FROM_EXCHANGE` = exchange → cold wallet → accumulation → bullish weight
+- `WALLET_TO_WALLET` = neutral; context-dependent
+
+**DEX swaps** (from `dex_swaps` in whale data):
+- Profitable wallets swapping on Uniswap V3 → highest directional conviction
+- BUY action = accumulating; SELL action = distributing
+- Combine with `profitable_wallet_signals` for cross-confirmation
 
 ### STEP 4 — Technical Analysis
 Use prices from the provided whale data. **Fixed analysis list:** BTC ETH XRP SUI SOL WLD DOGE ADA ONDO TRX. Run full analysis on all 10. For setup discovery (Step 5), also scan the broader market for any coin showing exceptional whale accumulation or a clean technical setup — these can appear as setup recommendations even if not on the fixed list.

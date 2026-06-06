@@ -30,8 +30,9 @@ from utils import sanitize_state, avg_into_position, reduce_position  # noqa: E4
 
 def _slim_transfer(tx):
     return {k: v for k, v in tx.items()
-            if k in ("chain", "value_usd", "direction", "amount_ondo",
-                     "amount_xrp", "wallet_label", "slot", "err")}
+            if k in ("chain", "value_usd", "direction", "price_at_transfer_usd",
+                     "amount_ondo", "amount_wld", "amount_xrp",
+                     "sol_delta", "wallet_label", "slot", "err")}
 
 
 def slim_whale_data(data):
@@ -68,6 +69,7 @@ def slim_whale_data(data):
         "prices":             data.get("prices", {}),
         "technicals":         data.get("technicals", {}),
         "transfers":          transfers,
+        "dex_swaps":          data.get("dex_swaps", [])[:10],
         "profitable_wallets": profitable,
         "profitable_signals": signals,
         "summary":            data.get("summary", {}),
@@ -640,7 +642,8 @@ Keep the email body tight — one idea per line, no padding sentences.
 {tg_section}
 Analysis instructions:
 - Use the real on-chain data above for Steps 3 (whale signals) and 4 (prices).
-- large_transfers shows actual large moves today — classify as bullish/bearish via direction field.
+- large_transfers shows actual large moves today. Each transfer has a `direction` field: DEPOSIT_TO_EXCHANGE=bearish (whale selling/exiting), WITHDRAWAL_FROM_EXCHANGE=bullish (whale accumulating), WALLET_TO_WALLET=neutral. Weight exchange deposits/withdrawals heavily — they reveal intent, not just movement. `price_at_transfer_usd` shows the price at which the move occurred.
+- dex_swaps shows Uniswap V3 swaps by tracked profitable wallets in the last 24h. BUY=accumulating, SELL=distributing. These are high-conviction directional signals — a profitable wallet actively swapping on DEX is a stronger signal than a simple transfer.
 - profitable_wallets_discovered are real wallets with >20% avg profit — treat as high-weight signals.
 - Execute all steps internally (macro, whale scoring, TA, composite scoring, setup updates).
 - No positions are open unless listed in current state open_positions.
@@ -666,7 +669,7 @@ Analysis instructions:
 - bias_short covers days-to-weeks setups (timeframe=SHORT_TERM).
 - bias_long covers months+ setups (timeframe=MEDIUM_TERM or LONG_TERM).
 - A setup whose direction conflicts with its matching bias gets conviction downgraded one level and flagged.
-- BTC CYCLE: today is in the 2024-04 halving cycle. Y1=2024, Y2=2025, Y3=2026 (now, bear/bottom year), Y4=2027 (pre-halving accumulation). Historical Y3 drawdown is 70–85% from cycle peak — multi-month longs in Y3 have been wrong every prior cycle. Always state `cycle_phase`, `cycle_year`, `cycle_thesis`, `cycle_bias_impact` in state and in the CYCLE VIEW email section.
+- BTC CYCLE: today is in the 2024-04 halving cycle. Y1=2024, Y2=2025, Y3=2026 (now, bear/bottom year), Y4=2027 (pre-halving accumulation). Historical Y3 drawdown is 70–85% from cycle peak — multi-month longs in Y3 have been wrong every prior cycle. Always state `cycle_phase`, `cycle_year`, `cycle_thesis`, `cycle_bias_impact` in state and in the CYCLE VIEW email section. For `cycle_thesis`, derive the bottom price zone fresh each run: apply −70% and −85% to the confirmed cycle peak — do NOT reuse a price target from a prior run or prior context.
 - TIMEFRAME-RESPECTING ACTION RULE: every open position has a `tf` field (SHORT_TERM, MEDIUM_TERM, LONG_TERM). Evaluate each position ONLY against the bias of its own timeframe:
     • SHORT_TERM position → vs bias_short
     • MEDIUM_TERM / LONG_TERM position → vs bias_long + cycle_phase

@@ -63,6 +63,7 @@ KNOWN_WALLETS = {
 
 # ONDO token contract
 ONDO_CONTRACT = "0xfAbA6f8e4a5E8Ab82F62fe7C39859FA577269BE3"
+WLD_CONTRACT  = "0x163f8C2467924be0ae7B5347228CABF260318753"
 
 # Etherscan V2 base URL
 ESCAN = "https://api.etherscan.io/v2/api"
@@ -583,14 +584,18 @@ def get_btc_large_transfers(min_usd: float = 1_000_000, prices: Dict[str, float]
 
     results = []
     for tx in data.get("data", []):
+        sender = tx.get("sender", "unknown")
+        recipient = tx.get("recipient", "unknown")
         results.append({
             "chain": "BTC",
             "hash": tx.get("hash", ""),
             "value_btc": tx.get("output_total", 0) / 1e8,
             "value_usd": (tx.get("output_total", 0) / 1e8) * btc_price,
+            "price_at_transfer_usd": btc_price,
             "time": tx.get("time", ""),
-            "sender": tx.get("sender", "unknown"),
-            "recipient": tx.get("recipient", "unknown"),
+            "sender": sender,
+            "recipient": recipient,
+            "direction": classify_transfer_direction(sender, recipient, "BTC"),
         })
     return results
 
@@ -630,13 +635,17 @@ def get_eth_large_transfers(etherscan_key: str = "", min_usd: float = 1_000_000,
             val_eth = int(tx.get("value", 0)) / 1e18
             if val_eth >= min_eth and tx.get("hash") not in seen:
                 seen.add(tx["hash"])
+                from_addr = tx.get("from", "")
+                to_addr = tx.get("to", "")
                 results.append({
                     "chain": "ETH",
                     "hash": tx.get("hash"),
-                    "from": tx.get("from"),
-                    "to": tx.get("to"),
+                    "from": from_addr,
+                    "to": to_addr,
                     "value_eth": val_eth,
                     "value_usd": val_eth * eth_price,
+                    "price_at_transfer_usd": eth_price,
+                    "direction": classify_transfer_direction(from_addr, to_addr, "ETH"),
                     "timestamp": tx.get("timeStamp"),
                 })
     return results
@@ -662,16 +671,59 @@ def get_ondo_large_transfers(etherscan_key: str = "", min_usd: float = 500_000, 
             amount = int(tx.get("value", 0)) / (10 ** decimals)
             value_usd = amount * ondo_price
             if value_usd >= min_usd:
+                from_addr = tx.get("from", "")
+                to_addr = tx.get("to", "")
                 results.append({
                     "chain": "ONDO",
                     "hash": tx.get("hash"),
-                    "from": tx.get("from"),
-                    "to": tx.get("to"),
+                    "from": from_addr,
+                    "to": to_addr,
                     "amount_ondo": amount,
                     "value_usd": value_usd,
+                    "price_at_transfer_usd": ondo_price,
+                    "direction": classify_transfer_direction(from_addr, to_addr, "ETH"),
                     "timestamp": tx.get("timeStamp"),
                 })
     return results
+
+
+def get_wld_large_transfers(etherscan_key="", min_usd=300_000, prices=None):
+    # type: (str, float, Optional[Dict[str, float]]) -> List[Dict]
+    """Detect large WLD token transfers in last 24h via Etherscan."""
+    price_data = get_prices(prices)
+    wld_price = price_data.get("WLD", 1.0)
+
+    start_block = _estimate_block_from_hours_ago(24, "eth")
+    params = {
+        "chainid": 1, "module": "account", "action": "tokentx",
+        "contractaddress": WLD_CONTRACT,
+        "startblock": start_block, "endblock": 99999999,
+        "sort": "desc", "apikey": etherscan_key or "YourKey",
+    }
+    data = _get("https://api.etherscan.io/v2/api", params=params)
+
+    results = []
+    if data and data.get("status") == "1":
+        for tx in data.get("result", [])[:200]:
+            decimals = int(tx.get("tokenDecimal", 18))
+            amount = int(tx.get("value", 0)) / (10 ** decimals)
+            value_usd = amount * wld_price
+            if value_usd >= min_usd:
+                from_addr = tx.get("from", "")
+                to_addr = tx.get("to", "")
+                results.append({
+                    "chain": "WLD",
+                    "hash": tx.get("hash"),
+                    "from": from_addr,
+                    "to": to_addr,
+                    "amount_wld": round(amount, 2),
+                    "value_usd": round(value_usd, 2),
+                    "price_at_transfer_usd": wld_price,
+                    "direction": classify_transfer_direction(from_addr, to_addr, "ETH"),
+                    "timestamp": tx.get("timeStamp"),
+                })
+    return results
+
 
 def _estimate_block_from_hours_ago(hours: int, chain: str) -> int:
     """Rough block number estimate for time range filtering."""
@@ -702,35 +754,88 @@ def _block_from_hours_ago(hours: int, etherscan_key: str = "") -> int:
 
 # ─── SOL ─────────────────────────────────────────────────────────────────────
 
-def get_sol_large_transfers(min_usd: float = 1_000_000, prices: Dict[str, float] = None) -> List[Dict]:
-    """Detect large SOL transfers via public Solana RPC."""
+def get_sol_large_transfers(min_usd=1_000_000, prices=None):
+    # type: (float, Optional[Dict[str, float]]) -> List[Dict]
+    """Detect large SOL movements for known wallets via public Solana RPC.
+    Resolves each signature to get actual SOL balance deltas."""
     price_data = get_prices(prices)
     sol_price = price_data.get("SOL", 95)
-
-    # Query recent signatures from known large holders
     results = []
+
     for label, address in KNOWN_WALLETS.get("SOL", {}).items():
+        # Step 1: get recent signatures
         payload = {
             "jsonrpc": "2.0", "id": 1,
             "method": "getSignaturesForAddress",
-            "params": [address, {"limit": 5}]
+            "params": [address, {"limit": 10}],
         }
         try:
             r = requests.post("https://api.mainnet-beta.solana.com",
                               json=payload, timeout=10)
-            if r.status_code == 200:
-                sigs = r.json().get("result", [])
-                for sig in sigs:
-                    results.append({
-                        "chain": "SOL",
-                        "wallet_label": label,
-                        "address": address,
-                        "signature": sig.get("signature", ""),
-                        "slot": sig.get("slot", 0),
-                        "err": sig.get("err"),
-                    })
+            if r.status_code != 200:
+                continue
+            sigs = r.json().get("result", [])
         except Exception:
-            pass
+            continue
+
+        for sig_info in sigs[:5]:
+            sig = sig_info.get("signature", "")
+            if not sig or sig_info.get("err"):
+                continue
+
+            # Step 2: resolve transaction to get actual balance changes
+            tx_payload = {
+                "jsonrpc": "2.0", "id": 1,
+                "method": "getTransaction",
+                "params": [sig, {"encoding": "json",
+                                  "maxSupportedTransactionVersion": 0}],
+            }
+            try:
+                tx_r = requests.post("https://api.mainnet-beta.solana.com",
+                                     json=tx_payload, timeout=15)
+                if tx_r.status_code != 200:
+                    continue
+                tx_data = tx_r.json().get("result")
+                if not tx_data:
+                    continue
+
+                accounts = (tx_data.get("transaction", {})
+                            .get("message", {})
+                            .get("accountKeys", []))
+                pre_bals  = tx_data.get("meta", {}).get("preBalances", [])
+                post_bals = tx_data.get("meta", {}).get("postBalances", [])
+
+                wallet_idx = None
+                for i, acc in enumerate(accounts):
+                    key = acc if isinstance(acc, str) else acc.get("pubkey", "")
+                    if key == address:
+                        wallet_idx = i
+                        break
+
+                if wallet_idx is None or wallet_idx >= len(pre_bals):
+                    continue
+
+                delta_lamports = post_bals[wallet_idx] - pre_bals[wallet_idx]
+                sol_delta = delta_lamports / 1e9
+                value_usd = abs(sol_delta) * sol_price
+
+                if value_usd < min_usd:
+                    continue
+
+                results.append({
+                    "chain":               "SOL",
+                    "wallet_label":        label,
+                    "address":             address,
+                    "signature":           sig,
+                    "sol_delta":           round(sol_delta, 4),
+                    "value_usd":           round(value_usd, 0),
+                    "direction":           "INFLOW" if sol_delta > 0 else "OUTFLOW",
+                    "price_at_transfer_usd": sol_price,
+                    "timestamp":           tx_data.get("blockTime"),
+                })
+            except Exception:
+                pass
+
     return results
 
 # ─── XRP ─────────────────────────────────────────────────────────────────────
@@ -782,6 +887,7 @@ def get_xrp_large_transfers(min_usd: float = 500_000, prices: Dict[str, float] =
 # Tokens to scan for early buyers. Add any ERC-20 contract here.
 SCANNABLE_TOKENS: Dict[str, str] = {
     "ONDO": ONDO_CONTRACT,
+    "WLD":  WLD_CONTRACT,
     "UNI":  "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984",
     "LINK": "0x514910771AF9Ca656af840dff83E8264EcF986CA",
     "AAVE": "0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9",
@@ -793,7 +899,127 @@ MIN_BUY_USD = 75_000
 # Exchange hot wallets to exclude (they're not buyers, just routing)
 _EXCHANGE_ADDRS_FLAT: Optional[List[str]] = None
 
-def _exchange_addrs() -> List[str]:
+# ─── Known exchange deposit addresses (directional signals) ──────────────────
+
+EXCHANGE_HOT_WALLETS = {
+    "ETH": {
+        "Binance": [
+            "0x28C6c06298d514Db089934071355E5743bf21d60",
+            "0xBE0eB53F46cd790Cd13851d5EFf43D12404d33E8",
+            "0xF977814e90dA44bFA03b6295A0616a897441aceC",
+            "0x3f5CE5FBFe3E9af3971dD833D26bA9b5C936f0bE",
+            "0xD551234Ae421e3BCBA99A0Da6d736074f22192FF",
+            "0x564286362092D8e7936f0549571a803B203aAceD",
+            "0x0681d8Db095565FE8A346fA0277bFfdE9C0eDBBF",
+            "0xFE9e8709d3215310075d67E3ed32A380CCf451C8",
+            "0x4E9ce36E442e55EcD9025B9a6E0D88485d628A67",
+        ],
+        "Coinbase": [
+            "0x503828976D22510aad0201ac7EC88293211D23Da",
+            "0xA9D1e08C7793af67e9d92fe308d5697FB81d3E43",
+            "0x71660c4005BA85c37ccec55d0C4493E66Fe775d3",
+            "0xDdfAbCdc4D8FfC6d5beaf154f18B778f892A0740",
+            "0x3cD751E6b0078Be393132286c442345e5DC49699",
+            "0xb5d85CBf7cB3EE0D56b3bB207D5Fc4B82f43F511",
+            "0xeB2629a2FEFea3168E2E27098eA29eC5F8F8bfC8",
+        ],
+        "Kraken": [
+            "0x2910543Af39abA0Cd09dBb2D50200b3E800A63D2",
+            "0xC6bed363b30DF7F35b601a5547fE56cd31Ec63ab",
+            "0x0A869d79a7052C7f1b55a8EbAbbEa3420F0D1E13",
+        ],
+        "OKX": [
+            "0x6cC5F688a315f3dC28A7781717a9A798a59fDA7b",
+            "0x98ec059Dc3aDFBdd63429454dEB0c531bcf36d4f",
+            "0x69F78Aa3F6CEF9f8C0F8a95EDbc8Fb7bfBDB8Fc6",
+        ],
+        "Bybit": [
+            "0xf89d7b9c864f589bbF53a82105107622B35EaA40",
+            "0x1Ab4973a48dc892Cd9971ECE8e01DcC7688f8F23",
+        ],
+        "HTX": [
+            "0x6748f50f686bfbca6Fe8ad62b22228b87F31ff2b",
+            "0xeEe28d484628d41A82d01e21d12E2E78D69920da",
+            "0x553204F9C68ea87b7b5a3BABFA7A9a8ac2B00fd2",
+        ],
+        "KuCoin": [
+            "0xD6216fC19DB775Df9774a6E33526131dA7D19a2c",
+            "0x2B5634C42055806a59e9107ED44D43c426E58258",
+        ],
+        "Bitfinex": [
+            "0x77134cbC06cB00b66F4c7e623D5fdBF6777635EC",
+            "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
+        ],
+        "Gate": [
+            "0x0D0707963952f2fBA59dD06f2b425ace40b492Fe",
+            "0x7793CD85C8A9408B027AfEC3a8B6884bFDe3c91f",
+        ],
+        "Gemini": [
+            "0xd24400ae8BfEBb18cA49Be86258a3C749cf46853",
+            "0x5f65f7b609678448494De4C87521CdF6cEf1e932",
+        ],
+        "Bitstamp": [
+            "0x00bDb5699745f5b860228c8f939ABF1b9Ae374eD",
+            "0x1522900b6daf44467e350b734b3d6f89f2ef6a78",
+        ],
+    },
+    "BTC": {
+        "Binance": [
+            "34xp4vRoCGJym3xR7yCVPFHoCNxv4Twseo",
+            "1NDyJtNTjmwk5xPNhjgAMu4HDHigtobu1s",
+            "bc1qgdjqv0av3q56jvd82tkdjpy7gdp9ut8tlqmgrpmv24sq90ecnvqqjwvw97",
+        ],
+        "Coinbase": [
+            "1LdRcdxfbSnmCYYNdeYpUnztiYzVfBEQeC",
+            "3Cbq7aT1tY8kMxWLbitaG7yT6bPbKChq64",
+            "bc1qazcm763858nkj2dj986etajv6wquslv8uxpcu",
+        ],
+        "Kraken": [
+            "3H5JTt42K7RmZtromfTSefcMEFMMe18pMD",
+            "3AfSdMEFME5V9jLLHVjC77b9TsVVYZv3KW",
+        ],
+        "Bitfinex": [
+            "3D2oetdNuZUqQHPJmcMDDHYoqkyNVsFk9r",
+        ],
+        "Bitstamp": [
+            "3P3QsMVK89JBI7bGZm1FXnACUG5jWFNMfC",
+        ],
+        "HTX": [
+            "1HckjUpRGcrrRAtFaaCAUaGjsPx9oYmLaZ",
+        ],
+    },
+    "XRP": {
+        "Binance":  ["rEb8TK3gBgk5auZkwc6sHnwrGVJH8DuaLh"],
+        "Coinbase": ["rPVMhWBsfF9iMXYj3aAzJVkPDTFNSyWdKy"],
+        "Kraken":   ["rLHzPsX6oXkzU2qL12kHCH8G8cnZv1rBJh"],
+        "Bitstamp": ["rrpNnNLKrartuEqfJGpqyDwPj1BBN1ov77"],
+    },
+}
+
+
+def classify_transfer_direction(from_addr, to_addr, chain="ETH"):
+    # type: (str, str, str) -> str
+    """
+    Returns DEPOSIT_TO_EXCHANGE (bearish), WITHDRAWAL_FROM_EXCHANGE (bullish),
+    or WALLET_TO_WALLET.
+    Exchange deposits = selling pressure. Withdrawals = accumulation.
+    """
+    exchange_addrs = []
+    for addrs in EXCHANGE_HOT_WALLETS.get(chain, {}).values():
+        exchange_addrs.extend([a.lower() for a in addrs])
+
+    from_l = from_addr.lower()
+    to_l = to_addr.lower()
+
+    if to_l in exchange_addrs:
+        return "DEPOSIT_TO_EXCHANGE"   # bearish
+    if from_l in exchange_addrs:
+        return "WITHDRAWAL_FROM_EXCHANGE"  # bullish
+    return "WALLET_TO_WALLET"
+
+
+def _exchange_addrs():
+    # type: () -> List[str]
     global _EXCHANGE_ADDRS_FLAT
     if _EXCHANGE_ADDRS_FLAT is None:
         _EXCHANGE_ADDRS_FLAT = [
@@ -981,6 +1207,7 @@ def get_profitable_wallet_current_activity(
                 "symbol":    symbol,
                 "amount":    round(amount, 2),
                 "value_usd": round(usd_val, 0),
+                "price_per_token_usd": prices.get(symbol, 0),
                 "direction": direction,
                 "timestamp": tx.get("timeStamp"),
             })
@@ -988,36 +1215,6 @@ def get_profitable_wallet_current_activity(
         time.sleep(0.15)  # stay within free tier rate limits
 
     return signals
-
-# ─── Known exchange deposit addresses (bearish signal) ───────────────────────
-
-EXCHANGE_HOT_WALLETS = {
-    "ETH": {
-        "Binance": ["0x28C6c06298d514Db089934071355E5743bf21d60",
-                    "0xBE0eB53F46cd790Cd13851d5EFf43D12404d33E8"],
-        "Coinbase": ["0x503828976D22510aad0201ac7EC88293211D23Da"],
-        "Kraken": ["0x2910543Af39abA0Cd09dBb2D50200b3E800A63D2"],
-        "OKX": ["0x6cC5F688a315f3dC28A7781717a9A798a59fDA7b"],
-    }
-}
-
-def classify_transfer_direction(from_addr: str, to_addr: str, chain: str = "ETH") -> str:
-    """
-    Returns 'DEPOSIT' (bearish), 'WITHDRAWAL' (bullish), or 'UNKNOWN'.
-    Exchange deposits = selling pressure. Withdrawals = accumulation.
-    """
-    exchange_addrs = []
-    for addrs in EXCHANGE_HOT_WALLETS.get(chain, {}).values():
-        exchange_addrs.extend([a.lower() for a in addrs])
-
-    from_l = from_addr.lower()
-    to_l = to_addr.lower()
-
-    if to_l in exchange_addrs:
-        return "DEPOSIT_TO_EXCHANGE"   # bearish
-    if from_l in exchange_addrs:
-        return "WITHDRAWAL_FROM_EXCHANGE"  # bullish
-    return "WALLET_TO_WALLET"
 
 # ─── Macro Liquidity Regime Data ─────────────────────────────────────────────
 
@@ -1500,6 +1697,89 @@ def get_macro_data() -> Dict:
     return result
 
 
+_GRAPH_UNISWAP_V3 = "https://api.thegraph.com/subgraphs/name/uniswap/uniswap-v3"
+
+
+def _graph_query(url, query, variables=None):
+    # type: (str, str, Optional[Dict]) -> Optional[Dict]
+    """Execute a GraphQL query against The Graph. Returns data dict or None on failure."""
+    try:
+        payload = {"query": query}
+        if variables:
+            payload["variables"] = variables
+        r = requests.post(url, json=payload, timeout=15, headers=CHROME_HDR)
+        if r.status_code != 200:
+            return None
+        j = r.json()
+        if "errors" in j:
+            return None
+        return j.get("data")
+    except Exception:
+        return None
+
+
+def get_dex_swaps_for_wallets(wallets, prices=None, lookback_hours=24):
+    # type: (List[Dict], Optional[Dict], int) -> List[Dict]
+    """
+    Query Uniswap V3 subgraph for recent swaps by tracked profitable wallets.
+    Returns swap records with symbol, direction (BUY/SELL), value_usd, price.
+    Gracefully returns [] if The Graph is unavailable.
+    """
+    if not wallets:
+        return []
+
+    price_data = get_prices(prices)
+    addrs = [w.get("address", "").lower() for w in wallets[:10] if w.get("address")]
+    if not addrs:
+        return []
+
+    since_ts = int((datetime.utcnow() - timedelta(hours=lookback_hours)).timestamp())
+
+    query = """
+    query Swaps($wallets: [String!]!, $since: Int!) {
+      swaps(
+        first: 50
+        orderBy: timestamp
+        orderDirection: desc
+        where: {origin_in: $wallets, timestamp_gte: $since}
+      ) {
+        origin
+        timestamp
+        token0 { symbol }
+        token1 { symbol }
+        amount0
+        amountUSD
+      }
+    }
+    """
+    variables = {"wallets": addrs, "since": since_ts}
+    data = _graph_query(_GRAPH_UNISWAP_V3, query, variables)
+    if not data:
+        return []
+
+    results = []
+    for swap in data.get("swaps", []):
+        amt_usd = float(swap.get("amountUSD") or 0)
+        if amt_usd < 5_000:
+            continue
+        amt0 = float(swap.get("amount0") or 0)
+        sym0 = (swap.get("token0") or {}).get("symbol", "?")
+        sym1 = (swap.get("token1") or {}).get("symbol", "?")
+        action = "SELL" if amt0 < 0 else "BUY"
+        symbol = sym0
+        results.append({
+            "wallet":    (swap.get("origin") or "")[:10] + "…",
+            "action":    action,
+            "symbol":    symbol,
+            "pair":      "{}/{}".format(sym0, sym1),
+            "value_usd": round(amt_usd, 0),
+            "price_usd": price_data.get(symbol, 0),
+            "timestamp": swap.get("timestamp"),
+        })
+
+    return results
+
+
 # ─── Main aggregator ─────────────────────────────────────────────────────────
 
 def get_all_whale_data(etherscan_key: str = "",
@@ -1537,18 +1817,11 @@ def get_all_whale_data(etherscan_key: str = "",
     ondo_txs = get_ondo_large_transfers(etherscan_key, min_usd=300_000, prices=prices)
     xrp_txs = get_xrp_large_transfers(min_usd=500_000, prices=prices)
     sol_activity = get_sol_large_transfers(min_usd=1_000_000, prices=prices)
+    wld_txs = get_wld_large_transfers(etherscan_key, min_usd=300_000, prices=prices)
 
     print(f"[WhaleTracker] BTC:{len(btc_txs)} ETH:{len(eth_txs)} "
-          f"ONDO:{len(ondo_txs)} XRP:{len(xrp_txs)} SOL:{len(sol_activity)}")
-
-    # 2. Classify ETH transfers (exchange flow direction)
-    for tx in eth_txs:
-        tx["direction"] = classify_transfer_direction(
-            tx.get("from", ""), tx.get("to", ""), "ETH")
-
-    for tx in ondo_txs:
-        tx["direction"] = classify_transfer_direction(
-            tx.get("from", ""), tx.get("to", ""), "ETH")
+          f"ONDO:{len(ondo_txs)} XRP:{len(xrp_txs)} SOL:{len(sol_activity)} "
+          f"WLD:{len(wld_txs)}")
 
     # 3. Discover new profitable wallets via early-buyer method
     print("[WhaleTracker] Scanning for profitable wallets (early-buyer method)...")
@@ -1587,7 +1860,14 @@ def get_all_whale_data(etherscan_key: str = "",
     if profitable_signals:
         print(f"[WhaleTracker] {len(profitable_signals)} copy-trade signals from profitable wallets")
 
-    # 6. Technical indicators (RSI, EMA20, BBands, ATR, MACD) for fixed list
+    # 6. DEX swaps for tracked wallets (Uniswap V3 via The Graph)
+    try:
+        dex_swaps = get_dex_swaps_for_wallets(tracked_wallets, prices=prices)
+    except Exception as e:
+        print(f"[WhaleTracker] DEX swaps fetch failed: {e}")
+        dex_swaps = []
+
+    # 7. Technical indicators (RSI, EMA20, BBands, ATR, MACD) for fixed list
     try:
         technicals = get_all_technicals()
     except Exception as e:
@@ -1600,23 +1880,27 @@ def get_all_whale_data(etherscan_key: str = "",
         "prices": prices,
         "technicals": technicals,
         "large_transfers": {
-            "BTC": btc_txs[:5],
-            "ETH": eth_txs[:5],
+            "BTC":  btc_txs[:5],
+            "ETH":  eth_txs[:5],
             "ONDO": ondo_txs[:5],
-            "XRP": xrp_txs[:5],
-            "SOL": sol_activity[:5],
+            "WLD":  wld_txs[:5],
+            "XRP":  xrp_txs[:5],
+            "SOL":  sol_activity[:5],
         },
+        "dex_swaps":       dex_swaps[:10],
         "market_globals":  market_globals,
         "cycle_metrics":   cycle_metrics,
-        "known_wallets": KNOWN_WALLETS,
+        "known_wallets":   KNOWN_WALLETS,
         "profitable_wallets_discovered": tracked_wallets,
         "profitable_wallet_signals": profitable_signals,
         "summary": {
-            "btc_large_moves": len(btc_txs),
-            "eth_large_moves": len(eth_txs),
+            "btc_large_moves":  len(btc_txs),
+            "eth_large_moves":  len(eth_txs),
             "ondo_large_moves": len(ondo_txs),
-            "xrp_large_moves": len(xrp_txs),
+            "wld_large_moves":  len(wld_txs),
+            "xrp_large_moves":  len(xrp_txs),
             "sol_active_wallets": len(sol_activity),
+            "dex_swaps_today":  len(dex_swaps),
             "profitable_wallets_tracked": len(tracked_wallets),
             "profitable_wallet_signals_today": len(profitable_signals),
         },
