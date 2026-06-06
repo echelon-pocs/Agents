@@ -166,18 +166,45 @@ Opening > closing (closing may be profit-taking, opening is a fresh bet).
 ### STEP 4 — Technical Analysis
 Use prices from the provided whale data. **Fixed analysis list:** BTC ETH XRP SUI SOL WLD DOGE ADA ONDO TRX. Run full analysis on all 10. For setup discovery (Step 5), also scan the broader market for any coin showing exceptional whale accumulation or a clean technical setup — these can appear as setup recommendations even if not on the fixed list.
 
+`pre_computed.technicals` contains Python-calculated indicators for each coin — use these exact values, do NOT re-derive from price:
+
+| Field | Meaning | Trading signal |
+|-------|---------|----------------|
+| `rsi_14` / `rsi_signal` | Momentum (Wilder 14-period) | OVERSOLD (<30) + whale accum → HIGH conviction long. OVERBOUGHT (>70) + distribution → short |
+| `ema20` / `price_vs_ema20` / `ema20_dist_pct` | Short-term dynamic S/R | Price crossing above EMA20 = early trend confirmation. EMA20 as target for mean-reversion setups |
+| `bb_pct_b` | Position within bands (0=lower, 1=upper) | <0.1 = near lower band → mean-reversion long candidate. >0.9 = near upper band → short/trim signal |
+| `bb_squeeze` | Band width < 80% of recent average | True → low volatility, breakout imminent → wait for direction before entering |
+| `bb_width_pct` | Band width as % of midline | Expanding = trending, contracting = ranging/squeeze |
+| `atr_pct` / `atr_stop_1_5x` / `atr_stop_2x` | Volatility-calibrated stop distance | **ALWAYS use ATR stops:** SHORT_TERM = entry ± atr_stop_1_5x%, MEDIUM_TERM = entry ± atr_stop_2x%. Never use arbitrary % |
+| `macd_hist_direction` | MACD histogram direction (RISING/FALLING/FLAT) | RISING + RSI < 55 = early bullish momentum. FALLING + RSI > 50 = momentum fading |
+| `macd_above_signal` | MACD line above signal line | True = bullish trend bias. False = bearish. Crossover = momentum shift |
+
+Additional TA (from market knowledge + current price):
 1. Trend: above/below 50d/200d MA, death/golden cross
 2. Key levels: nearest significant resistance above, support below
 3. Volume confirmation or divergence
 4. Derivatives: funding rates, OI trend (extreme funding = reversion candidate)
 5. Catalyst risk: upcoming unlock, regulatory event, ETF news
 
+**Indicator confluence rule:** The strongest setups have ≥3 aligned signals. Example of HIGH conviction long: whale accumulation + RSI oversold + bb_pct_b < 0.15 + MACD histogram RISING + price above EMA20. A setup with only whale signal + 1 TA signal = LOW conviction maximum.
+
 ### STEP 5 — Composite Scoring & Setup Discovery
 
 ```
 Composite = (Whale Score × 0.70) + (Tech Score × 0.30)
 
-Tech Score components: trend alignment +0.3 | key level proximity +0.3 | derivatives +0.2 | macro +0.2
+Tech Score components (each max ±1.0, weighted):
+  Trend (MA50/200 + EMA20 + MACD direction)  : weight 0.30
+  Key levels (support/resistance proximity)  : weight 0.25
+  Momentum (RSI 14 — signal + divergences)   : weight 0.20
+  Volatility/setup quality (BBands position) : weight 0.15
+  Derivatives (funding rate + OI trend)      : weight 0.10
+
+Bonus signals (additive, capped at ±0.2 total):
+  bb_squeeze = true                          : +0.1 to absolute score (breakout watch)
+  rsi_signal = OVERSOLD + direction = LONG   : +0.1 to tech score
+  rsi_signal = OVERBOUGHT + direction = SHORT: +0.1 to tech score
+  macd crossover this candle                 : +0.1 to tech score
 
 Composite > +0.3 → LONG | < -0.3 → SHORT | ±0.3 → no trade
 |Composite| ≥0.7 → HIGH | 0.4–0.7 → MEDIUM | 0.3–0.4 → LOW

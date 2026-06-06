@@ -94,6 +94,8 @@ COINGECKO_IDS = {
     "TIA":  "celestia",
     "HYPE": "hyperliquid",
     "TAO":  "bittensor",
+    "WLD":  "worldcoin-org",
+    "TRX":  "tron",
 }
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -114,6 +116,235 @@ def _get(url: str, params: dict = None, timeout: int = 12,
             if attempt < retries:
                 time.sleep(backoff * (2 ** attempt))
     return None
+
+
+# ─── Technical Indicators (computed from CoinGecko OHLCV) ───────────────────
+
+# Fixed list for daily technical analysis
+_TA_SYMBOLS = ["BTC", "ETH", "XRP", "SUI", "SOL", "WLD", "DOGE", "ADA", "ONDO", "TRX"]
+
+
+def _ema(values, period):
+    # type: (List[float], int) -> Optional[float]
+    if len(values) < period:
+        return None
+    k = 2.0 / (period + 1)
+    result = sum(values[:period]) / period
+    for v in values[period:]:
+        result = v * k + result * (1 - k)
+    return result
+
+
+def _rsi(closes, period=14):
+    # type: (List[float], int) -> Optional[float]
+    if len(closes) < period + 1:
+        return None
+    gains, losses = [], []
+    for i in range(1, len(closes)):
+        d = closes[i] - closes[i - 1]
+        gains.append(d if d > 0 else 0.0)
+        losses.append(-d if d < 0 else 0.0)
+    avg_gain = sum(gains[:period]) / period
+    avg_loss = sum(losses[:period]) / period
+    for i in range(period, len(gains)):
+        avg_gain = (avg_gain * (period - 1) + gains[i]) / period
+        avg_loss = (avg_loss * (period - 1) + losses[i]) / period
+    if avg_loss == 0:
+        return 100.0
+    rs = avg_gain / avg_loss
+    return round(100.0 - (100.0 / (1 + rs)), 1)
+
+
+def _bbands(closes, period=20, num_std=2):
+    # type: (List[float], int, int) -> dict
+    if len(closes) < period:
+        return {}
+    recent = closes[-period:]
+    sma = sum(recent) / period
+    variance = sum((x - sma) ** 2 for x in recent) / period
+    std = variance ** 0.5
+    upper = sma + num_std * std
+    lower = sma - num_std * std
+    current = closes[-1]
+    width_pct = round((upper - lower) / sma * 100, 2) if sma > 0 else 0
+    pct_b = round((current - lower) / (upper - lower), 3) if (upper - lower) > 0 else 0.5
+    # Squeeze: current width < 80% of 20-period average width
+    widths = []
+    for i in range(period, len(closes) + 1):
+        chunk = closes[i - period:i]
+        s = sum(chunk) / period
+        v = sum((x - s) ** 2 for x in chunk) / period
+        widths.append((v ** 0.5) * 2 * num_std / s * 100 if s > 0 else 0)
+    avg_width = sum(widths) / len(widths) if widths else width_pct
+    squeeze = width_pct < avg_width * 0.80
+    return {
+        "bb_upper":     round(upper, 4),
+        "bb_lower":     round(lower, 4),
+        "bb_pct_b":     pct_b,
+        "bb_width_pct": width_pct,
+        "bb_squeeze":   squeeze,
+    }
+
+
+def _atr(highs, lows, closes, period=14):
+    # type: (List[float], List[float], List[float], int) -> Optional[float]
+    if len(closes) < period + 1:
+        return None
+    trs = []
+    for i in range(1, len(closes)):
+        tr = max(
+            highs[i] - lows[i],
+            abs(highs[i] - closes[i - 1]),
+            abs(lows[i] - closes[i - 1]),
+        )
+        trs.append(tr)
+    if len(trs) < period:
+        return None
+    atr = sum(trs[:period]) / period
+    for tr in trs[period:]:
+        atr = (atr * (period - 1) + tr) / period
+    return atr
+
+
+def _macd(closes, fast=12, slow=26, signal_period=9):
+    # type: (List[float], int, int, int) -> dict
+    if len(closes) < slow + signal_period:
+        return {}
+    k_fast = 2.0 / (fast + 1)
+    k_slow = 2.0 / (slow + 1)
+    k_sig  = 2.0 / (signal_period + 1)
+    # Seed from SMA
+    ema_f = sum(closes[:fast]) / fast
+    ema_s = sum(closes[:slow]) / slow
+    # Advance fast EMA to slow start
+    for c in closes[fast:slow]:
+        ema_f = c * k_fast + ema_f * (1 - k_fast)
+    # Build MACD line
+    macd_line = []
+    for c in closes[slow:]:
+        ema_f = c * k_fast + ema_f * (1 - k_fast)
+        ema_s = c * k_slow + ema_s * (1 - k_slow)
+        macd_line.append(ema_f - ema_s)
+    if len(macd_line) < signal_period:
+        return {}
+    # Signal line
+    sig = sum(macd_line[:signal_period]) / signal_period
+    for m in macd_line[signal_period:]:
+        sig = m * k_sig + sig * (1 - k_sig)
+    hist = macd_line[-1] - sig
+    prev_hist = macd_line[-2] - sig if len(macd_line) > signal_period else hist
+    if hist > prev_hist * 1.01:
+        direction = "RISING"
+    elif hist < prev_hist * 0.99:
+        direction = "FALLING"
+    else:
+        direction = "FLAT"
+    return {
+        "macd_above_signal": macd_line[-1] > sig,
+        "macd_hist_direction": direction,
+    }
+
+
+def _fetch_ohlcv(symbol):
+    # type: (str) -> Optional[List[List[float]]]
+    """Fetch 60-day daily OHLC from CoinGecko for a given symbol.
+    60 days gives enough candles for MACD(12,26,9) which needs ≥35."""
+    cg_id = COINGECKO_IDS.get(symbol)
+    if not cg_id:
+        return None
+    data = _get(
+        f"https://api.coingecko.com/api/v3/coins/{cg_id}/ohlc",
+        params={"vs_currency": "usd", "days": "90"},
+        timeout=15,
+    )
+    if not isinstance(data, list) or len(data) < 35:
+        return None
+    return data  # [[ts_ms, open, high, low, close], ...]
+
+
+def _rsi_signal(rsi):
+    # type: (Optional[float]) -> str
+    if rsi is None:
+        return "N/A"
+    if rsi < 30:
+        return "OVERSOLD"
+    if rsi < 45:
+        return "WEAK"
+    if rsi < 55:
+        return "NEUTRAL"
+    if rsi < 70:
+        return "STRONG"
+    return "OVERBOUGHT"
+
+
+def compute_coin_technicals(symbol):
+    # type: (str) -> dict
+    """Compute RSI14, EMA20, BBands(20,2σ), ATR14, MACD(12,26,9) for one coin."""
+    candles = _fetch_ohlcv(symbol)
+    if not candles:
+        return {"error": "no_data"}
+    try:
+        opens  = [c[1] for c in candles]
+        highs  = [c[2] for c in candles]
+        lows   = [c[3] for c in candles]
+        closes = [c[4] for c in candles]
+        current_price = closes[-1]
+
+        rsi_val  = _rsi(closes)
+        ema20    = _ema(closes, 20)
+        bb       = _bbands(closes)
+        atr_val  = _atr(highs, lows, closes)
+        macd_res = _macd(closes)
+
+        result = {
+            "rsi_14":        rsi_val,
+            "rsi_signal":    _rsi_signal(rsi_val),
+        }
+
+        if ema20 is not None:
+            ema20_r = round(ema20, 4)
+            dist    = round((current_price - ema20) / ema20 * 100, 2)
+            result.update({
+                "ema20":           ema20_r,
+                "price_vs_ema20":  "ABOVE" if current_price >= ema20 else "BELOW",
+                "ema20_dist_pct":  dist,
+            })
+
+        result.update(bb)
+
+        if atr_val is not None:
+            atr_pct = round(atr_val / current_price * 100, 2)
+            result.update({
+                "atr_14":           round(atr_val, 4),
+                "atr_pct":          atr_pct,
+                "atr_stop_1_5x":    round(atr_pct * 1.5, 2),
+                "atr_stop_2x":      round(atr_pct * 2.0, 2),
+            })
+
+        result.update(macd_res)
+        return result
+
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def get_all_technicals():
+    # type: () -> Dict[str, dict]
+    """Fetch and compute technicals for all fixed-list symbols in parallel."""
+    results = {}  # type: Dict[str, dict]
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        futures = {pool.submit(compute_coin_technicals, sym): sym
+                   for sym in _TA_SYMBOLS}
+        for future in as_completed(futures):
+            sym = futures[future]
+            try:
+                results[sym] = future.result()
+            except Exception as e:
+                results[sym] = {"error": str(e)}
+    ok  = sum(1 for v in results.values() if "error" not in v)
+    err = sum(1 for v in results.values() if "error" in v)
+    print(f"[Technicals] computed {ok}/{len(_TA_SYMBOLS)} coins OK, {err} errors")
+    return results
 
 
 # Binance spot symbols for assets that CoinGecko may miss or rate-limit
@@ -1277,7 +1508,7 @@ def get_all_whale_data(etherscan_key: str = "",
     Aggregate all on-chain whale data into a structured dict for Claude.
     Merges known wallets with any previously discovered profitable wallets.
     """
-    print("[WhaleTracker] Fetching on-chain data...")
+    print("[WhaleTracker] Fetching on-chain data + technical indicators...")
 
     # Macro liquidity regime data (yields, SPX, BTC derivatives)
     try:
@@ -1356,10 +1587,18 @@ def get_all_whale_data(etherscan_key: str = "",
     if profitable_signals:
         print(f"[WhaleTracker] {len(profitable_signals)} copy-trade signals from profitable wallets")
 
+    # 6. Technical indicators (RSI, EMA20, BBands, ATR, MACD) for fixed list
+    try:
+        technicals = get_all_technicals()
+    except Exception as e:
+        print(f"[WhaleTracker] Technical indicators failed: {e}")
+        technicals = {}
+
     return {
         "timestamp": datetime.utcnow().isoformat(),
         "macro": macro_data,
         "prices": prices,
+        "technicals": technicals,
         "large_transfers": {
             "BTC": btc_txs[:5],
             "ETH": eth_txs[:5],

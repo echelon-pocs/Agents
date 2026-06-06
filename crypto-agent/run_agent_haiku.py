@@ -66,6 +66,7 @@ def slim_whale_data(data):
         "market_globals":     data.get("market_globals", {}),
         "cycle_metrics":      data.get("cycle_metrics", {}),
         "prices":             data.get("prices", {}),
+        "technicals":         data.get("technicals", {}),
         "transfers":          transfers,
         "profitable_wallets": profitable,
         "profitable_signals": signals,
@@ -584,6 +585,7 @@ def run():
         ),
         "cycle_metrics":    whale_slim.get("cycle_metrics", {}),
         "market_globals":   whale_slim.get("market_globals", {}),
+        "technicals":       whale_slim.get("technicals", {}),
         "fomc":             fomc,
     }
 
@@ -655,6 +657,7 @@ Analysis instructions:
 - All crypto perpetual positions are labeled as "perp" (not "spot") unless market_type is explicitly "spot" AND the user confirmed a spot purchase. When in doubt, use "perp".
 - pre_computed.position_analytics contains Python-verified P&L and flags for each position. Use these values exactly — do NOT recalculate P&L. Keys are "SYMBOL_DIRECTION" (e.g. "BTC_LONG").
 - pre_computed.setup_statuses contains Python-verified ENTER/APPROACHING/WAITING/INVALIDATED for each setup. Use these, do NOT re-derive from price.
+- pre_computed.technicals contains Python-computed RSI14, EMA20, Bollinger Bands, ATR14, MACD for each coin. Use these exact values in Step 4 TA analysis — do NOT re-derive from price. Key rules: (1) use atr_stop_1_5x% for SHORT_TERM stops, atr_stop_2x% for MEDIUM_TERM stops — never arbitrary %; (2) bb_squeeze=true means hold back — wait for breakout direction; (3) rsi_signal OVERSOLD + whale accum = highest conviction long setup; (4) MACD hist RISING + RSI < 55 = early momentum, good entry timing.
 - pre_computed.cycle_metrics contains btc_mvrv_approx: MVRV>3.0 = historically expensive (cycle top risk), MVRV<1.0 = historically cheap (bottom zone). Use this for cycle analysis.
 - pre_computed.market_globals contains fresh fear_greed and btc_dominance — use these values, not stale state values.
 - pre_computed.fomc: use for internal catalyst-risk weighting. If pre_fomc_window=true, suppress new SHORT_TERM setups. Note in CHANGES TODAY only if it materially affects a setup.
