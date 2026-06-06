@@ -11,7 +11,8 @@ import json
 import os
 import re
 import sys
-from datetime import datetime, timezone
+import time
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -39,7 +40,7 @@ except ImportError as _e:
 
 from utils import load_env as _load_env, _fmt, avg_into_position, reduce_position  # noqa: E402
 from assets import PORTFOLIO_ASSETS  # noqa: E402
-from data_fetcher import get_all_portfolio_data, get_macro_data, get_crs_data  # noqa: E402
+from data_fetcher import get_all_portfolio_data, get_macro_data, get_crs_data, get_wti_news  # noqa: E402
 
 
 # ── State helpers ─────────────────────────────────────────────────────────────
@@ -165,6 +166,109 @@ def apply_pending(state):
     except Exception:
         pass
     return state, log
+
+
+# ── Setup lifecycle helpers ───────────────────────────────────────────────────
+
+def expire_stale_setups(state, today_str):
+    # type: (dict, str) -> tuple
+    """Remove setups older than max_age_days (default 7). Returns (state, expired_list)."""
+    active = state.get("active_setups", [])
+    valid, expired_log = [], []
+    today_d = date.fromisoformat(today_str[:10])
+    for s in active:
+        created = s.get("created_at")
+        max_age = s.get("max_age_days", 7)
+        if created:
+            try:
+                days_old = (today_d - date.fromisoformat(created[:10])).days
+                if days_old > max_age:
+                    expired_log.append(s)
+                    continue
+            except Exception:
+                pass
+        valid.append(s)
+    state["active_setups"] = valid
+    return state, expired_log
+
+
+def compute_macro_delta(state, macro, crs_score, crs_regime):
+    # type: (dict, dict, float, str) -> str
+    """Human-readable delta of key macro values vs the prior run snapshot."""
+    last = state.get("last_macro", {})
+    if not last:
+        return "No prior run data."
+    lines = []
+    for key, label in [("us_10y", "US10Y"), ("us_30y", "US30Y"), ("usdjpy", "USDJPY")]:
+        prev = last.get(key)
+        curr = macro.get(key)
+        if prev is not None and curr is not None:
+            chg  = curr - prev
+            sign = "+" if chg >= 0 else ""
+            lines.append(f"{label}: {curr:.2f} ({sign}{chg:.3f} vs last run)")
+    prev_crs = last.get("crs_score")
+    if prev_crs is not None:
+        chg  = crs_score - prev_crs
+        sign = "+" if chg >= 0 else ""
+        lines.append(f"CRS: {crs_score} ({sign}{round(chg, 1)})")
+    prev_crs_regime = last.get("crs_regime", "")
+    if prev_crs_regime and prev_crs_regime != crs_regime:
+        lines.append(f"CRS regime: {prev_crs_regime} -> {crs_regime}")
+    prev_carry = last.get("carry_regime", "")
+    curr_carry = macro.get("carry_regime", "")
+    if prev_carry and curr_carry and prev_carry != curr_carry:
+        lines.append(f"Carry: {prev_carry} -> {curr_carry}")
+    return "\n".join(lines) if lines else "No significant changes since last run."
+
+
+def log_setup_outcomes(prior_setups, updated_setups, today_str, base_dir):
+    # type: (List[dict], List[dict], str, object) -> None
+    """Append a record to setups_log.jsonl when a setup disappears or is invalidated."""
+    prior_map   = {(s.get("symbol"), s.get("direction", "")): s for s in prior_setups}
+    updated_map = {(s.get("symbol"), s.get("direction", "")): s for s in updated_setups}
+    log_path    = base_dir / "setups_log.jsonl"
+    for key, setup in prior_map.items():
+        outcome = None
+        if key not in updated_map:
+            outcome = "REMOVED"
+        elif (updated_map[key].get("status") == "INVALIDATED"
+              and setup.get("status") != "INVALIDATED"):
+            outcome = "INVALIDATED"
+        if outcome:
+            entry = {
+                "date":         today_str,
+                "symbol":       setup.get("symbol"),
+                "direction":    setup.get("direction"),
+                "prior_status": setup.get("status"),
+                "outcome":      outcome,
+                "range":        setup.get("range"),
+                "stop":         setup.get("stop"),
+                "target":       setup.get("target"),
+                "conviction":   setup.get("conviction"),
+                "created_at":   setup.get("created_at"),
+            }
+            try:
+                with open(log_path, "a") as f:
+                    f.write(json.dumps(entry) + "\n")
+            except Exception as e:
+                print(f"[Portfolio] setup log write error: {e}")
+
+
+def _call_claude(client, max_retries=2, **kwargs):
+    # type: (object, int, **object) -> object
+    """Call client.messages.create with up to max_retries retries (exponential backoff)."""
+    last_err = None
+    for attempt in range(max_retries + 1):
+        try:
+            return client.messages.create(**kwargs)
+        except Exception as e:
+            last_err = e
+            if attempt < max_retries:
+                wait = 2 ** attempt
+                print(f"[Portfolio] Claude API error (attempt {attempt + 1}/{max_retries + 1}): "
+                      f"{e}. Retrying in {wait}s...")
+                time.sleep(wait)
+    raise last_err
 
 
 # ── Crash Risk Score ─────────────────────────────────────────────────────────
@@ -394,9 +498,30 @@ def build_prices_section(prices):
         if fr is not None:
             line += f" | FR:{fr}% OI:${oi}B"
         lines.append(line)
+        if asset in ("WTI", "SPX"):
+            atr  = d.get("atr_14")
+            r20h = d.get("range_20_high")
+            r20l = d.get("range_20_low")
+            recent = d.get("closes_10d", [])
+            if atr is not None:
+                lines.append(f"  ATR14:{_fmt(atr)} | 20dHi:{_fmt(r20h)} 20dLo:{_fmt(r20l)}")
+            if recent:
+                lines.append("  Recent5d: " + " ".join(_fmt(c) for c in recent[-5:]))
+        if asset == "WTI":
+            inv_l = prices.get("_crude_inv_level_kb")
+            inv_c = prices.get("_crude_inv_chg_kb")
+            if inv_l is not None:
+                if inv_c is not None:
+                    sign = "+" if inv_c >= 0 else ""
+                    lines.append(f"  EIA Stocks: {inv_l:,}kb | Chg:{sign}{inv_c:,}kb")
+                else:
+                    lines.append(f"  EIA Stocks: {inv_l:,}kb")
     spread = prices.get("wti_brent_spread")
     if spread is not None:
         lines.append(f"WTI/Brent spread: {_fmt(spread)}")
+    gsr = prices.get("gold_silver_ratio")
+    if gsr is not None:
+        lines.append(f"Gold/Silver Ratio: {gsr}")
     # Context indicators
     vix    = prices.get("_vix")
     eurusd = prices.get("_eurusd")
@@ -462,7 +587,8 @@ def extract_email_body(text):
     return text
 
 
-def merge_delta(prior, delta, prices, crs_score=None, crs_regime=None, crs_comp=None):
+def merge_delta(prior, delta, prices, crs_score=None, crs_regime=None, crs_comp=None,
+                today_str=None):
     """Merge STATE_DELTA from Claude into full state."""
     updated = dict(prior)
     updated["last_run"] = datetime.now(timezone.utc).isoformat()
@@ -473,11 +599,28 @@ def merge_delta(prior, delta, prices, crs_score=None, crs_regime=None, crs_comp=
         updated["crash_risk_regime"] = crs_regime
         updated["crs_components"]    = crs_comp
 
-    # Claude-owned fields
-    for field in ["macro_bias", "bias_short", "bias_long", "last_analysis",
-                  "active_setups", "alerted"]:
+    # Claude-owned scalar fields
+    for field in ["macro_bias", "bias_short", "bias_long", "last_analysis", "alerted"]:
         if field in delta:
             updated[field] = delta[field]
+
+    # active_setups: preserve created_at from prior state for unchanged setups
+    if "active_setups" in delta:
+        prior_setup_map = {
+            (s.get("symbol"), s.get("direction", "")): s
+            for s in prior.get("active_setups", [])
+        }
+        merged_setups = []
+        for s in delta["active_setups"]:
+            key   = (s.get("symbol"), s.get("direction", ""))
+            prior_s = prior_setup_map.get(key, {})
+            ms = dict(s)
+            if not ms.get("created_at"):
+                ms["created_at"] = prior_s.get("created_at") or today_str or ""
+            if not ms.get("max_age_days") and prior_s.get("max_age_days"):
+                ms["max_age_days"] = prior_s["max_age_days"]
+            merged_setups.append(ms)
+        updated["active_setups"] = merged_setups
 
     # Merge positions: Claude updates P&L/action fields; Python owns entry/qty/stop.
     # Key is (symbol, direction) so BTC LONG and BTC SHORT can coexist.
@@ -502,6 +645,83 @@ def merge_delta(prior, delta, prices, crs_score=None, crs_regime=None, crs_comp=
     return updated
 
 
+# ── Portfolio heat ────────────────────────────────────────────────────────────
+
+def compute_portfolio_heat(positions, prices):
+    # type: (List[dict], dict) -> tuple
+    """Return (total_eur_val, avg_pnl_pct_or_None, stressed_count)."""
+    total_val = 0.0
+    pnls      = []  # type: List[float]
+    stressed  = 0
+    for pos in positions:
+        qty   = pos.get("qty")
+        curr  = price_of(pos.get("symbol", "").upper(), prices)
+        pnl   = compute_pnl(pos, prices)
+        if qty is not None and curr is not None:
+            try:
+                total_val += float(qty) * float(curr)
+            except Exception:
+                pass
+        if pnl is not None:
+            pnls.append(pnl)
+            if pnl < -10:
+                stressed += 1
+    avg_pnl = round(sum(pnls) / len(pnls), 1) if pnls else None
+    return round(total_val), avg_pnl, stressed
+
+
+# ── Prior analysis verdicts ───────────────────────────────────────────────────
+
+def parse_last_analysis_verdicts(state):
+    # type: (dict) -> dict
+    """Parse last_analysis from state — accepts dict (new) or JSON string (legacy)."""
+    la = state.get("last_analysis")
+    if isinstance(la, dict):
+        return la
+    if isinstance(la, str) and la.strip().startswith("{"):
+        try:
+            return json.loads(la)
+        except Exception:
+            pass
+    return {}
+
+
+# ── Telegram alerting ─────────────────────────────────────────────────────────
+
+def send_telegram_alert(env, setups_entering):
+    # type: (dict, List[dict]) -> None
+    """Send a Telegram message for each newly-ENTER setup."""
+    token   = env.get("TELEGRAM_BOT_TOKEN", "")
+    chat_id = env.get("TELEGRAM_CHAT_ID", "")
+    if not token or not chat_id:
+        return
+    import requests as _req
+    for s in setups_entering:
+        sym       = s.get("symbol", "?")
+        dirn      = s.get("direction", "?")
+        conviction = s.get("conviction", "?")
+        rng       = s.get("range", "?")
+        stop      = s.get("stop", "?")
+        target    = s.get("target", "?")
+        note      = (s.get("note") or "").strip()
+        msg = (
+            f"\U0001f534 *PORTFOLIO ENTER: {sym} {dirn}*\n"
+            f"Range: {rng}\n"
+            f"Stop: {stop} | Target: {target}\n"
+            f"Conviction: {conviction}"
+            + (f"\n_{note}_" if note else "")
+        )
+        try:
+            _req.post(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                json={"chat_id": chat_id, "text": msg, "parse_mode": "Markdown"},
+                timeout=10,
+            )
+            print(f"[Portfolio] Telegram ENTER alert sent: {sym} {dirn}")
+        except Exception as e:
+            print(f"[Portfolio] Telegram alert error: {e}")
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def run():
@@ -518,6 +738,13 @@ def run():
     state = load_state()
     state, pending_log = apply_pending(state)
 
+    today_str = datetime.utcnow().strftime("%Y-%m-%d")
+
+    state, expired_setups = expire_stale_setups(state, today_str)
+    if expired_setups:
+        print(f"[Portfolio] Expired {len(expired_setups)} stale setup(s): "
+              + ", ".join(s.get("symbol", "?") for s in expired_setups))
+
     fred_key = env.get("FRED_API_KEY", "")
 
     # ── Step 2: Fetch data ──
@@ -531,7 +758,23 @@ def run():
     crs_score, crs_comp, crs_regime = compute_crash_risk_score(crs_data, macro)
     print(f"[Portfolio] CRS: {crs_score}/10 ({crs_regime})")
 
-    today_str  = datetime.utcnow().strftime("%Y-%m-%d")
+    if not fred_key:
+        print("[Portfolio] WARNING: FRED_API_KEY not set — HY OAS, 2s10s, TIPS, ISM, "
+              "SLOOS, SOFR, TGA, RRP, EIA crude missing. CRS based on carry+Japan+VIX only. "
+              "Free key: https://fred.stlouisfed.org/docs/api/api_key.html")
+    else:
+        missing_crs = [k for k in ("hy_credit_regime", "curve_2s10s_status")
+                       if crs_comp.get(k) == "NO_DATA"]
+        if missing_crs:
+            print(f"[Portfolio] WARNING: CRS partial data — missing: {missing_crs}")
+
+    # Inject EIA crude inventory into prices dict so build_prices_section can show it
+    prices["_crude_inv_level_kb"] = crs_data.get("crude_inv_level_kb")
+    prices["_crude_inv_chg_kb"]   = crs_data.get("crude_inv_chg_kb")
+
+    print("[Portfolio] Fetching WTI news headlines...")
+    wti_headlines = get_wti_news(n_headlines=6)
+
     prices_txt = build_prices_section(prices)
 
     # ── Step 3: Build prompts ──
@@ -548,7 +791,15 @@ def run():
         crash_risk_score=crs_score,
         crash_risk_regime=crs_regime,
         crs_components=crs_comp,
+        tga_balance_bn=crs_data.get("tga_balance"),
+        rrp_balance_bn=crs_data.get("rrp_balance"),
     ), default=str)
+
+    macro_delta_txt = compute_macro_delta(state, macro, crs_score, crs_regime)
+    prior_short = state.get("bias_short", "NEUTRAL")
+    prior_long  = state.get("bias_long",  "NEUTRAL")
+    prior_macro = state.get("macro_bias", "NEUTRAL")
+    prior_crs_s = state.get("crash_risk_score", "N/A")
 
     # Pre-fill header + macro card
     us10  = _fmt(macro.get("us_10y"), 2)
@@ -563,6 +814,37 @@ def run():
                if crs_comp.get("hy_oas_bps") is not None else "N/A")
     crv_str = crs_comp.get("curve_2s10s_status", "N/A")
 
+    # Portfolio heat line
+    _positions = state.get("open_positions", [])
+    _heat_val, _heat_pnl, _heat_stressed = compute_portfolio_heat(_positions, prices)
+    _heat_line = ""
+    if _positions:
+        _heat_parts = [f"€{_heat_val:,.0f}"] if _heat_val > 0 else []
+        if _heat_pnl is not None:
+            _sign = "+" if _heat_pnl >= 0 else ""
+            _heat_parts.append(f"AvgP&L:{_sign}{_heat_pnl}%")
+        if _heat_stressed > 0:
+            _heat_parts.append(f"⚠️{_heat_stressed} stressed")
+        if _heat_parts:
+            _heat_line = "Heat  : " + " | ".join(_heat_parts) + "\n"
+
+    # Prior analysis verdicts
+    la_verdicts = parse_last_analysis_verdicts(state)
+    if la_verdicts:
+        _wti_was   = la_verdicts.get("wti_bias", "N/A")
+        _spx_was   = la_verdicts.get("spx_bias", "N/A")
+        _wti_lvl   = la_verdicts.get("wti_key_level", "N/A")
+        _spx_lvl   = la_verdicts.get("spx_key_level", "N/A")
+        _macro_v   = la_verdicts.get("macro_verdict", "N/A")
+        _dom_risk  = la_verdicts.get("dominant_risk", "N/A")
+        prior_analysis_txt = (
+            f"WTI bias was: {_wti_was} | Key level: {_wti_lvl}\n"
+            f"SPX bias was: {_spx_was} | Key level: {_spx_lvl}\n"
+            f"Macro verdict: {_macro_v} | Dominant risk: {_dom_risk}"
+        )
+    else:
+        prior_analysis_txt = "No prior analysis data."
+
     prefill = (
         f"[EMAIL]\n"
         f"PORTFOLIO BRIEF\n"
@@ -576,6 +858,7 @@ def run():
         f"USDJPY: {usd}  Carry: {carry}\n"
         f"CRS   : {crs_score}/10 ({crs_regime})"
         f"  HY:{hy_str} Curve:{crv_str}\n"
+        f"{_heat_line}"
         f"------------------------------\n"
         f"SHORT bias:"
     ).rstrip()
@@ -587,6 +870,18 @@ def run():
 
 ═══ MACRO SNAPSHOT ═══
 {macro_snapshot}
+
+═══ WTI RECENT HEADLINES ═══
+{chr(10).join(wti_headlines) if wti_headlines else "(No headlines fetched.)"}
+
+═══ MACRO CHANGES SINCE LAST RUN ═══
+{macro_delta_txt}
+
+═══ PRIOR BIASES (last run) ═══
+Short: {prior_short} | Long: {prior_long} | Macro: {prior_macro} | CRS: {prior_crs_s}/10
+
+═══ PRIOR ANALYSIS VERDICTS (last run) ═══
+{prior_analysis_txt}
 
 ═══ CURRENT STATE ═══
 {json.dumps(state, separators=(',', ':'), default=str)}
@@ -676,6 +971,7 @@ Section order and EXACT header names to write:
     Range: 88.00-92.00
     Stop: 84.00
     Target: 100.00
+    Conviction: HIGH/MEDIUM/LOW
     Note: one short context line
 
     SPX SHORT
@@ -683,6 +979,7 @@ Section order and EXACT header names to write:
     Range: 7500-7550
     Stop: 7650
     Target: 7200
+    Conviction: HIGH/MEDIUM/LOW
     Note: one short context line
 
   CHANGES TODAY
@@ -783,6 +1080,7 @@ Status: WAITING
 Range: X.XX-X.XX
 Stop: X.XX
 Target: X.XX
+Conviction: HIGH/MEDIUM/LOW
 Note: <one line>
 ------------------------------
 
@@ -793,18 +1091,22 @@ CHANGES TODAY
 
 [STATE_DELTA]
 {{Only these Claude-owned fields:
-  macro_bias, bias_short, bias_long, last_analysis,
-  active_setups, open_positions (P&L/action only — no entry_price/qty override), alerted}}
+  macro_bias, bias_short, bias_long,
+  last_analysis (MUST be a JSON object — not a string — with these exact keys:
+    wti_bias, spx_bias, wti_key_level, spx_key_level, dominant_risk, macro_verdict),
+  active_setups (each setup must include conviction:HIGH/MEDIUM/LOW and created_at:YYYY-MM-DD),
+  open_positions (P&L/action only — no entry_price/qty override), alerted}}
 [/STATE_DELTA]
 """
 
     # ── Step 4: Call Claude ──
     client = anthropic.Anthropic(api_key=api_key)
-    print(f"[{datetime.utcnow().isoformat()}] Calling Claude Haiku 4.5...")
+    print(f"[{datetime.utcnow().isoformat()}] Calling Claude Sonnet 4.6...")
 
-    message = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=6000,
+    message = _call_claude(
+        client,
+        model="claude-sonnet-4-6",
+        max_tokens=8192,
         system=[{
             "type": "text",
             "text": system_prompt,
@@ -822,22 +1124,49 @@ CHANGES TODAY
     tokens_cache_write = getattr(message.usage, "cache_creation_input_tokens", 0)
     tokens_out         = message.usage.output_tokens
     cost_usd = (
-        (tokens_in          * 0.80) +
-        (tokens_cache_read  * 0.08) +
-        (tokens_cache_write * 1.00) +
-        (tokens_out         * 4.00)
+        (tokens_in          *  3.00) +
+        (tokens_cache_read  *  0.30) +
+        (tokens_cache_write *  3.75) +
+        (tokens_out         * 15.00)
     ) / 1_000_000
     print(f"[Portfolio] Tokens: in={tokens_in} cache_read={tokens_cache_read} "
           f"out={tokens_out} cost=${cost_usd:.4f}")
 
     # ── Step 5: Update state ──
+    prior_setups = list(state.get("active_setups", []))
     delta = extract_state_delta(response)
     if delta:
         updated_state = merge_delta(state, delta, prices,
                                     crs_score=crs_score,
                                     crs_regime=crs_regime,
-                                    crs_comp=crs_comp)
+                                    crs_comp=crs_comp,
+                                    today_str=today_str)
         save_state(updated_state)
+        log_setup_outcomes(prior_setups,
+                           updated_state.get("active_setups", []),
+                           today_str, BASE_DIR)
+        updated_state["last_macro"] = {
+            "us_10y":       macro.get("us_10y"),
+            "us_30y":       macro.get("us_30y"),
+            "usdjpy":       macro.get("usdjpy"),
+            "carry_regime": macro.get("carry_regime"),
+            "crs_score":    crs_score,
+            "crs_regime":   crs_regime,
+        }
+        save_state(updated_state)
+        # Telegram: alert on setups newly moved to ENTER
+        _prior_status_map = {
+            (s.get("symbol"), s.get("direction", "")): s.get("status")
+            for s in prior_setups
+        }
+        newly_entering = [
+            s for s in updated_state.get("active_setups", [])
+            if (s.get("status") == "ENTER"
+                and _prior_status_map.get(
+                    (s.get("symbol"), s.get("direction", "")), "") != "ENTER")
+        ]
+        if newly_entering:
+            send_telegram_alert(env, newly_entering)
         print(f"[{datetime.utcnow().isoformat()}] State updated via delta")
     else:
         state["last_run"] = datetime.now(timezone.utc).isoformat()
@@ -856,8 +1185,12 @@ CHANGES TODAY
     setup_count  = len(updated_state.get("active_setups", []))
     enter_count  = sum(1 for s in updated_state.get("active_setups", [])
                        if s.get("status") == "ENTER")
+    high_conv_enters = sum(
+        1 for s in updated_state.get("active_setups", [])
+        if s.get("status") == "ENTER" and s.get("conviction") == "HIGH"
+    )
     subject = (f"🔴 PORTFOLIO ENTRY — {today_str} | {macro_bias} | {enter_count} ENTER"
-               if enter_count > 0
+               if high_conv_enters > 0
                else f"📈 Portfolio Brief — {today_str} | {macro_bias} | {setup_count} setups")
 
     email_ok = send_report(

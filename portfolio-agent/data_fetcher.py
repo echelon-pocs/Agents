@@ -6,7 +6,7 @@ import sys
 import time
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 import requests
 
@@ -42,6 +42,36 @@ def _yf_fetch(yf_symbol, history=60):
         return (None, [])
 
 
+def _yf_fetch_full(yf_symbol, history=60):
+    # type: (str, int) -> tuple
+    """Return (latest_close, closes, highs, lows) from Yahoo Finance."""
+    try:
+        days = max(history * 2, 90)
+        url = (f"https://query1.finance.yahoo.com/v8/finance/chart/{yf_symbol}"
+               f"?interval=1d&range={days}d")
+        r = requests.get(url, timeout=15, headers=CHROME_HDR)
+        if r.status_code != 200:
+            return (None, [], [], [])
+        data = r.json()
+        quote = (data.get("chart", {}).get("result", [{}])[0]
+                 .get("indicators", {}).get("quote", [{}])[0])
+        raw_c = quote.get("close", [])
+        raw_h = quote.get("high", [])
+        raw_l = quote.get("low", [])
+        closes, highs, lows = [], [], []
+        for c, h, l in zip(raw_c, raw_h, raw_l):
+            if c is not None and h is not None and l is not None:
+                closes.append(round(c, 4))
+                highs.append(round(h, 4))
+                lows.append(round(l, 4))
+        if not closes:
+            return (None, [], [], [])
+        return (closes[-1], closes, highs, lows)
+    except Exception as e:
+        print(f"[Portfolio] YF FULL {yf_symbol}: {e}")
+        return (None, [], [], [])
+
+
 def _pct_chg(closes, n_days):
     """% change over last n_days from closes list."""
     if len(closes) < n_days + 1:
@@ -58,6 +88,24 @@ def _ma(closes, n):
     if len(closes) < n:
         return None
     return round(sum(closes[-n:]) / n, 4)
+
+
+def _atr(highs, lows, closes, n=14):
+    # type: (List[float], List[float], List[float], int) -> Optional[float]
+    """N-day Average True Range."""
+    if len(highs) < n + 1 or len(lows) < n + 1 or len(closes) < n + 1:
+        return None
+    trs = []
+    for i in range(1, len(closes)):
+        tr = max(
+            highs[i] - lows[i],
+            abs(highs[i] - closes[i - 1]),
+            abs(lows[i] - closes[i - 1]),
+        )
+        trs.append(tr)
+    if len(trs) < n:
+        return None
+    return round(sum(trs[-n:]) / n, 4)
 
 
 # ── MEXC perpetuals ───────────────────────────────────────────────────────────
@@ -159,6 +207,64 @@ def _fred_latest(series_id, api_key, n_lookback=5):
         return None
 
 
+def _fred_series(series_id, api_key, n=2):
+    # type: (str, str, int) -> List[float]
+    """Return list of last n non-missing FRED observations, newest first."""
+    try:
+        r = requests.get(
+            _FRED_BASE,
+            params={
+                "series_id":  series_id,
+                "api_key":    api_key,
+                "file_type":  "json",
+                "sort_order": "desc",
+                "limit":      n * 3,
+            },
+            timeout=15,
+            headers=CHROME_HDR,
+        )
+        if r.status_code != 200:
+            return []
+        results = []
+        for obs in r.json().get("observations", []):
+            v = obs.get("value", ".")
+            if v and v != ".":
+                results.append(float(v))
+            if len(results) >= n:
+                break
+        return results
+    except Exception as e:
+        print(f"[Portfolio] FRED series {series_id}: {e}")
+        return []
+
+
+def get_wti_news(n_headlines=5):
+    # type: (int) -> List[str]
+    """Fetch recent WTI/oil/OPEC headlines from Yahoo Finance. Returns '[Mon DD] Title' strings."""
+    headlines = []
+    try:
+        url = (
+            "https://query1.finance.yahoo.com/v1/finance/search"
+            "?q=crude+oil+WTI+OPEC&newsCount=8&quotesCount=0"
+            "&lang=en-US&region=US&enableFuzzyQuery=false"
+        )
+        r = requests.get(url, timeout=10, headers=CHROME_HDR)
+        if r.status_code == 200:
+            for item in r.json().get("news", [])[:n_headlines]:
+                title = (item.get("title") or "").strip()
+                ts    = item.get("providerPublishTime", 0)
+                if not title:
+                    continue
+                try:
+                    dt_str = datetime.utcfromtimestamp(ts).strftime("%b %d")
+                    headlines.append(f"[{dt_str}] {title}")
+                except Exception:
+                    headlines.append(title)
+    except Exception as e:
+        print(f"[Portfolio] WTI news fetch error: {e}")
+    return headlines
+
+
 def get_crs_data(fred_key=None, vix_spot=None):
     # type: (Optional[str], Optional[float]) -> Dict
     """
@@ -196,9 +302,18 @@ def get_crs_data(fred_key=None, vix_spot=None):
         data["lending_std"]     = _fred_latest("DRTSCILM",     fred_key, n_lookback=5)
         data["sofr"]            = _fred_latest("SOFR",         fred_key)
         data["fed_funds_upper"] = _fred_latest("DFEDTARU",     fred_key)
+        data["tga_balance"]     = _fred_latest("WTREGEN",      fred_key, n_lookback=5)
+        data["rrp_balance"]     = _fred_latest("RRPONTSYD",    fred_key, n_lookback=5)
+        # EIA crude oil inventories — weekly, thousands of barrels
+        _crude = _fred_series("WCRSTUS1", fred_key, n=2)
+        data["crude_inv_level_kb"] = int(_crude[0]) if _crude else None
+        data["crude_inv_chg_kb"]   = (int(_crude[0] - _crude[1])
+                                      if len(_crude) >= 2 else None)
     else:
         for k in ("hy_oas", "curve_2s10s", "tips_10y", "ism_pmi",
-                  "lending_std", "sofr", "fed_funds_upper"):
+                  "lending_std", "sofr", "fed_funds_upper",
+                  "tga_balance", "rrp_balance",
+                  "crude_inv_level_kb", "crude_inv_chg_kb"):
             data[k] = None
 
     return data
@@ -242,19 +357,24 @@ def get_all_portfolio_data():
     result = {}
 
     for asset, yf_sym in YF_SYMBOLS.items():
-        price, closes = _yf_fetch(yf_sym, history=60)
+        price, closes, highs, lows = _yf_fetch_full(yf_sym, history=60)
+        atr14         = _atr(highs, lows, closes, 14)
+        range_20_high = max(highs[-20:]) if len(highs) >= 20 else None
+        range_20_low  = min(lows[-20:])  if len(lows)  >= 20 else None
         entry = {
-            "asset":      asset,
-            "yf_symbol":  yf_sym,
-            "price":      price,
-            "chg_1d":     _pct_chg(closes, 1),
-            "chg_5d":     _pct_chg(closes, 5),
-            "chg_30d":    _pct_chg(closes, 30),
-            "ma_20":      _ma(closes, 20),
-            "ma_50":      _ma(closes, 50),
-            "closes_10d": closes[-10:] if closes else [],
+            "asset":         asset,
+            "yf_symbol":     yf_sym,
+            "price":         price,
+            "chg_1d":        _pct_chg(closes, 1),
+            "chg_5d":        _pct_chg(closes, 5),
+            "chg_30d":       _pct_chg(closes, 30),
+            "ma_20":         _ma(closes, 20),
+            "ma_50":         _ma(closes, 50),
+            "closes_10d":    closes[-10:] if closes else [],
+            "atr_14":        atr14,
+            "range_20_high": range_20_high,
+            "range_20_low":  range_20_low,
         }
-        # Trend vs MAs
         if price and entry["ma_20"] and entry["ma_50"]:
             entry["above_ma20"] = price > entry["ma_20"]
             entry["above_ma50"] = price > entry["ma_50"]
@@ -287,6 +407,14 @@ def get_all_portfolio_data():
     brent_p = result.get("BRENT", {}).get("price")
     if wti_p and brent_p:
         result["wti_brent_spread"] = round(brent_p - wti_p, 2)
+
+    # Gold/silver ratio — spot futures (USD/oz), standard market reference
+    _gold_spot, _   = _yf_fetch("GC=F", history=5)
+    _silver_spot, _ = _yf_fetch("SI=F", history=5)
+    if _gold_spot and _silver_spot and _silver_spot > 0:
+        result["gold_silver_ratio"] = round(_gold_spot / _silver_spot, 1)
+    else:
+        result["gold_silver_ratio"] = None
 
     print(
         f"[Portfolio] "

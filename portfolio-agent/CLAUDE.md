@@ -111,7 +111,7 @@ This is an active tactical position. Perform a full multi-factor analysis coveri
 - Net OPEC+ bias: RESTRICTIVE / NEUTRAL / LOOSENING
 
 **C. US supply dynamics**
-- EIA weekly inventory: if data unavailable, note N/A but comment on trend
+- EIA weekly inventory: level and week-over-week change NOW PROVIDED in prices section (EIA Stocks: XXXkb | Chg:±XXkb). A draw (negative Chg) is bullish; a build (positive Chg) is bearish. Note the reading and its direction.
 - US rig count trend (Baker Hughes): if unavailable, note N/A
 - Shale production breakeven: ~$55–60/bbl WTI — are we above or below?
 - SPR releases or refills: if known, note
@@ -129,7 +129,8 @@ This is an active tactical position. Perform a full multi-factor analysis coveri
 
 **F. Technical structure (WTI)**
 - Price vs MA20 / MA50: above/below, distance %
-- Key levels: nearest significant resistance above, support below (round numbers, prior highs/lows)
+- ATR14 provided in prices — use for stop calibration (e.g. 1.5×ATR below entry for longs)
+- 20d high/low provided — nearest significant resistance/support before round-number levels
 - Pattern: trending, ranging, topping, bottoming
 - MEXC funding rate: positive = leveraged longs; negative = short-side dominant
 - OI trend: rising OI + rising price = momentum; rising OI + falling price = distribution
@@ -161,8 +162,8 @@ This is an active tactical position. Perform a full multi-factor analysis:
 - Current risk: is carry architecture shifting? What's the carry regime today?
 
 **C. Liquidity conditions**
-- TGA (Treasury General Account): drawdown = liquidity injection into markets (bullish)
-- Reverse Repo (RRP): declining RRP = excess liquidity rotating into risk assets
+- TGA (Treasury General Account): drawdown = liquidity injection (bullish). Live balance in macro_snapshot.tga_balance_bn ($B).
+- Reverse Repo (RRP): declining RRP = excess liquidity rotating into risk assets. Live balance in macro_snapshot.rrp_balance_bn ($B).
 - Bank reserves: elevated = system flush; falling = tightening
 - QT pace: note current $Bn/month balance sheet reduction if known
 - Net liquidity assessment: INJECTING / NEUTRAL / DRAINING
@@ -186,6 +187,8 @@ This is an active tactical position. Perform a full multi-factor analysis:
 
 **G. Technical structure (SPX)**
 - Price vs MA20 / MA50: above/below, trend strength
+- ATR14 provided in prices — use for stop calibration
+- 20d high/low range provided — use for support/resistance context
 - Distance from ATH / recent highs: < 5% = distribution zone risk; > 10% = room to run
 - VIX level: < 15 = complacency (setup for volatility spike); 15–25 = normal; > 25 = fear
 - MEXC funding rate: positive = leveraged longs; crowded = reversion candidate
@@ -259,6 +262,19 @@ For active_setups (Tier 1 only):
 ### STEP 7 — Output
 Produce [EMAIL] and [STATE_DELTA] blocks exactly as specified in the user prompt.
 
+**last_analysis must be a JSON object** (not a plain string) with these exact keys:
+```json
+{
+  "wti_bias": "BULLISH|BEARISH|NEUTRAL",
+  "spx_bias": "BULLISH|BEARISH|NEUTRAL",
+  "wti_key_level": 68.50,
+  "spx_key_level": 5350,
+  "dominant_risk": "free text, e.g. USD_STRENGTH / CARRY_RISK / OPEC_SUPPLY",
+  "macro_verdict": "RISK_ON|RISK_OFF|NEUTRAL|BIFURCATED"
+}
+```
+This is read back next run to compare verdicts explicitly (WTI was BEARISH → now NEUTRAL).
+
 ---
 
 ## Output Format Notes
@@ -299,6 +315,7 @@ Produce [EMAIL] and [STATE_DELTA] blocks exactly as specified in the user prompt
     Range: X-Y
     Stop: X.XX
     Target: X.XX
+    Conviction: HIGH/MEDIUM/LOW
     Note: one line of context
 - CHANGES TODAY: one bullet per change: NEW / ENTER / REVISED / HOLD / ADD / TRIM / ADOPTED
 
@@ -321,8 +338,23 @@ Produce [EMAIL] and [STATE_DELTA] blocks exactly as specified in the user prompt
       "action": "HOLD"
     }
   ],
-  "active_setups": [],
+  "active_setups": [
+    {
+      "symbol": "WTI", "direction": "LONG",
+      "status": "WAITING",
+      "range": "88.00-92.00",
+      "stop": 84.00, "target": 100.00,
+      "conviction": "HIGH",
+      "created_at": "YYYY-MM-DD",
+      "max_age_days": 7,
+      "note": ""
+    }
+  ],
   "alerted": [],
-  "last_analysis": ""
+  "last_analysis": {
+    "wti_bias": "NEUTRAL", "spx_bias": "NEUTRAL",
+    "wti_key_level": 0, "spx_key_level": 0,
+    "dominant_risk": "", "macro_verdict": "NEUTRAL"
+  }
 }
 ```
