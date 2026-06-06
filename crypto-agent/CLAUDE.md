@@ -164,7 +164,7 @@ Count wallets: 1 = LOW, 3–4 = MEDIUM, 6+ = HIGH on whale layer alone.
 Opening > closing (closing may be profit-taking, opening is a fresh bet).
 
 ### STEP 4 — Technical Analysis
-Use prices from the provided whale data. For each asset (Tier 1: BTC ETH SOL XRP BNB ONDO; Tier 2: DOGE ADA AVAX LINK DOT MATIC ATOM LTC BCH UNI AAVE OP ARB SUI APT INJ TIA HYPE TAO):
+Use prices from the provided whale data. **Fixed analysis list:** BTC ETH XRP SUI SOL WLD DOGE ADA ONDO TRX. Run full analysis on all 10. For setup discovery (Step 5), also scan the broader market for any coin showing exceptional whale accumulation or a clean technical setup — these can appear as setup recommendations even if not on the fixed list.
 
 1. Trend: above/below 50d/200d MA, death/golden cross
 2. Key levels: nearest significant resistance above, support below
@@ -241,6 +241,8 @@ Never close a position in state without user confirmation. Only recommend action
 
 ### STEP 7 — Output
 Produce output in EXACTLY the format specified in the user prompt ([EMAIL] and [STATE_JSON] blocks). No other output.
+
+**Macro indicators stay internal.** US yields, JGB rates, USDJPY, carry regime, SPX, FOMC — use them to compute biases and composite scores, but do NOT print them in the email. The portfolio-agent handles macro reporting. The crypto email shows only crypto-native indicators: BTC price, dominance, F&G, OI, funding rate, leverage signal, cycle position.
 
 State JSON fields: last_run, macro_bias, bias_short, bias_long, cycle_phase, cycle_year, cycle_thesis, cycle_bias_impact, btc_price, btc_dominance, altcoin_season_index, fear_greed, macro_snapshot (us_10y, us_30y, japan_10y, japan_30y, japan_curve_spread, spx, btc_oi_usd_bn, btc_funding_rate_pct, us_curve_status, japan_stress, usdjpy, usdjpy_weekly_chg_pct, carry_regime, carry_architecture_alert, usdjpy_history[4 weekly closes newest-first]), open_positions (each with tf), whale_wallets, whale_signals_today, active_setups, alerted, profitable_wallets_discovered, last_analysis.
 

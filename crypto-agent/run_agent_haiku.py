@@ -238,6 +238,26 @@ def apply_pending_updates(state):
     return state, log
 
 
+def prune_stale_setups(state):
+    """Remove WAITING setups older than 14 days to prevent state bloat."""
+    from datetime import timedelta
+    cutoff = (datetime.utcnow() - timedelta(days=14)).strftime('%Y-%m-%d')
+    pruned, removed = [], []
+    for setup in state.get("active_setups", []):
+        if not isinstance(setup, dict):
+            continue
+        added  = setup.get("added", "")
+        status = setup.get("status", "WAITING")
+        if status == "WAITING" and added and added < cutoff:
+            removed.append(setup.get("symbol", "?"))
+        else:
+            pruned.append(setup)
+    if removed:
+        state["active_setups"] = pruned
+        print(f"[Agent] Pruned stale WAITING setups (>14d): {', '.join(removed)}")
+    return state, removed
+
+
 def load_env():
     env_vars = {}
     p = BASE_DIR / ".env"
@@ -382,7 +402,8 @@ def merge_state_delta(prior_state, delta, macro_data, prices, profitable_wallets
     # Python-managed
     new_state["last_run"]  = datetime.utcnow().isoformat()
     new_state["btc_price"] = prices.get("BTC") or prior_state.get("btc_price")
-    new_state["profitable_wallets_discovered"] = profitable_wallets
+    # Cap profitable wallets at 20 (newest-first from whale_tracker)
+    new_state["profitable_wallets_discovered"] = profitable_wallets[:20] if isinstance(profitable_wallets, list) else profitable_wallets
     new_state["macro_snapshot"] = {
         "us_10y":                 macro_data.get("us_10y"),
         "us_30y":                 macro_data.get("us_30y"),
@@ -414,6 +435,11 @@ def merge_state_delta(prior_state, delta, macro_data, prices, profitable_wallets
     ):
         if field in delta:
             new_state[field] = delta[field]
+
+    # Cap alerted list at 30 entries (oldest are irrelevant)
+    alerted = new_state.get("alerted")
+    if isinstance(alerted, list) and len(alerted) > 30:
+        new_state["alerted"] = alerted[-30:]
 
     return new_state
 
@@ -520,8 +546,10 @@ def run():
     # ── Step 1: Load state + apply Telegram position updates ───────────────────────
     state = load_state()
     state, tg_log = apply_pending_updates(state)
-    if tg_log:
-        print(f"[{datetime.utcnow().isoformat()}] Telegram updates applied: {', '.join(tg_log)}")
+    state, pruned_syms = prune_stale_setups(state)
+    if tg_log or pruned_syms:
+        if tg_log:
+            print(f"[{datetime.utcnow().isoformat()}] Telegram updates applied: {', '.join(tg_log)}")
         save_state(state)
     print(f"[{datetime.utcnow().isoformat()}] State loaded — "
           f"{len(state.get('active_setups', []))} setups, "
@@ -559,131 +587,42 @@ def run():
         "fomc":             fomc,
     }
 
+    tg_lines = list(tg_log)
+    for sym in pruned_syms:
+        tg_lines.append(f"PRUNED {sym} — WAITING setup expired after 14d, no trigger")
     tg_section = (
-        f"\n═══ POSITION UPDATES (received via Telegram before this run) ═══\n"
-        + "\n".join(f"- {l}" for l in tg_log)
-        if tg_log else ""
+        f"\n═══ PRE-RUN STATE CHANGES ═══\n"
+        + "\n".join(f"- {l}" for l in tg_lines)
+        if tg_lines else ""
     )
 
     today_str = datetime.utcnow().strftime('%Y-%m-%d')
 
-    # ── Build data-driven prefill ─────────────────────────────────────
-    # MACRO REGIME and YEN CARRY are pre-filled from Python using the
-    # freshly-fetched macro data. This makes it physically impossible for
-    # Claude to skip those sections — they're already in the response before
-    # Claude writes its first token. Claude only needs to fill analysis
-    # sections (biases, cycle view, liquidity bullets, positions, setups).
-
-    macro = whale_slim.get("macro", {})
-    prices = whale_slim.get("prices", {})
-
-    def _fv(v, suffix="", na="N/A"):
-        return f"{v}{suffix}" if v is not None else na
-
-    us_10y_raw  = macro.get("us_10y")
-    us_30y_raw  = macro.get("us_30y")
-    j_10y_raw   = macro.get("japan_10y")
-    j_30y_raw   = macro.get("japan_30y")
-
-    us_spread_v = (
-        f"{(us_30y_raw - us_10y_raw):.2f}%"
-        if us_10y_raw is not None and us_30y_raw is not None else "N/A"
-    )
-    j_spread_v  = _fv(macro.get("japan_curve_spread"), "%")
-
-    us_10y_v    = _fv(us_10y_raw, "%")
-    us_30y_v    = _fv(us_30y_raw, "%")
-    j_10y_v     = _fv(j_10y_raw,  "%")
-    j_30y_v     = _fv(j_30y_raw,  "%")
-    us_status_v = macro.get("us_curve_status")   or "N/A"
-    j_stress_v  = macro.get("japan_stress")      or "N/A"
-    spx_v       = _fv(macro.get("spx"))
-    oi_v        = _fv(macro.get("btc_oi_usd_bn"),        "B")
-    fr_v        = _fv(macro.get("btc_funding_rate_pct"),  "%")
-    lev_v       = macro.get("btc_leverage_signal") or "N/A"
-    usdjpy_v    = _fv(macro.get("usdjpy"))
-    usdjpy_chg  = _fv(macro.get("usdjpy_weekly_chg_pct"), "%/wk")
-    carry_v     = macro.get("carry_regime") or "N/A"
-    arch_alert  = macro.get("carry_architecture_alert", False)
-    arch_line   = "\nArch  : ⚠️ lower-highs (arch alert)" if arch_alert else ""
-
-    mg          = whale_slim.get("market_globals", {})
-    cm          = whale_slim.get("cycle_metrics", {})
-
-    btc_price_v = _fv(prices.get("BTC") or state.get("btc_price"))
-    btc_dom_v   = _fv(mg.get("btc_dominance") or state.get("btc_dominance"))
-    fg_v        = _fv(mg.get("fear_greed") or state.get("fear_greed"))
-
-    # Cycle metrics for prefill
-    cy_year     = cm.get("cycle_year") or state.get("cycle_year") or "?"
-    cy_ma       = cm.get("btc_200w_ma")
-    cy_ma_prem  = cm.get("btc_200w_ma_premium_pct")
-    cy_mvrv     = cm.get("btc_mvrv_approx")
-    cy_ma_v     = f"${cy_ma:,.0f}" if cy_ma is not None else "N/A"
-    cy_prem_v   = f"({cy_ma_prem:+.1f}%)" if cy_ma_prem is not None else ""
-    cy_mvrv_v   = f"{cy_mvrv}" if cy_mvrv is not None else "N/A"
-
-    # FOMC for prefill
-    fomc_days   = fomc.get("days_to_fomc")
-    next_fomc   = fomc.get("next_fomc") or "N/A"
-    pre_fomc_w  = fomc.get("pre_fomc_window", False)
-    fomc_v      = f"{fomc_days}d to {next_fomc}" if fomc_days is not None else f"next {next_fomc}"
-    fomc_flag   = " ⚠️ PRE-FOMC" if pre_fomc_w else ""
-
-    # Prefill: MACRO REGIME and YEN CARRY are pre-filled from Python so
-    # Claude cannot skip them. Claude continues from SHORT bias onwards.
+    # Prefill: minimal crypto header. Claude writes TOP SIGNAL then biases.
+    # Macro indicators (yields, JGB, USDJPY, SPX) must NOT appear in the email.
     prefill = (
         f"[EMAIL]\n"
-        f"CRYPTO DAILY BRIEF\n"
-        f"{today_str} | "
-    )
-
-    # The macro card suffix is appended to whatever macro_bias Claude writes.
-    # Because it's in the prefill it cannot be omitted.
-    macro_card_suffix = (
-        f"\n"
-        f"BTC ${btc_price_v} | Dom {btc_dom_v}% | F&G {fg_v}\n"
-        f"------------------------------\n"
-        f"\n"
-        f"MACRO REGIME\n"
-        f"------------------------------\n"
-        f"US 10Y: {us_10y_v}   30Y: {us_30y_v}\n"
-        f"Curve : {us_spread_v} ({us_status_v})\n"
-        f"JGB10Y: {j_10y_v}  30Y: {j_30y_v}\n"
-        f"JGB   : {j_stress_v}\n"
-        f"SPX   : {spx_v}\n"
-        f"BTC OI: ${oi_v}  FR: {fr_v}\n"
-        f"Lev   : {lev_v}\n"
-        f"------------------------------\n"
-        f"YEN CARRY\n"
-        f"USDJPY: {usdjpy_v}  ({usdjpy_chg})\n"
-        f"Regime: {carry_v}{arch_line}\n"
-        f"------------------------------\n"
-        f"FOMC  : {fomc_v}{fomc_flag}\n"
-        f"Cycle : Y{cy_year}/4 | MA1000d: {cy_ma_v} {cy_prem_v} | MVRV≈{cy_mvrv_v}\n"
-        f"------------------------------\n"
-        f"SHORT bias:"
-    )
-    prefill = (prefill + macro_card_suffix).rstrip()
+        f"CRYPTO DAILY BRIEF — {today_str}\n"
+        f"TOP:"
+    ).rstrip()
 
     user_prompt = f"""Today is {today_str}.
 
 ═══ OUTPUT FORMAT — READ THIS FIRST ═══
 Your response MUST contain two blocks: [EMAIL]...[/EMAIL] then [STATE_DELTA]...[/STATE_DELTA].
 The [EMAIL] block MUST contain ALL of these sections IN THIS EXACT ORDER:
-  1.  Header line  (date | bias | BTC price | dom | F&G)
-  2.  MACRO REGIME card  ← REQUIRED even if all values are N/A
-  3.  YEN CARRY card     ← REQUIRED even if USDJPY is N/A
-  4.  SHORT bias / LONG bias lines
-  5.  CYCLE VIEW (BTC 4-yr halving cycle — 2 lines max)
-  6.  LIQUIDITY ANALYSIS (3-4 bullets, 1 line each) ← REQUIRED
-  7.  OPEN POSITIONS (each card MUST show TF: SHORT/MED/LONG_TERM)
-  8.  SHORT-TERM SETUPS (days–2wk)  ← always present, "None." if empty
-  9.  LONG-TERM SETUPS  (weeks–months+) ← always present, "None." if empty
-  10. WAITING (monitor only)
-  11. CHANGES TODAY
+  1.  TOP SIGNAL + SHORT/LONG bias lines
+  2.  BTC MARKET (price | dom | F&G | OI | FR | leverage signal)
+  3.  CYCLE VIEW (BTC 4-yr halving cycle)
+  4.  OPEN POSITIONS (compact 3-line cards)
+  5.  SHORT-TERM SETUPS (days–2wk) — max 3 setups, "None." if empty
+  6.  LONG-TERM SETUPS  (weeks–months+) — max 3 setups, "None." if empty
+  7.  WAITING (monitor only) — max 5 lines, "None." if empty
+  8.  CHANGES TODAY
 NEVER rename, merge, reorder, or skip any section.
 If a value is unavailable write N/A — do NOT remove the section or its header.
+MACRO EXCLUSION: do NOT print US yields, JGB, USDJPY, carry regime, SPX, FOMC in the email.
+  Use them internally for bias/composite scoring, but they belong to portfolio-agent.
 No markdown: no **, no ##, no _underscores_. Plain text only.
 Max ~35 chars per line (mobile).
 Keep the email body tight — one idea per line, no padding sentences.
@@ -708,33 +647,33 @@ Analysis instructions:
 - Positions with status=OPEN and conviction=UNKNOWN were opened outside analysis — run full whale+TA on them and adopt them into active_setups with real levels.
 - SPX / SP500 / US500 / S&P 500 HARD EXCLUSION: these are PORTFOLIO AGENT assets.
   Do NOT write a position card for them in OPEN POSITIONS. Do NOT write any SPX analysis.
-  In the crypto email SPX appears ONLY as a number in the pre-filled MACRO REGIME card.
   If SP500/SPX/US500 appears in open_positions, write ONE line in CHANGES TODAY:
   "• SP500 SHORT out-of-scope — manage via portfolio agent" — nothing else.
+- MACRO INDICATORS (US yields, JGB, USDJPY, SPX, FOMC, carry regime) are for internal scoring ONLY.
+  Use them to set bias_short, bias_long, and composite adjustments. Do NOT print them in the email.
+  The portfolio-agent handles macro reporting.
 - All crypto perpetual positions are labeled as "perp" (not "spot") unless market_type is explicitly "spot" AND the user confirmed a spot purchase. When in doubt, use "perp".
 - pre_computed.position_analytics contains Python-verified P&L and flags for each position. Use these values exactly — do NOT recalculate P&L. Keys are "SYMBOL_DIRECTION" (e.g. "BTC_LONG").
 - pre_computed.setup_statuses contains Python-verified ENTER/APPROACHING/WAITING/INVALIDATED for each setup. Use these, do NOT re-derive from price.
 - pre_computed.cycle_metrics contains btc_mvrv_approx: MVRV>3.0 = historically expensive (cycle top risk), MVRV<1.0 = historically cheap (bottom zone). Use this for cycle analysis.
 - pre_computed.market_globals contains fresh fear_greed and btc_dominance — use these values, not stale state values.
-- pre_computed.fomc: if pre_fomc_window=true, a Fed decision is within 3 days — suppress new SHORT_TERM setups and flag elevated volatility risk. If days_to_fomc < 7, note in CHANGES TODAY as catalyst risk.
+- pre_computed.fomc: use for internal catalyst-risk weighting. If pre_fomc_window=true, suppress new SHORT_TERM setups. Note in CHANGES TODAY only if it materially affects a setup.
 - Flag any position with P&L < -10% or no stop_loss as high risk. Flag P&L < -15% as DANGER.
-- macro.japan_stress HIGH/CRITICAL = liquidity tightening risk, increase bearish weight on risk assets.
-- macro.us_curve_status INVERTED = recession signal, favour defensive bias_long = BEARISH.
-- macro.btc_leverage_signal EXTREME_LONGS = crowded, reversion risk; EXTREME_SHORTS = squeeze risk.
+- macro.japan_stress / us_curve_status / carry_regime → adjust composites and biases internally; do NOT print these in the email.
 - bias_short covers days-to-weeks setups (timeframe=SHORT_TERM).
 - bias_long covers months+ setups (timeframe=MEDIUM_TERM or LONG_TERM).
 - A setup whose direction conflicts with its matching bias gets conviction downgraded one level and flagged.
-- macro.carry_regime: CARRY_STABLE=no adjustment | CARRY_STRESS=add -0.1 to all risk longs | CARRY_UNWIND=bias_short BEARISH override, add -0.2 | CARRY_COLLAPSE=both biases BEARISH, -0.35, flag SYSTEMIC.
-- macro.carry_architecture_alert=true means USDJPY is below stable-carry range: add -0.1 to bias_long and note structural concern in email.
-- macro.japan_curve_spread narrowing run-over-run = BOJ losing long-end control; amplifies japan_stress signal.
-- Track macro.usdjpy across runs in macro_snapshot.usdjpy_history (list of last 4 weekly closes); flag if making lower-highs.
-- If carry_regime is CARRY_UNWIND or COLLAPSE and user holds a long position → always flag ⚠️ CARRY RISK regardless of P&L.
 - BTC CYCLE: today is in the 2024-04 halving cycle. Y1=2024, Y2=2025, Y3=2026 (now, bear/bottom year), Y4=2027 (pre-halving accumulation). Historical Y3 drawdown is 70–85% from cycle peak — multi-month longs in Y3 have been wrong every prior cycle. Always state `cycle_phase`, `cycle_year`, `cycle_thesis`, `cycle_bias_impact` in state and in the CYCLE VIEW email section.
 - TIMEFRAME-RESPECTING ACTION RULE: every open position has a `tf` field (SHORT_TERM, MEDIUM_TERM, LONG_TERM). Evaluate each position ONLY against the bias of its own timeframe:
     • SHORT_TERM position → vs bias_short
     • MEDIUM_TERM / LONG_TERM position → vs bias_long + cycle_phase
   NEVER recommend closing a MEDIUM/LONG_TERM position because of opposing SHORT_TERM whale flow or TA. Note such conflicts as "ST noise — hold thesis", but the action must respect the long-term thesis unless stop breached or cycle/bias_long has actually flipped.
 - SETUP TIMEFRAMES: every setup MUST have a `timeframe` field. Place SHORT_TERM setups under "SHORT-TERM SETUPS" section, MEDIUM_TERM/LONG_TERM under "LONG-TERM SETUPS". If a section has no setups write "None.".
+- FIXED ANALYSIS LIST: always analyse BTC ETH XRP SUI SOL WLD DOGE ADA ONDO TRX.
+- EXTENDED SETUP SCAN: beyond the fixed list, scan the broader market for any coin with strong whale accumulation or a clean technical pattern (e.g. breakout setup, oversold bounce, key level tap). Include these as additional setup recommendations if composite score clears the threshold.
+- DYNAMIC WHALE/TA WEIGHTING: default is 70% whale / 30% TA. If profitable_wallet_signals returns < 2 signals for a specific asset, shift to 50% whale / 50% TA for that asset only. Note the shift in rationale.
+- SETUP CAPS: include at most 3 SHORT-TERM setups and 3 LONG-TERM setups in the email. If more than 3 qualify, rank by composite score and show the top 3. Move lower-ranked ones to WAITING.
+- WAITING CAP: at most 5 lines in WAITING. If more qualify, drop the lowest-conviction ones entirely — do not force-list marginal setups.
 
 ═══ EMAIL FORMAT — MANDATORY RULES ═══
 VIOLATION OF ANY RULE BELOW = WRONG OUTPUT.
@@ -743,138 +682,94 @@ VIOLATION OF ANY RULE BELOW = WRONG OUTPUT.
    Never rename, merge, skip, or add sections.
 
 2. NO MARKDOWN. No **, no *, no ##, no _underscores_. Plain text only.
-   Section headers are written as-is (e.g. "MACRO REGIME", not "**MACRO REGIME**").
+   Section headers are written as-is (e.g. "BTC MARKET", not "**BTC MARKET**").
 
 3. EVERY SECTION IS REQUIRED IN EVERY EMAIL.
    If a value is unavailable write N/A — never omit the section.
 
-4. MACRO REGIME card: fill every field with real values from macro data.
-   If a fetch failed, write "N/A (fetch failed)". Never skip the card.
+4. BTC MARKET card: crypto-native data only — price, dominance, F&G, OI, FR, leverage.
+   Do NOT include US yields, JGB, USDJPY, SPX, or any macro rate data here.
+   Compact format: 3 lines max.
 
-5. LIQUIDITY ANALYSIS: write 3-4 bullets. Keep each to ONE line.
-   Format: "INDICATOR VALUE → brief impact on crypto"
-   Example: "US10Y 4.52% → high opp cost, mild BTC headwind"
-   If macro data is N/A, use prior state + BTC context.
-   Body bullets must be self-contained — no multi-line explanations.
-
-6. OPEN POSITIONS: every entry in open_positions MUST appear as a card,
+5. OPEN POSITIONS: every entry in open_positions MUST appear as a 3-line card,
    EXCEPT SPX/SP500/US500 which are excluded entirely (see analysis rules).
    If none (or all excluded): write exactly "None confirmed."
-   The OPEN POSITIONS section contains ONLY confirmed crypto positions.
    Setup cards (🔴 🟣) NEVER appear inside OPEN POSITIONS.
-   No analysis bullets between position cards — each card is self-contained.
+   Action must name a specific price level (e.g. "Trail to $X", not just "Hold").
 
    SECTION BOUNDARY RULE — CRITICAL:
    If a symbol is in open_positions, it MUST appear in OPEN POSITIONS
    and MUST NOT appear again in SHORT-TERM SETUPS or LONG-TERM SETUPS.
-   SHORT-TERM SETUPS = SHORT_TERM setups whose symbol is NOT in open_positions.
-   LONG-TERM SETUPS  = MEDIUM/LONG_TERM setups whose symbol is NOT in open_positions.
-   A position already tracked in OPEN POSITIONS needs no duplicate setup card.
    Violating this rule = duplicate content = wrong output.
+
+6. SETUP SECTIONS: max 3 cards each. Rank by composite score; remainder goes to WAITING.
+   WAITING: max 5 one-liners. Drop marginal setups entirely rather than pad to 5.
 
 7. Max ~35 characters per line (mobile screen). No wide lines.
 
 
-[NOTE: The email has already been started for you.
- The MACRO REGIME and YEN CARRY cards are pre-filled.
- Your response will be appended after "SHORT bias: "
- Continue from there. Write ONLY what comes after
- the prefill — do not repeat sections already written.]
+[NOTE: The email header "CRYPTO DAILY BRIEF — {today_str}" is pre-filled.
+ The line "TOP:" has been started.
+ Continue directly from there — do NOT repeat the header.]
 
 Your output must continue as:
-<BIAS>  (weeks)
-LONG  bias: <bias_long>   (months+)
+<SYM> <DIR> — <conviction> (<reason, ≤6 words>)
+SHORT: <bias_short>  LONG: <bias_long>
+------------------------------
+
+BTC MARKET
+------------------------------
+BTC $<price> | Dom <dom>% | F&G <fg>
+OI $<oi>B | FR <fr>% | Lev: <signal>
+Alts: <1-line dom implication>
 ------------------------------
 
 CYCLE VIEW
 ------------------------------
-Phase  : <cycle_phase> (Y<cycle_year>/4)
-Halving: 2024-04 → next ~2028-04
-Thesis : <cycle_thesis>
-Impact : <cycle_bias_impact>
-------------------------------
-
-LIQUIDITY ANALYSIS
-------------------------------
-<REQUIRED — 4 to 6 bullets. Each bullet MUST:
- (a) name the signal with its current value,
- (b) state what it means right now (not generic),
- (c) state the direct crypto impact.
- Format: "• Signal X%/level: what it means → crypto impact"
- Cover in order (skip only if value is N/A):
- 1. US 10Y yield — level vs historical norm,
-    rising/falling trend, what it means for
-    risk-asset valuations right now
- 2. US 30Y vs 5% threshold — funding cost
-    pressure on leveraged players, credit stress
- 3. US yield curve (normal/flat/inverted) —
-    recession signal or growth signal
- 4. JGB 30Y / Japan stress — BOJ policy stress,
-    yen carry trade fragility, global liquidity
- 5. Yen carry regime — USDJPY trend, carry
-    adjustment applied to composites, risk
- 6. BTC OI + funding rate — leverage positioning,
-    forced-liquidation risk or squeeze risk
- 7. Combined verdict: how 1-6 produced
-    bias_short and bias_long values above>
-• <bullet 1 with value, meaning, crypto impact>
-• <bullet 2 with value, meaning, crypto impact>
-• <bullet 3 with value, meaning, crypto impact>
-• <bullet 4 with value, meaning, crypto impact>
-• <bullet 5 with value, meaning, crypto impact>
-• <bullet 6 or 7 if needed>
+<cycle_phase> Y<year>/4 — <cycle_thesis, 1 line>
+Impact: <cycle_bias_impact, 1 line>
 ------------------------------
 
 OPEN POSITIONS
 ------------------------------
-<If open_positions is empty: write "None confirmed.">
-<One card per position. Use exactly this layout.
- NEVER put setup entries (🔴 🟣) in this section.>
-<SYM> <DIRECTION>
-  Type  : <perp|spot>
-  TF    : <SHORT_TERM|MEDIUM_TERM|LONG_TERM>
-  Entry : $<entry_price>
-  Now   : $<current>  P&L: <pnl>%
-  Stop  : $<stop_loss or N/A>
-  Bias  : <Aligned|CONFLICT>
-  Action: <specific action>
+<If empty: "None confirmed.">
+<3-line card per position.
+ ⚠️ prefix if P&L < -10% or no stop.
+ 🚨 prefix if P&L < -15% or stop breached.
+ NEVER put setup cards (🔴 🟣) here.>
+[⚠️/🚨] <SYM> <DIR> | <perp|spot> | <TF>
+  $<entry>→$<now> (<pnl>%) | Stop $<stop|N/A>
+  Bias: <Aligned|CONFLICT> | <specific action>
 ------------------------------
-<P&L < -10% or stop missing — open card with ⚠️ SYM DIRECTION>
-<P&L < -15% or stop breached — open card with 🚨 SYM DIRECTION>
 
 SHORT-TERM SETUPS (days–2wk)
 ------------------------------
-<Setups with timeframe=SHORT_TERM only.
- If none: write "None.">
-🔴 <SYM> <DIR> — <CONVICTION>
-  Status: <ENTER|APPROACHING|WAITING>
-  Zone  : $<low>–$<high>
-  Stop  : $<stop>
-  T1    : $<t1>  T2: $<t2>
-  R/R   : <ratio>x | Whale: <whale_signal>
+<MAX 3. Rank by composite score, drop the rest to WAITING.
+ Fixed list + broader market finds. "None." if empty.>
+🔴 <SYM> <DIR> — <CONVICTION> (<STATUS>)
+  Zone $<low>–$<high> | Stop $<stop>
+  T1 $<t1> T2 $<t2> | R/R <r>x | Whale: <signal>
 ------------------------------
 
 LONG-TERM SETUPS (weeks–months+)
 ------------------------------
-<Setups with timeframe=MEDIUM_TERM or LONG_TERM.
- If none: write "None.">
-🟣 <SYM> <DIR> — <CONVICTION>
-  Status: <ENTER|APPROACHING|WAITING>
-  Zone  : $<low>–$<high>
-  Stop  : $<stop>
-  T1    : $<t1>  T2: $<t2>
-  R/R   : <ratio>x | Cycle: <aligned|against>
+<MAX 3. Rank by composite score, drop the rest to WAITING.
+ Fixed list + broader market finds. "None." if empty.>
+🟣 <SYM> <DIR> — <CONVICTION> (<STATUS>)
+  Zone $<low>–$<high> | Stop $<stop>
+  T1 $<t1> T2 $<t2> | R/R <r>x | Cycle: <aligned|against>
 ------------------------------
 
 WAITING (monitor only)
 ------------------------------
-<One line each: SYM DIR — reason in <7 words>
- If none: write "None.">
+<MAX 5 lines. Highest-conviction only. "None." if empty.>
+<SYM> <DIR> — <reason ≤6 words>
+------------------------------
 
 CHANGES TODAY
 ------------------------------
 <One bullet per change. Tags: NEW / ENTER /
- INVALIDATED / REVISED / ADOPTED / COMPLETED>
+ INVALIDATED / REVISED / ADOPTED / COMPLETED / PRUNED>
 [/EMAIL]
 
 [STATE_DELTA]
