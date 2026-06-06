@@ -108,6 +108,43 @@ def _atr(highs, lows, closes, n=14):
     return round(sum(trs[-n:]) / n, 4)
 
 
+def _yf_fetch_weekly(yf_symbol, weeks=52):
+    # type: (str, int) -> dict
+    """Return weekly summary: 52-week high/low, 8-week ATR, last 4 weekly closes."""
+    try:
+        url = (f"https://query1.finance.yahoo.com/v8/finance/chart/{yf_symbol}"
+               f"?interval=1wk&range={weeks}wk")
+        r = requests.get(url, timeout=15, headers=CHROME_HDR)
+        if r.status_code != 200:
+            return {}
+        data = r.json()
+        quote = (data.get("chart", {}).get("result", [{}])[0]
+                 .get("indicators", {}).get("quote", [{}])[0])
+        raw_c = quote.get("close", [])
+        raw_h = quote.get("high", [])
+        raw_l = quote.get("low", [])
+        closes, highs, lows = [], [], []
+        for c, h, l in zip(raw_c, raw_h, raw_l):
+            if c is not None and h is not None and l is not None:
+                closes.append(round(c, 4))
+                highs.append(round(h, 4))
+                lows.append(round(l, 4))
+        if not closes:
+            return {}
+        w52_high = max(highs[-52:]) if len(highs) >= 52 else max(highs)
+        w52_low  = min(lows[-52:])  if len(lows)  >= 52 else min(lows)
+        watr     = _atr(highs, lows, closes, n=8)
+        return {
+            "w52_high":      w52_high,
+            "w52_low":       w52_low,
+            "weekly_atr":    watr,
+            "weekly_closes": closes[-4:],
+        }
+    except Exception as e:
+        print(f"[Portfolio] YF WEEKLY {yf_symbol}: {e}")
+        return {}
+
+
 # ── MEXC perpetuals ───────────────────────────────────────────────────────────
 
 _MEXC_CACHE = {}      # module-level cache: {symbol: ticker_dict}
@@ -265,6 +302,43 @@ def get_wti_news(n_headlines=5):
     return headlines
 
 
+_MEGA_CAPS = ["NVDA", "AAPL", "MSFT", "META", "GOOGL", "AMZN", "TSLA"]
+
+
+def get_earnings_calendar(days_ahead=14):
+    # type: (int) -> List[str]
+    """Return mega-cap earnings due within days_ahead days. Returns 'TICKER (Mon DD)' strings."""
+    upcoming = []  # type: List[str]
+    now_ts  = datetime.utcnow().timestamp()
+    cutoff  = now_ts + days_ahead * 86400
+    for ticker in _MEGA_CAPS:
+        try:
+            url = (
+                f"https://query1.finance.yahoo.com/v10/finance/quoteSummary/{ticker}"
+                f"?modules=calendarEvents"
+            )
+            r = requests.get(url, timeout=10, headers=CHROME_HDR)
+            if r.status_code != 200:
+                continue
+            earn_dates = (
+                r.json()
+                .get("quoteSummary", {})
+                .get("result", [{}])[0]
+                .get("calendarEvents", {})
+                .get("earnings", {})
+                .get("earningsDate", [])
+            )
+            for ed in earn_dates:
+                ts = ed.get("raw", 0)
+                if now_ts <= ts <= cutoff:
+                    dt_str = datetime.utcfromtimestamp(ts).strftime("%b %d")
+                    upcoming.append(f"{ticker} ({dt_str})")
+                    break
+        except Exception:
+            pass
+    return upcoming
+
+
 def get_crs_data(fred_key=None, vix_spot=None):
     # type: (Optional[str], Optional[float]) -> Dict
     """
@@ -309,11 +383,15 @@ def get_crs_data(fred_key=None, vix_spot=None):
         data["crude_inv_level_kb"] = int(_crude[0]) if _crude else None
         data["crude_inv_chg_kb"]   = (int(_crude[0] - _crude[1])
                                       if len(_crude) >= 2 else None)
+        # Baker Hughes US oil rig count (weekly) + 2Y Treasury for implied cuts
+        data["rig_count"]   = _fred_latest("RIGSOILNA", fred_key, n_lookback=5)
+        data["us_2y_yield"] = _fred_latest("DGS2",      fred_key, n_lookback=3)
     else:
         for k in ("hy_oas", "curve_2s10s", "tips_10y", "ism_pmi",
                   "lending_std", "sofr", "fed_funds_upper",
                   "tga_balance", "rrp_balance",
-                  "crude_inv_level_kb", "crude_inv_chg_kb"):
+                  "crude_inv_level_kb", "crude_inv_chg_kb",
+                  "rig_count", "us_2y_yield"):
             data[k] = None
 
     return data
@@ -378,6 +456,8 @@ def get_all_portfolio_data():
         if price and entry["ma_20"] and entry["ma_50"]:
             entry["above_ma20"] = price > entry["ma_20"]
             entry["above_ma50"] = price > entry["ma_50"]
+        if asset in ("WTI", "SPX"):
+            entry["weekly"] = _yf_fetch_weekly(yf_sym)
         result[asset] = entry
 
     # Overlay MEXC perpetual data for tradable assets.

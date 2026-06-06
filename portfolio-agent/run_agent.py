@@ -40,7 +40,8 @@ except ImportError as _e:
 
 from utils import load_env as _load_env, _fmt, avg_into_position, reduce_position  # noqa: E402
 from assets import PORTFOLIO_ASSETS  # noqa: E402
-from data_fetcher import get_all_portfolio_data, get_macro_data, get_crs_data, get_wti_news  # noqa: E402
+from data_fetcher import (get_all_portfolio_data, get_macro_data, get_crs_data,  # noqa: E402
+                          get_wti_news, get_earnings_calendar)
 
 
 # ── State helpers ─────────────────────────────────────────────────────────────
@@ -481,7 +482,7 @@ def _fmt_chg(v):
     return f"{sign}{v:.2f}%"
 
 
-def build_prices_section(prices):
+def build_prices_section(prices, portfolio_value_eur=None):
     lines = []
     for asset in PORTFOLIO_ASSETS:
         d = prices.get(asset, {})
@@ -507,6 +508,18 @@ def build_prices_section(prices):
                 lines.append(f"  ATR14:{_fmt(atr)} | 20dHi:{_fmt(r20h)} 20dLo:{_fmt(r20l)}")
             if recent:
                 lines.append("  Recent5d: " + " ".join(_fmt(c) for c in recent[-5:]))
+            weekly = d.get("weekly", {})
+            if weekly:
+                w52h = _fmt(weekly.get("w52_high"))
+                w52l = _fmt(weekly.get("w52_low"))
+                watr = _fmt(weekly.get("weekly_atr"))
+                lines.append(f"  52wk:{w52l}-{w52h} | wATR:{watr}")
+            if portfolio_value_eur and atr is not None and atr > 0:
+                stop_d   = atr * 1.5
+                qty_est  = (portfolio_value_eur * 0.01) / stop_d
+                px       = float(d.get("price") or 0)
+                notional = qty_est * px
+                lines.append(f"  Sizing(1%): qty≈{qty_est:.2f} ~${notional:,.0f}")
         if asset == "WTI":
             inv_l = prices.get("_crude_inv_level_kb")
             inv_c = prices.get("_crude_inv_chg_kb")
@@ -516,6 +529,9 @@ def build_prices_section(prices):
                     lines.append(f"  EIA Stocks: {inv_l:,}kb | Chg:{sign}{inv_c:,}kb")
                 else:
                     lines.append(f"  EIA Stocks: {inv_l:,}kb")
+            rig = prices.get("_rig_count")
+            if rig is not None:
+                lines.append(f"  Rig Count: {int(rig)}")
     spread = prices.get("wti_brent_spread")
     if spread is not None:
         lines.append(f"WTI/Brent spread: {_fmt(spread)}")
@@ -768,14 +784,36 @@ def run():
         if missing_crs:
             print(f"[Portfolio] WARNING: CRS partial data — missing: {missing_crs}")
 
-    # Inject EIA crude inventory into prices dict so build_prices_section can show it
+    # Inject EIA crude inventory + rig count into prices dict
     prices["_crude_inv_level_kb"] = crs_data.get("crude_inv_level_kb")
     prices["_crude_inv_chg_kb"]   = crs_data.get("crude_inv_chg_kb")
+    prices["_rig_count"]          = crs_data.get("rig_count")
+
+    # Implied Fed Funds cuts: 2Y yield vs Fed Funds upper bound
+    dgs2        = crs_data.get("us_2y_yield")
+    dfed        = crs_data.get("fed_funds_upper")
+    cuts_priced = None  # type: Optional[int]
+    if dgs2 is not None and dfed is not None:
+        cuts_priced = round((dfed - dgs2) / 0.25)
+
+    is_friday = datetime.utcnow().weekday() == 4
+
+    # Portfolio sizing: read base portfolio value from env
+    portfolio_value_eur = None  # type: Optional[float]
+    try:
+        _pv = float(env.get("PORTFOLIO_VALUE_EUR", "0") or "0")
+        if _pv > 0:
+            portfolio_value_eur = _pv
+    except Exception:
+        pass
 
     print("[Portfolio] Fetching WTI news headlines...")
     wti_headlines = get_wti_news(n_headlines=6)
 
-    prices_txt = build_prices_section(prices)
+    print("[Portfolio] Fetching earnings calendar...")
+    earnings_upcoming = get_earnings_calendar(days_ahead=14)
+
+    prices_txt = build_prices_section(prices, portfolio_value_eur=portfolio_value_eur)
 
     # ── Step 3: Build prompts ──
     with open(BASE_DIR / "CLAUDE.md") as f:
@@ -793,6 +831,8 @@ def run():
         crs_components=crs_comp,
         tga_balance_bn=crs_data.get("tga_balance"),
         rrp_balance_bn=crs_data.get("rrp_balance"),
+        cuts_priced_next3=cuts_priced,
+        rig_count=crs_data.get("rig_count"),
     ), default=str)
 
     macro_delta_txt = compute_macro_delta(state, macro, crs_score, crs_regime)
@@ -863,6 +903,17 @@ def run():
         f"SHORT bias:"
     ).rstrip()
 
+    _friday_note = (
+        "\n═══ FRIDAY DEEP-DIVE MODE ═══\n"
+        "Today is Friday. Inside WTI and SPX, add a\n"
+        "WEEKLY LOOKBACK block (max 4 lines):\n"
+        "- Main driver this week vs prior base case\n"
+        "- Key level hits or misses this week\n"
+        "- Weekend event risk (geopolitical, data)\n"
+        "- Positioning bias into weekend close\n"
+        "Do not shorten the rest of the analysis.\n"
+    ) if is_friday else ""
+
     user_prompt = f"""Today is {today_str}.
 
 ═══ ASSET PRICES (fetched this run) ═══
@@ -873,6 +924,9 @@ def run():
 
 ═══ WTI RECENT HEADLINES ═══
 {chr(10).join(wti_headlines) if wti_headlines else "(No headlines fetched.)"}
+
+═══ MEGA-CAP EARNINGS (next 14 days) ═══
+{chr(10).join(earnings_upcoming) if earnings_upcoming else "None scheduled in next 14 days."}
 
 ═══ MACRO CHANGES SINCE LAST RUN ═══
 {macro_delta_txt}
@@ -1097,7 +1151,7 @@ CHANGES TODAY
   active_setups (each setup must include conviction:HIGH/MEDIUM/LOW and created_at:YYYY-MM-DD),
   open_positions (P&L/action only — no entry_price/qty override), alerted}}
 [/STATE_DELTA]
-"""
+{_friday_note}"""
 
     # ── Step 4: Call Claude ──
     client = anthropic.Anthropic(api_key=api_key)
@@ -1106,7 +1160,7 @@ CHANGES TODAY
     message = _call_claude(
         client,
         model="claude-sonnet-4-6",
-        max_tokens=8192,
+        max_tokens=10000 if is_friday else 8192,
         system=[{
             "type": "text",
             "text": system_prompt,

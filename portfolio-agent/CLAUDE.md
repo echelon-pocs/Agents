@@ -112,7 +112,7 @@ This is an active tactical position. Perform a full multi-factor analysis coveri
 
 **C. US supply dynamics**
 - EIA weekly inventory: level and week-over-week change NOW PROVIDED in prices section (EIA Stocks: XXXkb | Chg:±XXkb). A draw (negative Chg) is bullish; a build (positive Chg) is bearish. Note the reading and its direction.
-- US rig count trend (Baker Hughes): if unavailable, note N/A
+- US rig count (Baker Hughes): NOW PROVIDED in prices section as `Rig Count: NNN`. Rising rig count = supply growth signal; falling = tightening supply. Compare to ~500 baseline (pre-2023 avg).
 - Shale production breakeven: ~$55–60/bbl WTI — are we above or below?
 - SPR releases or refills: if known, note
 
@@ -129,8 +129,11 @@ This is an active tactical position. Perform a full multi-factor analysis coveri
 
 **F. Technical structure (WTI)**
 - Price vs MA20 / MA50: above/below, distance %
-- ATR14 provided in prices — use for stop calibration (e.g. 1.5×ATR below entry for longs)
-- 20d high/low provided — nearest significant resistance/support before round-number levels
+- ATR14 provided — use for stop calibration (stop = entry ± 1.5×ATR)
+- 20d high/low provided — nearest resistance/support before round-number levels
+- 52-week high/low provided (52wk) — structural context for breakout/breakdown risk
+- Weekly ATR (wATR) provided — use for weekly range expectations
+- Sizing helper provided (Sizing(1%)): qty and notional for 1% portfolio risk using 1.5×ATR stop
 - Pattern: trending, ranging, topping, bottoming
 - MEXC funding rate: positive = leveraged longs; negative = short-side dominant
 - OI trend: rising OI + rising price = momentum; rising OI + falling price = distribution
@@ -151,7 +154,7 @@ This is an active tactical position. Perform a full multi-factor analysis:
 - US 10Y: level + recent direction (rising/falling) → P/E multiple compression/expansion
 - US 30Y: level → long-duration asset funding pressure
 - Real yield proxy: 10Y nominal − 2.5% (rough inflation estimate) → positive real yield = headwind for growth
-- Fed Funds rate implied path: number of cuts/hikes priced for next 3 FOMC meetings (use prior knowledge)
+- Fed Funds implied cuts: provided in `macro_snapshot.cuts_priced_next3` (derived from 2Y Treasury vs Fed Funds upper). Negative = market pricing cuts; positive = pricing hikes.
 - Curve shape: NORMAL / FLAT / INVERTED → recession signal if inverted
 
 **B. JPY carry architecture**
@@ -172,6 +175,7 @@ This is an active tactical position. Perform a full multi-factor analysis:
 - Earnings season: are we in it? What's the beat/miss rate trend?
 - Mega-cap tech (AAPL, MSFT, NVDA, META, GOOGL, AMZN = ~30% of SPX weight):
   momentum positive or negative? Any major guidance/news?
+- Upcoming mega-cap earnings: PROVIDED in prompt (MEGA-CAP EARNINGS section). If any key ticker is due this week, note it as a volatility catalyst.
 - Key sector rotations this week: tech vs defensives vs financials vs energy
 - EPS revision trend: analyst upgrades vs downgrades — leading indicator
 
@@ -187,8 +191,11 @@ This is an active tactical position. Perform a full multi-factor analysis:
 
 **G. Technical structure (SPX)**
 - Price vs MA20 / MA50: above/below, trend strength
-- ATR14 provided in prices — use for stop calibration
+- ATR14 provided — use for stop calibration (stop = entry ± 1.5×ATR)
 - 20d high/low range provided — use for support/resistance context
+- 52-week high/low provided (52wk) — structural context: near 52wk high = distribution risk
+- Weekly ATR (wATR) provided — use for weekly range expectations
+- Sizing helper provided (Sizing(1%)): qty and notional for 1% portfolio risk
 - Distance from ATH / recent highs: < 5% = distribution zone risk; > 10% = room to run
 - VIX level: < 15 = complacency (setup for volatility spike); 15–25 = normal; > 25 = fear
 - MEXC funding rate: positive = leveraged longs; crowded = reversion candidate
