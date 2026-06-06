@@ -790,10 +790,10 @@ CHANGES TODAY
 
     # ── Step 4: Call Claude Haiku ───────────────────────────────────
     client = anthropic.Anthropic(api_key=api_key)
-    print(f"[{datetime.utcnow().isoformat()}] Calling Claude Haiku 4.5...")
+    print(f"[{datetime.utcnow().isoformat()}] Calling Claude Sonnet 4.6...")
 
     message = client.messages.create(
-        model="claude-haiku-4-5-20251001",
+        model="claude-sonnet-4-6",
         max_tokens=6000,
         system=[{
             "type": "text",
