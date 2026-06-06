@@ -1040,19 +1040,23 @@ Section order and EXACT header names to write:
   ← One bullet per change. Tags: NEW / ENTER / REVISED /
     HOLD / ADD / TRIM / ADOPTED
 
-[NOTE: The email has already been started for you.
- MACRO REGIME is pre-filled. Continue from SHORT bias.
- Your response will be appended after "SHORT bias: "
- Write ONLY what comes after — do NOT repeat MACRO REGIME.]
-
 CRITICAL FORMAT RULE: Use key: value rows for ALL analysis content.
 No prose paragraphs. Every line must be "Key : Value" or a single
 short sentence. Max ~35 chars per line. No line wraps.
 
-Your output must continue as:
-<bias_short>  (days–weeks)
-LONG  bias: <bias_long>   (months+)
+[NOTE: Output the COMPLETE email from [EMAIL] to [/EMAIL].
+ Start your response with EXACTLY the following pre-built header
+ (copy it verbatim — do not modify any value):
+
+{prefill}
+<BULLISH|BEARISH|NEUTRAL>  (days-weeks)
+LONG  bias: <BULLISH|BEARISH|NEUTRAL>  (months+)
 ------------------------------
+
+ Replace the angle-bracket placeholders above with real values,
+ then continue with all sections below.]
+
+Your full output must be:
 
 MACRO COMMENTARY
 ------------------------------
@@ -1167,12 +1171,11 @@ CHANGES TODAY
             "cache_control": {"type": "ephemeral"},
         }],
         messages=[
-            {"role": "user",      "content": user_prompt},
-            {"role": "assistant", "content": prefill},
+            {"role": "user", "content": user_prompt},
         ],
     )
 
-    response = prefill + message.content[0].text
+    response = message.content[0].text
     tokens_in          = message.usage.input_tokens
     tokens_cache_read  = getattr(message.usage, "cache_read_input_tokens", 0)
     tokens_cache_write = getattr(message.usage, "cache_creation_input_tokens", 0)
