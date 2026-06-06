@@ -602,14 +602,6 @@ def run():
 
     today_str = datetime.utcnow().strftime('%Y-%m-%d')
 
-    # Prefill: minimal crypto header. Claude writes TOP SIGNAL then biases.
-    # Macro indicators (yields, JGB, USDJPY, SPX) must NOT appear in the email.
-    prefill = (
-        f"[EMAIL]\n"
-        f"CRYPTO DAILY BRIEF — {today_str}\n"
-        f"TOP:"
-    ).rstrip()
-
     user_prompt = f"""Today is {today_str}.
 
 ═══ OUTPUT FORMAT — READ THIS FIRST ═══
@@ -714,11 +706,10 @@ VIOLATION OF ANY RULE BELOW = WRONG OUTPUT.
 7. Max ~35 characters per line (mobile screen). No wide lines.
 
 
-[NOTE: The email header "CRYPTO DAILY BRIEF — {today_str}" is pre-filled.
- The line "TOP:" has been started.
- Continue directly from there — do NOT repeat the header.]
-
-Your output must continue as:
+Start your response with this exact header (no text before it):
+[EMAIL]
+CRYPTO DAILY BRIEF — {today_str}
+TOP:
 <SYM> <DIR> — <conviction> (<reason, ≤6 words>)
 SHORT: <bias_short>  LONG: <bias_long>
 ------------------------------
@@ -801,22 +792,20 @@ CHANGES TODAY
             "cache_control": {"type": "ephemeral"},
         }],
         messages=[
-            {"role": "user",      "content": user_prompt},
-            {"role": "assistant", "content": prefill},
+            {"role": "user", "content": user_prompt},
         ],
     )
 
-    # Prepend the prefilled text — the API does not echo it back in the response.
-    response          = prefill + message.content[0].text
+    response          = message.content[0].text
     tokens_in         = message.usage.input_tokens
     tokens_cache_read  = getattr(message.usage, "cache_read_input_tokens", 0)
     tokens_cache_write = getattr(message.usage, "cache_creation_input_tokens", 0)
     tokens_out        = message.usage.output_tokens
     cost_usd = (
-        (tokens_in         * 0.80) +
-        (tokens_cache_read  * 0.08) +
-        (tokens_cache_write * 1.00) +
-        (tokens_out        * 4.00)
+        (tokens_in          *  3.00) +
+        (tokens_cache_read  *  0.30) +
+        (tokens_cache_write *  3.75) +
+        (tokens_out         * 15.00)
     ) / 1_000_000
 
     print(f"[{datetime.utcnow().isoformat()}] Response received — "
