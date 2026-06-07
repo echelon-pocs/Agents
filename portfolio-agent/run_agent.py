@@ -1044,19 +1044,13 @@ CRITICAL FORMAT RULE: Use key: value rows for ALL analysis content.
 No prose paragraphs. Every line must be "Key : Value" or a single
 short sentence. Max ~35 chars per line. No line wraps.
 
-[NOTE: Output the COMPLETE email from [EMAIL] to [/EMAIL].
- Start your response with EXACTLY the following pre-built header
- (copy it verbatim — do not modify any value):
+[NOTE: The MACRO REGIME header is pre-built — do NOT output it.
+ Start your response DIRECTLY with the SHORT bias value.
+ Write ONLY what comes after "SHORT bias: " — no preamble,
+ no [EMAIL] tag, no PORTFOLIO BRIEF, no MACRO REGIME block.
+ Your response will be concatenated with the pre-built header.]
 
-{prefill}
-<BULLISH|BEARISH|NEUTRAL>  (days-weeks)
-LONG  bias: <BULLISH|BEARISH|NEUTRAL>  (months+)
-------------------------------
-
- Replace the angle-bracket placeholders above with real values,
- then continue with all sections below.]
-
-Your full output must be:
+Your output must continue as:
 
 MACRO COMMENTARY
 ------------------------------
@@ -1175,7 +1169,7 @@ CHANGES TODAY
         ],
     )
 
-    response = message.content[0].text
+    response = prefill + message.content[0].text
     tokens_in          = message.usage.input_tokens
     tokens_cache_read  = getattr(message.usage, "cache_read_input_tokens", 0)
     tokens_cache_write = getattr(message.usage, "cache_creation_input_tokens", 0)
