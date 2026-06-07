@@ -886,7 +886,6 @@ def run():
         prior_analysis_txt = "No prior analysis data."
 
     prefill = (
-        f"[EMAIL]\n"
         f"PORTFOLIO BRIEF\n"
         f"{today_str}\n"
         f"\n"
@@ -899,9 +898,8 @@ def run():
         f"CRS   : {crs_score}/10 ({crs_regime})"
         f"  HY:{hy_str} Curve:{crv_str}\n"
         f"{_heat_line}"
-        f"------------------------------\n"
-        f"SHORT bias:"
-    ).rstrip()
+        f"------------------------------"
+    )
 
     _friday_note = (
         "\n═══ FRIDAY DEEP-DIVE MODE ═══\n"
@@ -1044,13 +1042,16 @@ CRITICAL FORMAT RULE: Use key: value rows for ALL analysis content.
 No prose paragraphs. Every line must be "Key : Value" or a single
 short sentence. Max ~35 chars per line. No line wraps.
 
-[NOTE: The MACRO REGIME header is pre-built — do NOT output it.
- Start your response DIRECTLY with the SHORT bias value.
- Write ONLY what comes after "SHORT bias: " — no preamble,
- no [EMAIL] tag, no PORTFOLIO BRIEF, no MACRO REGIME block.
- Your response will be concatenated with the pre-built header.]
+[OUTPUT RULE — MANDATORY]
+A pre-built header (PORTFOLIO BRIEF + MACRO REGIME data) will be prepended
+to your output in Python. Your response must begin with [EMAIL] as the
+very first characters — no preamble, no text before [EMAIL].
 
-Your output must continue as:
+Your output must be:
+
+[EMAIL]
+SHORT bias: BULLISH
+LONG bias: NEUTRAL
 
 MACRO COMMENTARY
 ------------------------------
@@ -1169,7 +1170,7 @@ CHANGES TODAY
         ],
     )
 
-    response = prefill + message.content[0].text
+    response = prefill + "\n" + message.content[0].text
     tokens_in          = message.usage.input_tokens
     tokens_cache_read  = getattr(message.usage, "cache_read_input_tokens", 0)
     tokens_cache_write = getattr(message.usage, "cache_creation_input_tokens", 0)
@@ -1231,7 +1232,7 @@ CHANGES TODAY
     print(f"[{datetime.utcnow().isoformat()}] Report saved: {report_path}")
 
     # ── Step 7: Send email ──
-    email_body   = extract_email_body(response)
+    email_body   = prefill + "\n" + extract_email_body(response)
     macro_bias   = updated_state.get("macro_bias", "NEUTRAL")
     setup_count  = len(updated_state.get("active_setups", []))
     enter_count  = sum(1 for s in updated_state.get("active_setups", [])
