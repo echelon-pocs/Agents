@@ -208,10 +208,12 @@ def _section_header(s: str) -> Optional[str]:
         # "WTI  [TIER 1 — DEEP ANALYSIS]" → "WTI"
         # "SILVER (8PSB)" → "SILVER"
         # Exclude kv lines: "SPX   : 5800" must NOT match "SPX" section.
+        # Exclude card titles: "WTI LONG" / "SPX SHORT" are positions, not sections.
         if (s.startswith(sec)
                 and len(s) > len(sec)
                 and s[len(sec)] in ' \t(['
-                and ':' not in s):
+                and ':' not in s
+                and s[len(sec):].strip() not in ('LONG', 'SHORT')):
             return sec
     return None
 
@@ -334,12 +336,26 @@ def render_html_email(plain_body: str) -> str:
                 out.append(f'<div class="{cls}">{_colorize(line)}</div>')
             continue
 
+        # ── Setup / position card titles — BEFORE section header check ──
+        # "WTI LONG" / "SPX SHORT" must become cards, not re-trigger section detection.
+        if in_section and _is_card_title(line):
+            close_card()
+            out.append(f'<div class="card"><div class="card-title">{_colorize(line)}</div>')
+            in_card = True
+            continue
+
         # ── Section header ──
         sec = _section_header(line)
         if sec:
             if sec == current_sec:
-                # bare section name appeared inside the section body (e.g. "WTI"
-                # in a mid-analysis line) — ignore, don't re-open
+                # bare section name inside same section body — ignore
+                continue
+            # Inside SETUPS, bare ticker names ("WTI", "SPX") without a direction
+            # are setup sub-headers — open a card rather than a new section.
+            if current_sec == "SETUPS" and sec in ("WTI", "SPX", "BRENT"):
+                close_card()
+                out.append(f'<div class="card"><div class="card-title">{escape(line)}</div>')
+                in_card = True
                 continue
             close_section()
             out.append(_open_section(sec))
@@ -396,13 +412,6 @@ def render_html_email(plain_body: str) -> str:
             close_bullet()
             close_card()
             out.append(f'<div class="change-item">▸ {_colorize(line)}</div>')
-            continue
-
-        # ── Setup / position card titles ──
-        if in_section and _is_card_title(line):
-            close_card()
-            out.append(f'<div class="card"><div class="card-title">{_colorize(line)}</div>')
-            in_card = True
             continue
 
         # ── All lines inside a card stay inside — indented or not.
