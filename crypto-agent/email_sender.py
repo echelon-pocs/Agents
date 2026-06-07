@@ -58,6 +58,7 @@ _SECTION_COLORS = {
     "GOLD":                  "#3d3000",
     "SILVER":                "#2d3030",
     "SETUPS":                "#3d1c02",
+    "GLOSSARY":              "#2d2d2d",
 }
 
 # keyword → (emoji, text-color, background-color)
@@ -148,6 +149,7 @@ _KNOWN_SECTIONS = [
     # Portfolio agent
     "MACRO COMMENTARY", "WTI", "BRENT", "SPX", "EQUITIES",
     "VWCE / VWRL", "VWCE", "VWRL", "GOLD", "SILVER", "SETUPS",
+    "GLOSSARY",
 ]
 
 
@@ -265,10 +267,11 @@ def render_html_email(plain_body: str) -> str:
            _HTML_CSS,
            '</head><body><div class="wrap">']
 
-    in_section  = False
-    in_card     = False    # inside a position/setup card block
-    in_bullet   = False    # last rendered line was a bullet; accumulate continuations
-    header_done = False
+    in_section   = False
+    current_sec  = None    # name of the currently open section
+    in_card      = False   # inside a position/setup card block
+    in_bullet    = False   # last rendered line was a bullet; accumulate continuations
+    header_done  = False
 
     def close_bullet():
         nonlocal in_bullet
@@ -284,12 +287,13 @@ def render_html_email(plain_body: str) -> str:
             in_card = False
 
     def close_section():
-        nonlocal in_section
+        nonlocal in_section, current_sec
         close_bullet()
         close_card()
         if in_section:
             out.append(_close_section())
             in_section = False
+            current_sec = None
 
     i = 0
     while i < len(lines):
@@ -333,9 +337,14 @@ def render_html_email(plain_body: str) -> str:
         # ── Section header ──
         sec = _section_header(line)
         if sec:
+            if sec == current_sec:
+                # bare section name appeared inside the section body (e.g. "WTI"
+                # in a mid-analysis line) — ignore, don't re-open
+                continue
             close_section()
             out.append(_open_section(sec))
             in_section = True
+            current_sec = sec
             continue
 
         # ── Email header block ──

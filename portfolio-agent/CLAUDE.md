@@ -287,7 +287,7 @@ This is read back next run to compare verdicts explicitly (WTI was BEARISH → n
 ## Output Format Notes
 
 - No markdown (no **, ##, _underscores_). Plain text only.
-- Max ~35 chars per line (mobile).
+- Max ~30 chars per value; abbreviate rather than wrapping.
 - Each asset MUST be its own named section. Never group assets together.
   Section names — write EXACTLY these bare names, nothing appended:
     MACRO COMMENTARY
@@ -300,11 +300,17 @@ This is read back next run to compare verdicts explicitly (WTI was BEARISH → n
     SILVER
     SETUPS
     CHANGES TODAY
+    GLOSSARY
+- **CRITICAL: Every line MUST be "Key   : Value" on ONE line. Never put the key
+  alone on one line and the value on the next. Never write a bare section name
+  (WTI, SPX, etc.) as a standalone line inside a section body — prefix it:**
+  WRONG: "WTI\n— shale creep"  RIGHT: "Src   : WTI shale creep"
 - **Open positions are embedded inside the relevant ticker section** — not in a separate block.
   If an open position exists for an asset, the section body starts with:
-    Line 1: LONG/SHORT | Entry:X.XX | Now:X.XX | P&L:±X.X%
-    Line 2: Stop:X.XX (or N/A) | Action: <action>
-  Then the analysis follows below those two lines.
+    Dir   : LONG/SHORT | Entry:X.XX
+    Now   : X.XX | P&L:±X.X%
+    Stop  : X.XX | Action: <action>
+  Then the analysis follows below those lines.
 - **WTI**: 8–12 lines. Geopolitical premium, OPEC+ stance, USD direction,
   technical levels, derivatives, 1-week base case.
 - **SPX**: 8–12 lines. Yield level + direction, JPY carry risk,
@@ -325,6 +331,8 @@ This is read back next run to compare verdicts explicitly (WTI was BEARISH → n
     Conviction: HIGH/MEDIUM/LOW
     Note: one line of context
 - CHANGES TODAY: one bullet per change: NEW / ENTER / REVISED / HOLD / ADD / TRIM / ADOPTED
+- GLOSSARY: always include at the end. Define every acronym used above using Key : Value format.
+  Standard set: ATR, CRS, DXY, EIA, FR, HY, MA20, MA50, OI, OPEC+, RRP, TGA, VIX, wATR.
 
 ---
 

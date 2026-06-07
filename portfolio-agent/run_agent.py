@@ -1038,9 +1038,16 @@ Section order and EXACT header names to write:
   ← One bullet per change. Tags: NEW / ENTER / REVISED /
     HOLD / ADD / TRIM / ADOPTED
 
-CRITICAL FORMAT RULE: Use key: value rows for ALL analysis content.
-No prose paragraphs. Every line must be "Key : Value" or a single
-short sentence. Max ~35 chars per line. No line wraps.
+CRITICAL FORMAT RULES:
+1. Every analysis line MUST be "Key   : Value" on ONE single line.
+   The colon is MANDATORY. NEVER put the key alone on one line and
+   the value on the next line.
+   WRONG: "Dir\nLONG | Entry: 90.00"
+   RIGHT: "Dir   : LONG | Entry: 90.00"
+2. Values over ~28 chars: abbreviate — do NOT wrap to a new line.
+3. Never write a bare section name (WTI, SPX, etc.) inside a section
+   body. It will be treated as a new section header. Use a key prefix:
+   "Src   : WTI shale production creep" instead of "WTI\n— shale..."
 
 [OUTPUT RULE — MANDATORY]
 A pre-built header (PORTFOLIO BRIEF + MACRO REGIME data) will be prepended
@@ -1140,6 +1147,25 @@ Note: <one line>
 CHANGES TODAY
 ------------------------------
 <one bullet per change>
+------------------------------
+
+GLOSSARY
+------------------------------
+ATR   : Average True Range (volatility)
+CRS   : Crash Risk Score (0-10 composite)
+DXY   : US Dollar Index
+EIA   : Energy Info Admin (US crude stocks)
+FR    : Funding Rate (MEXC perpetual swap)
+HY    : High-Yield credit spread (bps)
+MA20  : 20-day moving average
+MA50  : 50-day moving average
+OI    : Open Interest
+OPEC+ : OPEC + allied producers
+RRP   : Fed Reverse Repo balance
+TGA   : Treasury General Account
+VIX   : CBOE Volatility Index
+wATR  : Weekly Average True Range
+------------------------------
 [/EMAIL]
 
 [STATE_DELTA]
