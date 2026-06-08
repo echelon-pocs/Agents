@@ -98,6 +98,9 @@ def save_state(state):
 
 
 def apply_pending_updates(state):
+    # NOTE: does NOT clear pending_updates.json here.
+    # Call clear_pending_updates() only after save_state() succeeds,
+    # so a crash between apply and save cannot silently drop closes.
     pending_path = BASE_DIR / "pending_updates.json"
     if not pending_path.exists():
         return state, []
@@ -232,13 +235,18 @@ def apply_pending_updates(state):
 
     state["open_positions"] = list(positions.values())
     state["active_setups"]  = list(setups.values())
+    return state, log
+
+
+def clear_pending_updates():
+    """Clear pending_updates.json. Call only after save_state() succeeds."""
+    pending_path = BASE_DIR / "pending_updates.json"
     try:
         tmp_path = pending_path.with_suffix(".tmp")
         tmp_path.write_text("[]")
         os.rename(str(tmp_path), str(pending_path))
     except Exception as e:
         print(f"[Agent] WARNING: could not clear pending_updates.json: {e}")
-    return state, log
 
 
 def prune_stale_setups(state):
@@ -825,6 +833,7 @@ CHANGES TODAY
             profitable_wallets=whale_data.get("profitable_wallets_discovered", []),
         )
         save_state(updated_state)
+        clear_pending_updates()
         log_setup_snapshot(updated_state, date_str)
         print(f"[{datetime.utcnow().isoformat()}] state.json updated via delta merge")
     else:
@@ -837,11 +846,13 @@ CHANGES TODAY
             fallback["profitable_wallets_discovered"] = whale_data.get("profitable_wallets_discovered", [])
             updated_state = fallback
             save_state(updated_state)
+            clear_pending_updates()
             log_setup_snapshot(updated_state, date_str)
             print(f"[{datetime.utcnow().isoformat()}] state.json updated via fallback full-JSON")
         else:
             print(f"[{datetime.utcnow().isoformat()}] WARNING: Could not extract state — state unchanged")
             updated_state = state
+            # Do NOT clear pending_updates — state wasn't saved, so keep them for next run
 
     # ── Step 6: Save full response to file ────────────────────────────────
     report_path = BASE_DIR / f"daily_report_{date_str}.txt"
