@@ -801,7 +801,7 @@ SHORT-TERM SETUPS (days–2wk)
 <MAX 3. Rank by composite score, drop the rest to WAITING.
  Fixed list + broader market finds. "None." if empty.>
 🔴 <SYM> <DIR> — <CONVICTION> (<STATUS>)
-  Zone $<low>–$<high> | Stop $<stop>
+  Now $<current_price> | Zone $<low>–$<high> | Stop $<stop>
   T1 $<t1> T2 $<t2> | R/R <r>x | Whale: <signal>
 ------------------------------
 
@@ -810,14 +810,14 @@ LONG-TERM SETUPS (weeks–months+)
 <MAX 3. Rank by composite score, drop the rest to WAITING.
  Fixed list + broader market finds. "None." if empty.>
 🟣 <SYM> <DIR> — <CONVICTION> (<STATUS>)
-  Zone $<low>–$<high> | Stop $<stop>
+  Now $<current_price> | Zone $<low>–$<high> | Stop $<stop>
   T1 $<t1> T2 $<t2> | R/R <r>x | Cycle: <aligned|against>
 ------------------------------
 
 WAITING (monitor only)
 ------------------------------
 <MAX 5 lines. Highest-conviction only. "None." if empty.>
-<SYM> <DIR> — <reason ≤6 words>
+<SYM> <DIR> $<now> — <reason ≤6 words>
 ------------------------------
 
 CHANGES TODAY
