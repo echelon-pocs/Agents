@@ -558,8 +558,15 @@ def extract_email_body(text):
     start = text.find("[EMAIL]")
     end   = text.find("[/EMAIL]")
     if start != -1 and end != -1:
-        return text[start + 7:end].strip()
-    return text
+        body = text[start + 7:end].strip()
+    else:
+        body = text
+    # Strip any chain-of-thought reasoning that leaked before the actual header.
+    # The real email always starts with "CRYPTO DAILY BRIEF".
+    header_idx = body.find("CRYPTO DAILY BRIEF")
+    if header_idx > 0:
+        body = body[header_idx:]
+    return body
 
 
 def run():
@@ -634,7 +641,14 @@ def run():
 
     user_prompt = f"""Today is {today_str}.
 
-═══ OUTPUT FORMAT — READ THIS FIRST ═══
+═══ OUTPUT DISCIPLINE — ABSOLUTE RULE ═══
+Do ALL analysis silently. Your visible output has exactly two parts:
+  PART 1: [EMAIL]...[/EMAIL]   ← starts with "CRYPTO DAILY BRIEF", no reasoning before it
+  PART 2: [STATE_DELTA]...[/STATE_DELTA]
+No step-by-step reasoning, no "I'll work through...", no STEP labels, no chain-of-thought
+appears anywhere in your output. Thinking is internal. Output is structured data only.
+
+═══ OUTPUT FORMAT ═══
 Your response MUST contain two blocks: [EMAIL]...[/EMAIL] then [STATE_DELTA]...[/STATE_DELTA].
 The [EMAIL] block MUST contain ALL of these sections IN THIS EXACT ORDER:
   1.  TOP SIGNAL + SHORT/LONG bias lines
