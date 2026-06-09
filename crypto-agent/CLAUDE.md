@@ -233,7 +233,9 @@ Composite > +0.3 → LONG | < -0.3 → SHORT | ±0.3 → no trade
 No-trade rule: whales NEUTRAL + TA only 1 signal → skip, don't force.
 Levels must be significant: ATH/ATL, prior major highs/lows, round numbers, key MAs, Fib 61.8%.
 
-For each setup define: symbol, direction, whale_signal, technical_score, composite_score, conviction, entry_zone [low,high], stop_loss, target_1, target_2, r_r_ratio, status (WAITING|APPROACHING|ENTER|INVALIDATED), rationale (2–3 sentences, lead with whale action), catalyst_risk, timeframe (SHORT_TERM|MEDIUM_TERM).
+For each setup define: symbol, direction, whale_signal, technical_score, composite_score, conviction, entry_zone [low,high], stop_loss, target_1, target_2, r_r_ratio, status (WAITING|APPROACHING|ENTER|INVALIDATED), rationale (2–3 sentences, lead with whale action), catalyst_risk, timeframe (SHORT_TERM|MEDIUM_TERM), last_updated (today's date).
+
+**Email section eligibility rule:** SHORT-TERM SETUPS and LONG-TERM SETUPS sections show ONLY setups with status ENTER or APPROACHING (price within 3% of entry zone). A setup with status WAITING MUST go to the WAITING section only — never in SHORT/LONG-TERM SETUPS regardless of how high its conviction is. A far-from-entry setup in SHORT/LONG-TERM SETUPS is a hard format error.
 
 ### STEP 6 — Update Active Setups & Manage Open Positions
 

@@ -405,9 +405,19 @@ def compute_setup_statuses(setups, prices):
         if z_low <= current <= z_high:
             statuses[sym] = "ENTER"
         elif direction == "LONG":
-            statuses[sym] = "APPROACHING" if current >= z_low * 0.97 else "WAITING"
-        else:
-            statuses[sym] = "APPROACHING" if current <= z_high * 1.03 else "WAITING"
+            if current > z_high:
+                # Price above zone — waiting for pullback
+                statuses[sym] = "APPROACHING" if current <= z_high * 1.03 else "WAITING"
+            else:
+                # Price below zone — waiting for breakout up
+                statuses[sym] = "APPROACHING" if current >= z_low * 0.97 else "WAITING"
+        else:  # SHORT
+            if current < z_low:
+                # Price below zone — waiting for rally
+                statuses[sym] = "APPROACHING" if current >= z_low * 0.97 else "WAITING"
+            else:
+                # Price above zone — waiting for breakdown
+                statuses[sym] = "APPROACHING" if current <= z_high * 1.03 else "WAITING"
 
     return statuses
 
@@ -713,6 +723,7 @@ Analysis instructions:
     • MEDIUM_TERM / LONG_TERM position → vs bias_long + cycle_phase
   NEVER recommend closing a MEDIUM/LONG_TERM position because of opposing SHORT_TERM whale flow or TA. Note such conflicts as "ST noise — hold thesis", but the action must respect the long-term thesis unless stop breached or cycle/bias_long has actually flipped.
 - SETUP TIMEFRAMES: every setup MUST have a `timeframe` field. Place SHORT_TERM setups under "SHORT-TERM SETUPS" section, MEDIUM_TERM/LONG_TERM under "LONG-TERM SETUPS". If a section has no setups write "None.".
+- SETUP SECTION ELIGIBILITY (critical): SHORT-TERM SETUPS and LONG-TERM SETUPS sections show ONLY setups where pre_computed.setup_statuses = ENTER or APPROACHING. A setup with status WAITING must NOT appear in these sections regardless of conviction. It goes to WAITING only. A setup far from its entry zone (status WAITING) showing up in SHORT/LONG-TERM SETUPS is a hard error.
 - FIXED ANALYSIS LIST: always analyse BTC ETH XRP SUI SOL WLD DOGE ADA ONDO TRX.
 - EXTENDED SETUP SCAN: beyond the fixed list, scan the broader market for any coin with strong whale accumulation or a clean technical pattern (e.g. breakout setup, oversold bounce, key level tap). Include these as additional setup recommendations if composite score clears the threshold.
 - DYNAMIC WHALE/TA WEIGHTING: default is 70% whale / 30% TA. If profitable_wallet_signals returns < 2 signals for a specific asset, shift to 50% whale / 50% TA for that asset only. Note the shift in rationale.
