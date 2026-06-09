@@ -248,19 +248,35 @@ def _macd(closes, fast=12, slow=26, signal_period=9):
 
 def _fetch_ohlcv(symbol):
     # type: (str) -> Optional[List[List[float]]]
-    """Fetch 60-day daily OHLC from CoinGecko for a given symbol.
-    60 days gives enough candles for MACD(12,26,9) which needs ≥35."""
+    """Fetch 90-day daily OHLC for a given symbol.
+    Primary: CoinGecko. Fallback: Binance klines (free, no key, more reliable).
+    Needs ≥35 candles for MACD(12,26,9)."""
     cg_id = COINGECKO_IDS.get(symbol)
-    if not cg_id:
-        return None
-    data = _get(
-        f"https://api.coingecko.com/api/v3/coins/{cg_id}/ohlc",
-        params={"vs_currency": "usd", "days": "90"},
+    if cg_id:
+        data = _get(
+            "https://api.coingecko.com/api/v3/coins/{}/ohlc".format(cg_id),
+            params={"vs_currency": "usd", "days": "90"},
+            timeout=15,
+        )
+        if isinstance(data, list) and len(data) >= 35:
+            return data  # [[ts_ms, open, high, low, close], ...]
+
+    # Fallback: Binance klines (daily, 90 candles)
+    pair = _BINANCE_FUTURES_SYMBOLS.get(symbol.upper(), symbol.upper() + "USDT")
+    klines = _get(
+        "{}/api/v3/klines".format(_BINANCE_SPOT),
+        params={"symbol": pair, "interval": "1d", "limit": 90},
         timeout=15,
     )
-    if not isinstance(data, list) or len(data) < 35:
+    if not isinstance(klines, list) or len(klines) < 35:
         return None
-    return data  # [[ts_ms, open, high, low, close], ...]
+    converted = []
+    for k in klines:
+        try:
+            converted.append([k[0], float(k[1]), float(k[2]), float(k[3]), float(k[4])])
+        except (IndexError, ValueError, TypeError):
+            pass
+    return converted if len(converted) >= 35 else None
 
 
 def _rsi_signal(rsi):
@@ -1697,6 +1713,112 @@ def get_macro_data() -> Dict:
     return result
 
 
+# ─── Liquidity Levels (orderbook walls) ──────────────────────────────────────
+
+_BINANCE_FUTURES = "https://fapi.binance.com"
+_BINANCE_SPOT    = "https://api.binance.com"
+
+_BINANCE_FUTURES_SYMBOLS = {
+    "BTC": "BTCUSDT", "ETH": "ETHUSDT", "SOL": "SOLUSDT",
+    "XRP": "XRPUSDT", "SUI": "SUIUSDT", "WLD": "WLDUSDT",
+    "DOGE": "DOGEUSDT", "ADA": "ADAUSDT", "ONDO": "ONDOUSDT",
+    "TRX": "TRXUSDT",
+}
+
+
+def get_orderbook_walls(symbol, prices=None, bucket_pct=0.5, top_n=5):
+    # type: (str, Optional[Dict], float, int) -> Dict
+    """
+    Fetch Binance futures depth (500 levels) and identify large bid/ask clusters.
+    Aggregates levels into 0.5% price buckets; returns the top_n by notional USD.
+    Gracefully falls back to spot if futures unavailable.
+    """
+    price_data = get_prices(prices)
+    current_price = price_data.get(symbol, 0)
+    if not current_price:
+        return {"symbol": symbol, "bid_walls": [], "ask_walls": [],
+                "nearest_support_wall": None, "nearest_resistance_wall": None,
+                "dist_to_support_pct": None, "dist_to_resistance_pct": None}
+
+    pair = _BINANCE_FUTURES_SYMBOLS.get(symbol.upper(), symbol.upper() + "USDT")
+    data = _get("{}/fapi/v1/depth".format(_BINANCE_FUTURES),
+                params={"symbol": pair, "limit": 500})
+    if not data or "bids" not in data:
+        data = _get("{}/api/v3/depth".format(_BINANCE_SPOT),
+                    params={"symbol": pair, "limit": 500})
+    if not data or "bids" not in data:
+        return {"symbol": symbol, "bid_walls": [], "ask_walls": [],
+                "nearest_support_wall": None, "nearest_resistance_wall": None,
+                "dist_to_support_pct": None, "dist_to_resistance_pct": None}
+
+    bucket_size = current_price * bucket_pct / 100.0
+
+    def _aggregate(levels):
+        # type: (List) -> List[Dict]
+        buckets = {}  # type: Dict[float, float]
+        for row in levels:
+            try:
+                p = float(row[0])
+                q = float(row[1])
+            except (ValueError, IndexError):
+                continue
+            key = round(round(p / bucket_size) * bucket_size, 8)
+            buckets[key] = buckets.get(key, 0.0) + q * p
+        ranked = sorted(buckets.items(), key=lambda x: x[1], reverse=True)
+        return [{"price": round(bp, 6), "size_usd": round(bs, 0)}
+                for bp, bs in ranked[:top_n]]
+
+    bid_walls = _aggregate(data.get("bids", []))
+    ask_walls = _aggregate(data.get("asks", []))
+
+    # Sort for readability: bids descending (highest near price first),
+    # asks ascending (lowest near price first)
+    bid_walls.sort(key=lambda x: x["price"], reverse=True)
+    ask_walls.sort(key=lambda x: x["price"])
+
+    bid_prices = [w["price"] for w in bid_walls if w["price"] < current_price]
+    ask_prices = [w["price"] for w in ask_walls if w["price"] > current_price]
+
+    nearest_bid = max(bid_prices) if bid_prices else None
+    nearest_ask = min(ask_prices) if ask_prices else None
+
+    dist_bid = round((current_price - nearest_bid) / current_price * 100, 2) if nearest_bid else None
+    dist_ask = round((nearest_ask - current_price) / current_price * 100, 2) if nearest_ask else None
+
+    return {
+        "symbol":                  symbol,
+        "current_price":           current_price,
+        "bid_walls":               bid_walls,
+        "ask_walls":               ask_walls,
+        "nearest_support_wall":    nearest_bid,
+        "nearest_resistance_wall": nearest_ask,
+        "dist_to_support_pct":     dist_bid,
+        "dist_to_resistance_pct":  dist_ask,
+    }
+
+
+def get_all_liquidity_levels(prices=None):
+    # type: (Optional[Dict]) -> Dict[str, Dict]
+    """Fetch orderbook liquidity walls for all fixed-list symbols in parallel."""
+    price_data = get_prices(prices)
+
+    def _fetch(sym):
+        # type: (str) -> tuple
+        try:
+            return sym, get_orderbook_walls(sym, prices=price_data)
+        except Exception as e:
+            return sym, {"symbol": sym, "bid_walls": [], "ask_walls": [],
+                         "nearest_support_wall": None, "nearest_resistance_wall": None,
+                         "dist_to_support_pct": None, "dist_to_resistance_pct": None,
+                         "error": str(e)}
+
+    results = {}
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        for sym, data in pool.map(_fetch, _TA_SYMBOLS):
+            results[sym] = data
+    return results
+
+
 _GRAPH_UNISWAP_V3 = "https://api.thegraph.com/subgraphs/name/uniswap/uniswap-v3"
 
 
@@ -1874,11 +1996,21 @@ def get_all_whale_data(etherscan_key: str = "",
         print(f"[WhaleTracker] Technical indicators failed: {e}")
         technicals = {}
 
+    # 8. Orderbook liquidity walls (bid/ask clusters)
+    try:
+        liquidity_levels = get_all_liquidity_levels(prices=prices)
+        liq_ok = sum(1 for v in liquidity_levels.values() if v.get("bid_walls"))
+        print(f"[WhaleTracker] Liquidity levels: {liq_ok}/{len(liquidity_levels)} symbols OK")
+    except Exception as e:
+        print(f"[WhaleTracker] Liquidity levels failed: {e}")
+        liquidity_levels = {}
+
     return {
         "timestamp": datetime.utcnow().isoformat(),
         "macro": macro_data,
         "prices": prices,
         "technicals": technicals,
+        "liquidity_levels": liquidity_levels,
         "large_transfers": {
             "BTC":  btc_txs[:5],
             "ETH":  eth_txs[:5],

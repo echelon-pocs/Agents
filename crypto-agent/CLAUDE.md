@@ -195,6 +195,14 @@ Additional TA (from market knowledge + current price):
 3. Volume confirmation or divergence
 4. Derivatives: funding rates, OI trend (extreme funding = reversion candidate)
 5. Catalyst risk: upcoming unlock, regulatory event, ETF news
+6. Liquidity levels (from `pre_computed.liquidity_levels[SYM]`):
+   - `support` = largest bid wall cluster below current price → price tends to bounce here
+   - `resistance` = largest ask wall cluster above price → price tends to stall/reverse here
+   - `dist_sup_pct` / `dist_res_pct` = % distance to each wall
+   - Entry within 1.5% of support wall = strong long zone (big bids absorb selling)
+   - Entry within 1.5% of resistance wall = strong short zone / long exit
+   - Both walls far (>5%) = "free air" — momentum trades have room to run
+   - A wall just broken through (price closed beyond it) = wall absorbed → likely continuation
 
 **Indicator confluence rule:** The strongest setups have ≥3 aligned signals. Example of HIGH conviction long: whale accumulation + RSI oversold + bb_pct_b < 0.15 + MACD histogram RISING + price above EMA20. A setup with only whale signal + 1 TA signal = LOW conviction maximum.
 
@@ -215,6 +223,8 @@ Bonus signals (additive, capped at ±0.2 total):
   rsi_signal = OVERSOLD + direction = LONG   : +0.1 to tech score
   rsi_signal = OVERBOUGHT + direction = SHORT: +0.1 to tech score
   macd crossover this candle                 : +0.1 to tech score
+  price within 1.5% of support wall + LONG  : +0.1 to tech score
+  price within 1.5% of resistance wall + SHORT: +0.1 to tech score
 
 Composite > +0.3 → LONG | < -0.3 → SHORT | ±0.3 → no trade
 |Composite| ≥0.7 → HIGH | 0.4–0.7 → MEDIUM | 0.3–0.4 → LOW
@@ -229,6 +239,8 @@ For each setup define: symbol, direction, whale_signal, technical_score, composi
 
 **6a — Active Setups (ideas being monitored)**
 
+**SETUP REFRESH RULE (mandatory every run):** For EVERY existing setup, re-run the full whale + TA analysis for that symbol using today's data. Update `entry_zone`, `stop_loss`, `target_1`, `target_2`, `r_r_ratio`, `conviction`, `rationale`, and set `last_updated` to today's date. Do NOT copy prior fields verbatim — stale levels are worse than no levels. If the thesis still holds but price has moved, adjust the zone to reflect the current opportunity.
+
 For each existing setup in `active_setups`, apply these rules in order:
 
 | Condition | Action |
@@ -239,7 +251,7 @@ For each existing setup in `active_setups`, apply these rules in order:
 | Entry zone reached (price inside [entry_low, entry_high]) | ENTER — fire alert if not already in `alerted` list |
 | Price within 3% of entry zone | APPROACHING |
 | Whale signal reversed vs. setup direction | INVALIDATED or downgrade conviction, explain why |
-| Levels still valid, no trigger | Keep as WAITING, update current price |
+| Levels still valid, no trigger | Keep as WAITING, update levels to today's data |
 | Setup from yesterday still valid but entry missed | Keep, widen zone slightly if justified, note revision |
 
 For new setups discovered in Step 5: add only if composite score clears threshold. Do not add duplicates of existing symbols unless direction is opposite.

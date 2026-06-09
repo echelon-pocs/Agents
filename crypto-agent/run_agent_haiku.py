@@ -35,6 +35,26 @@ def _slim_transfer(tx):
                      "sol_delta", "wallet_label", "slot", "err")}
 
 
+def _slim_liquidity(liq_data):
+    # type: (Dict) -> Dict
+    """Keep only nearest walls and distances — full wall lists waste tokens."""
+    result = {}
+    for sym, d in liq_data.items():
+        if not isinstance(d, dict):
+            continue
+        bid_walls = d.get("bid_walls") or []
+        ask_walls = d.get("ask_walls") or []
+        result[sym] = {
+            "support":      d.get("nearest_support_wall"),
+            "resistance":   d.get("nearest_resistance_wall"),
+            "dist_sup_pct": d.get("dist_to_support_pct"),
+            "dist_res_pct": d.get("dist_to_resistance_pct"),
+            "top_bid_usd":  bid_walls[0].get("size_usd") if bid_walls else None,
+            "top_ask_usd":  ask_walls[0].get("size_usd") if ask_walls else None,
+        }
+    return result
+
+
 def slim_whale_data(data):
     transfers = {
         chain: [_slim_transfer(tx) for tx in txs[:5]]   # top 5 not 10
@@ -68,6 +88,7 @@ def slim_whale_data(data):
         "cycle_metrics":      data.get("cycle_metrics", {}),
         "prices":             data.get("prices", {}),
         "technicals":         data.get("technicals", {}),
+        "liquidity_levels":   _slim_liquidity(data.get("liquidity_levels", {})),
         "transfers":          transfers,
         "dex_swaps":          data.get("dex_swaps", [])[:10],
         "profitable_wallets": profitable,
@@ -596,6 +617,7 @@ def run():
         "cycle_metrics":    whale_slim.get("cycle_metrics", {}),
         "market_globals":   whale_slim.get("market_globals", {}),
         "technicals":       whale_slim.get("technicals", {}),
+        "liquidity_levels": whale_slim.get("liquidity_levels", {}),
         "fomc":             fomc,
     }
 
@@ -660,7 +682,9 @@ Analysis instructions:
 - All crypto perpetual positions are labeled as "perp" (not "spot") unless market_type is explicitly "spot" AND the user confirmed a spot purchase. When in doubt, use "perp".
 - pre_computed.position_analytics contains Python-verified P&L and flags for each position. Use these values exactly — do NOT recalculate P&L. Keys are "SYMBOL_DIRECTION" (e.g. "BTC_LONG").
 - pre_computed.setup_statuses contains Python-verified ENTER/APPROACHING/WAITING/INVALIDATED for each setup. Use these, do NOT re-derive from price.
+- SETUP REFRESH RULE (critical): For EVERY setup in active_setups, re-run the full whale + TA analysis for that symbol using TODAY's data. Update entry_zone, stop_loss, target_1, target_2, r_r_ratio, conviction, rationale, and set last_updated to today's date. Do NOT copy prior fields verbatim — if you cannot re-derive a level from today's data, say so explicitly in rationale. Stale levels copied from prior state are worse than no levels.
 - pre_computed.technicals contains Python-computed RSI14, EMA20, Bollinger Bands, ATR14, MACD for each coin. Use these exact values in Step 4 TA analysis — do NOT re-derive from price. Key rules: (1) use atr_stop_1_5x% for SHORT_TERM stops, atr_stop_2x% for MEDIUM_TERM stops — never arbitrary %; (2) bb_squeeze=true means hold back — wait for breakout direction; (3) rsi_signal OVERSOLD + whale accum = highest conviction long setup; (4) MACD hist RISING + RSI < 55 = early momentum, good entry timing.
+- pre_computed.liquidity_levels contains orderbook wall data for each coin: `support` = nearest large bid wall below price, `resistance` = nearest large ask wall above price, `dist_sup_pct` / `dist_res_pct` = % distance to each wall. Use in Step 4: price within 1.5% of support wall = high-conviction long entry zone (big bids absorb selling); price within 1.5% of resistance wall = exit zone for longs / entry for shorts (big asks cap upside). "Free air" between walls (both dist > 4%) = momentum-friendly, entries have room to run.
 - pre_computed.cycle_metrics contains btc_mvrv_approx: MVRV>3.0 = historically expensive (cycle top risk), MVRV<1.0 = historically cheap (bottom zone). Use this for cycle analysis.
 - pre_computed.market_globals contains fresh fear_greed and btc_dominance — use these values, not stale state values.
 - pre_computed.fomc: use for internal catalyst-risk weighting. If pre_fomc_window=true, suppress new SHORT_TERM setups. Note in CHANGES TODAY only if it materially affects a setup.
