@@ -639,14 +639,21 @@ def merge_delta(prior, delta, prices, crs_score=None, crs_regime=None, crs_comp=
         updated["active_setups"] = merged_setups
 
     # Merge positions: Claude updates P&L/action fields; Python owns entry/qty/stop.
-    # Key is (symbol, direction) so BTC LONG and BTC SHORT can coexist.
+    # Key is (symbol, direction) so WTI LONG and WTI SHORT can coexist.
     if "open_positions" in delta:
         prior_map = {(p["symbol"], p.get("direction", "LONG")): p
                      for p in prior.get("open_positions", [])}
         merged = []
         for pos in delta["open_positions"]:
             key = (pos.get("symbol", ""), pos.get("direction", "LONG"))
-            base = dict(prior_map.get(key, {}))
+            base = prior_map.get(key)
+            if base is None:
+                # Position not in prior state — it was closed by apply_pending
+                # (or Claude hallucinated it). Drop it; never let Claude re-open
+                # a position that Python already removed.
+                print(f"[Portfolio] merge_delta: dropping {key} — not in prior state")
+                continue
+            base = dict(base)
             base.update({k: v for k, v in pos.items()
                          if k not in ("entry_price", "qty")})
             merged.append(base)
@@ -753,6 +760,10 @@ def run():
     # ── Step 1: Load state + apply pending Telegram updates ──
     state = load_state()
     state, pending_log = apply_pending(state)
+    if pending_log:
+        # Persist closes/enters immediately so they survive a Claude API failure
+        save_state(state)
+        print(f"[Portfolio] Pending applied & saved: {pending_log}")
 
     today_str = datetime.utcnow().strftime("%Y-%m-%d")
 
